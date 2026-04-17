@@ -48,6 +48,10 @@ final class DJBrain: DJBrainProtocol {
         parts.append("Introduce '\(context.upcomingTrack.title)' by \(context.upcomingTrack.artist).")
         parts.append("Time: \(context.timeOfDay.rawValue).")
 
+        if let name = context.listenerName, !name.isEmpty {
+            parts.append("Listener name: \(name). Address them by name occasionally, not every time.")
+        }
+
         if !context.recentTracks.isEmpty {
             let recent = context.recentTracks.prefix(3)
                 .map { "\($0.title) by \($0.artist)" }

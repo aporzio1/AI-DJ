@@ -7,6 +7,7 @@ struct DJContext: Sendable {
     let recentTracks: [Track]     // last N played, oldest-first
     let timeOfDay: TimeOfDay
     let newsHeadline: NewsHeadline?
+    let listenerName: String?
 
     enum TimeOfDay: String, Sendable {
         case morning, afternoon, evening, lateNight

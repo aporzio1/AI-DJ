@@ -9,6 +9,7 @@ actor Producer {
     private let voice: any DJVoiceProtocol
     private let rssFetcher: any RSSFetcherProtocol
     private let persona: DJPersona
+    private var listenerName: String?
 
     private var recentTracks: [AIDJ.Track] = []
     private var monitorTask: Task<Void, Never>?
@@ -18,13 +19,19 @@ actor Producer {
         brain: any DJBrainProtocol,
         voice: any DJVoiceProtocol,
         rssFetcher: any RSSFetcherProtocol,
-        persona: DJPersona = .default
+        persona: DJPersona = .default,
+        listenerName: String? = nil
     ) {
         self.coordinator = coordinator
         self.brain = brain
         self.voice = voice
         self.rssFetcher = rssFetcher
         self.persona = persona
+        self.listenerName = listenerName
+    }
+
+    func updateListenerName(_ name: String?) {
+        listenerName = name
     }
 
     // MARK: Lifecycle
@@ -78,7 +85,8 @@ actor Producer {
             upcomingTrack: upcomingTrack,
             recentTracks: recentTracks,
             timeOfDay: .current(),
-            newsHeadline: headline
+            newsHeadline: headline,
+            listenerName: listenerName
         )
 
         let script: String

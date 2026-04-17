@@ -29,10 +29,15 @@ struct SettingsView: View {
             Toggle("Announcements", isOn: $vm.announcementsEnabled)
                 .disabled(!vm.djEnabled)
 
-            // Persona picker scaffold (single item in MVP)
             LabeledContent("Persona") {
                 Text(vm.persona.name)
                     .foregroundStyle(.secondary)
+            }
+
+            LabeledContent("Your Name") {
+                TextField("Your name", text: $vm.listenerName, onCommit: { vm.save() })
+                    .textFieldStyle(.roundedBorder)
+                    .frame(maxWidth: 200)
             }
         }
     }

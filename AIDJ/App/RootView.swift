@@ -31,6 +31,11 @@ struct RootView: View {
             if isReady, let nowPlaying = nowPlayingVM, let queue = queueVM, let library = libraryVM {
                 mainContent(nowPlaying: nowPlaying, queue: queue, library: library)
                     .onAppear { print("[RootView] Main content appeared") }
+                    .onChange(of: settings.listenerName) { _, newName in
+                        if let p = producer {
+                            Task { await p.updateListenerName(newName.isEmpty ? nil : newName) }
+                        }
+                    }
             } else {
                 if let vm = onboardingVM {
                     OnboardingView(vm: vm, onReady: handleReady)
@@ -48,10 +53,17 @@ struct RootView: View {
     }
 
     private func handleReady() {
-        print("[RootView] handleReady called — wiring coordinator + producer")
+        print("[RootView] handleReady called — wiring coordinator + producer (listener=\(settings.listenerName))")
         let c = PlaybackCoordinator(musicService: musicService, audioGraph: audioGraph)
         let rss = RSSFetcher(feedURLs: settings.feedURLs)
-        let p = Producer(coordinator: c, brain: djBrain, voice: djVoice, rssFetcher: rss, persona: settings.persona)
+        let p = Producer(
+            coordinator: c,
+            brain: djBrain,
+            voice: djVoice,
+            rssFetcher: rss,
+            persona: settings.persona,
+            listenerName: settings.listenerName.isEmpty ? nil : settings.listenerName
+        )
         coordinator = c
         producer = p
         nowPlayingVM = NowPlayingViewModel(coordinator: c)
