@@ -20,16 +20,29 @@ final class MusicKitService: MusicKitServiceProtocol {
 
     func start(track: Track) async throws {
         Log.musicKit.info("start(track: '\(track.title, privacy: .public)')")
-        var request = MusicLibraryRequest<Song>()
-        request.filter(matching: \.id, equalTo: MusicItemID(rawValue: track.id))
-        let response = try await request.response()
-        guard let song = response.items.first else {
-            Log.musicKit.error("start failed: track not found")
-            throw MusicKitServiceError.trackNotFound(id: track.id)
-        }
+        let song = try await resolveSong(id: track.id)
         player.queue = ApplicationMusicPlayer.Queue(for: [song])
         try await player.play()
         Log.musicKit.debug("player.play() returned, playbackTime=\(self.player.playbackTime) status=\(String(describing: self.player.state.playbackStatus), privacy: .public)")
+    }
+
+    /// Tries the user's library first, falls back to the Apple Music catalog.
+    /// Needed because search returns catalog IDs, playlists return library IDs.
+    private func resolveSong(id: String) async throws -> Song {
+        var libRequest = MusicLibraryRequest<Song>()
+        libRequest.filter(matching: \.id, equalTo: MusicItemID(rawValue: id))
+        if let librarySong = (try? await libRequest.response())?.items.first {
+            return librarySong
+        }
+        let catalogRequest = MusicCatalogResourceRequest<Song>(
+            matching: \.id, equalTo: MusicItemID(rawValue: id)
+        )
+        let catalogResponse = try await catalogRequest.response()
+        guard let catalogSong = catalogResponse.items.first else {
+            Log.musicKit.error("start failed: track not found in library or catalog")
+            throw MusicKitServiceError.trackNotFound(id: id)
+        }
+        return catalogSong
     }
 
     func pause() async throws {
@@ -98,6 +111,16 @@ final class MusicKitService: MusicKitServiceProtocol {
                 artworkURL: $0.artwork?.url(width: 200, height: 200)
             )
         }
+    }
+
+    func searchCatalogSongs(query: String, limit: Int) async throws -> [Track] {
+        guard !query.isEmpty else { return [] }
+        var request = MusicCatalogSearchRequest(term: query, types: [Song.self])
+        request.limit = limit
+        let response = try await request.response()
+        let songs = Array(response.songs)
+        for song in songs { cacheArtwork(for: song) }
+        return songs.map(Track.init(song:))
     }
 
     func songs(inPlaylistWith id: String) async throws -> [Track] {

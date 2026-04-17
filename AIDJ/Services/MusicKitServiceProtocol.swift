@@ -33,6 +33,7 @@ protocol MusicKitServiceProtocol: AnyObject, Sendable {
 
     func playlists() async throws -> [PlaylistInfo]
     func songs(inPlaylistWith id: String) async throws -> [Track]
+    func searchCatalogSongs(query: String, limit: Int) async throws -> [Track]
 
     /// Returns cached MusicKit Artwork for a previously-fetched track, or nil if not cached.
     /// Used to drive ArtworkImage which handles the `musicKit://` URLs that AsyncImage can't.
