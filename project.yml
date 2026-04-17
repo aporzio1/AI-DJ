@@ -18,7 +18,6 @@ targets:
         SWIFT_VERSION: "6.0"
         MARKETING_VERSION: "1.0"
         CURRENT_PROJECT_VERSION: "1"
-        PRODUCT_NAME: "AI DJ"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     entitlements:
       path: AIDJ/Resources/AIDJ.entitlements
@@ -42,3 +41,14 @@ targets:
     settings:
       base:
         SWIFT_VERSION: "6.0"
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/AIDJ.app/Contents/MacOS/AIDJ"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+
+schemes:
+  AIDJ:
+    build:
+      targets:
+        AIDJ: all
+    test:
+      targets:
+        - AIDJTests
