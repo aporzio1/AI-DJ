@@ -3,6 +3,7 @@ import MusicKit
 
 struct NowPlayingView: View {
     @State private var vm: NowPlayingViewModel
+    @State private var scrubTime: Double?
 
     init(vm: NowPlayingViewModel) {
         self._vm = State(initialValue: vm)
@@ -15,11 +16,45 @@ struct NowPlayingView: View {
             if vm.isDJSpeaking {
                 djBanner
             }
+            progressSlider
             transportControls
         }
         .padding()
         .onAppear { vm.startObserving() }
         .onDisappear { vm.stopObserving() }
+    }
+
+    private var progressSlider: some View {
+        VStack(spacing: 4) {
+            Slider(
+                value: Binding(
+                    get: { scrubTime ?? vm.playbackTime },
+                    set: { scrubTime = $0 }
+                ),
+                in: 0...max(vm.duration, 1),
+                onEditingChanged: { editing in
+                    if !editing, let t = scrubTime {
+                        vm.seek(to: t)
+                        scrubTime = nil
+                    }
+                }
+            )
+            .disabled(vm.duration <= 0)
+            HStack {
+                Text(format(scrubTime ?? vm.playbackTime))
+                Spacer()
+                Text("-\(format(max(vm.duration - (scrubTime ?? vm.playbackTime), 0)))")
+            }
+            .font(.caption.monospacedDigit())
+            .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: 320)
+    }
+
+    private func format(_ time: TimeInterval) -> String {
+        guard time.isFinite, time >= 0 else { return "0:00" }
+        let total = Int(time)
+        return String(format: "%d:%02d", total / 60, total % 60)
     }
 
     @ViewBuilder

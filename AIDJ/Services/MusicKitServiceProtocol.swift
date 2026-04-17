@@ -22,6 +22,7 @@ protocol MusicKitServiceProtocol: AnyObject, Sendable {
     func pause() async throws
     func resume() async throws
     func stop() async throws
+    func seek(to time: TimeInterval) async throws
 
     /// Returns elapsed playback time for the current track.
     var currentPlaybackTime: TimeInterval { get }

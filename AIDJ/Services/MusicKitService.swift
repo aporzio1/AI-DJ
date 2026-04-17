@@ -40,6 +40,10 @@ final class MusicKitService: MusicKitServiceProtocol {
         player.stop()
     }
 
+    func seek(to time: TimeInterval) async throws {
+        player.playbackTime = time
+    }
+
     // MARK: State
 
     var currentPlaybackTime: TimeInterval {

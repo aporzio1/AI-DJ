@@ -23,6 +23,7 @@ final class FakeMusicService: MusicKitServiceProtocol {
     func pause() async throws { pauseCallCount += 1 }
     func resume() async throws { resumeCallCount += 1 }
     func stop() async throws { stopCallCount += 1 }
+    func seek(to time: TimeInterval) async throws { currentPlaybackTime = time }
     func playlists() async throws -> [PlaylistInfo] { [] }
     func songs(inPlaylistWith id: String) async throws -> [AIDJ.Track] { [] }
 }

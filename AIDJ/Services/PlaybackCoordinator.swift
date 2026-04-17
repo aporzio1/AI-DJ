@@ -107,6 +107,18 @@ actor PlaybackCoordinator {
         }
     }
 
+    func seek(to time: TimeInterval) async throws {
+        try await musicService.seek(to: time)
+    }
+
+    func musicPlaybackTime() async -> TimeInterval {
+        await musicService.currentPlaybackTime
+    }
+
+    func musicTrackDuration() async -> TimeInterval? {
+        await musicService.currentTrackDuration
+    }
+
     // MARK: Private
 
     private func playCurrentItem() async throws {
