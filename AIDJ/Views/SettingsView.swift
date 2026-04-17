@@ -26,8 +26,6 @@ struct SettingsView: View {
     private var djSection: some View {
         Section("DJ") {
             Toggle("Enable DJ", isOn: $vm.djEnabled)
-            Toggle("Announcements", isOn: $vm.announcementsEnabled)
-                .disabled(!vm.djEnabled)
 
             LabeledContent("Persona") {
                 Text(vm.persona.name)

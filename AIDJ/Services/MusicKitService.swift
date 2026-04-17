@@ -59,15 +59,7 @@ final class MusicKitService: MusicKitServiceProtocol {
 
     var currentTrack: Track? {
         guard case .song(let song) = player.queue.currentEntry?.item else { return nil }
-        return Track(
-            id: song.id.rawValue,
-            title: song.title,
-            artist: song.artistName,
-            album: song.albumTitle ?? "",
-            artworkURL: song.artwork.map { $0.url(width: 300, height: 300) } ?? nil,
-            duration: song.duration.map { TimeInterval($0) } ?? 0,
-            providerID: .appleMusic
-        )
+        return Track(song: song)
     }
 
     var playbackStatus: MusicPlaybackStatus {
@@ -108,7 +100,7 @@ enum MusicKitServiceError: Error {
 }
 
 private extension Track {
-    init?(song: Song) {
+    init(song: Song) {
         self.init(
             id: song.id.rawValue,
             title: song.title,

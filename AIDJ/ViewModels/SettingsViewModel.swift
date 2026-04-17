@@ -7,14 +7,12 @@ final class SettingsViewModel {
     var persona: DJPersona = .default
     var djEnabled: Bool = true
     var newsEnabled: Bool = true
-    var announcementsEnabled: Bool = true
     var feedURLStrings: [String] = []
     var listenerName: String = ""
 
     private static let feedsKey = "rssFeedURLs"
     private static let djEnabledKey = "djEnabled"
     private static let newsEnabledKey = "newsEnabled"
-    private static let announcementsEnabledKey = "announcementsEnabled"
     private static let listenerNameKey = "listenerName"
 
     init() {
@@ -57,7 +55,6 @@ final class SettingsViewModel {
         UserDefaults.standard.set(feedURLStrings, forKey: Self.feedsKey)
         UserDefaults.standard.set(djEnabled, forKey: Self.djEnabledKey)
         UserDefaults.standard.set(newsEnabled, forKey: Self.newsEnabledKey)
-        UserDefaults.standard.set(announcementsEnabled, forKey: Self.announcementsEnabledKey)
         UserDefaults.standard.set(listenerName, forKey: Self.listenerNameKey)
     }
 
@@ -65,7 +62,6 @@ final class SettingsViewModel {
         feedURLStrings = UserDefaults.standard.stringArray(forKey: Self.feedsKey) ?? []
         djEnabled = UserDefaults.standard.object(forKey: Self.djEnabledKey) as? Bool ?? true
         newsEnabled = UserDefaults.standard.object(forKey: Self.newsEnabledKey) as? Bool ?? true
-        announcementsEnabled = UserDefaults.standard.object(forKey: Self.announcementsEnabledKey) as? Bool ?? true
         if let stored = UserDefaults.standard.string(forKey: Self.listenerNameKey), !stored.isEmpty {
             listenerName = stored
         } else {
@@ -75,7 +71,6 @@ final class SettingsViewModel {
 
     private func defaultSystemName() -> String {
         let full = NSFullUserName()
-        // Extract just the first name for a more natural DJ greeting
         return full.components(separatedBy: .whitespaces).first ?? full
     }
 }

@@ -178,6 +178,14 @@ actor PlaybackCoordinator {
                 return
             }
 
+            // Check state BEFORE end-of-track heuristics. A pause() call that resets
+            // playbackTime to 0 would otherwise falsely trigger the reset heuristic
+            // and auto-advance to the next track.
+            if state != .playing {
+                print("[Coordinator] state is \(state), exiting poll loop (gen=\(myGen))")
+                return
+            }
+
             tickCount += 1
             let elapsed = await musicService.currentPlaybackTime
             let duration = await musicService.currentTrackDuration ?? track.duration
@@ -207,11 +215,6 @@ actor PlaybackCoordinator {
             if maxElapsedSeen > 10, elapsed < 1.0 {
                 print("[Coordinator] playbackTime reset after progress — track ended (gen=\(myGen))")
                 break
-            }
-
-            if state != .playing {
-                print("[Coordinator] state is \(state), exiting poll loop (gen=\(myGen))")
-                return
             }
         }
         // Only advance if we're still the current generation

@@ -36,6 +36,8 @@ struct RootView: View {
                             Task { await p.updateListenerName(newName.isEmpty ? nil : newName) }
                         }
                     }
+                    .onChange(of: settings.djEnabled) { _, _ in updateProducerConfig() }
+                    .onChange(of: settings.newsEnabled) { _, _ in updateProducerConfig() }
             } else {
                 if let vm = onboardingVM {
                     OnboardingView(vm: vm, onReady: handleReady)
@@ -62,7 +64,8 @@ struct RootView: View {
             voice: djVoice,
             rssFetcher: rss,
             persona: settings.persona,
-            listenerName: settings.listenerName.isEmpty ? nil : settings.listenerName
+            listenerName: settings.listenerName.isEmpty ? nil : settings.listenerName,
+            config: producerConfig()
         )
         coordinator = c
         producer = p
@@ -72,6 +75,17 @@ struct RootView: View {
         Task { await p.start() }
         isReady = true
         print("[RootView] isReady = true")
+    }
+
+    private func producerConfig() -> Producer.Config {
+        Producer.Config(djEnabled: settings.djEnabled, newsEnabled: settings.newsEnabled)
+    }
+
+    private func updateProducerConfig() {
+        let cfg = producerConfig()
+        if let p = producer {
+            Task { await p.updateConfig(cfg) }
+        }
     }
 
     @ViewBuilder

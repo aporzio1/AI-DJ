@@ -17,33 +17,29 @@ final class DJVoice: DJVoiceProtocol {
 
         let renderer = SpeechRenderer(utterance: utterance, outputURL: outputURL)
 
-        return try await withThrowingTaskGroup(of: URL.self) { group in
-            group.addTask {
-                try await withCheckedThrowingContinuation { continuation in
-                    renderer.render { [renderer] result in
-                        _ = renderer // keep alive until callback fires
-                        continuation.resume(with: result)
-                    }
-                }
+        return try await withCheckedThrowingContinuation { continuation in
+            let timeout = Task {
+                try? await Task.sleep(for: .seconds(15))
+                renderer.stop()
             }
-            group.addTask {
-                try await Task.sleep(for: .seconds(15))
-                throw DJVoiceError.renderTimeout
+            renderer.render { [renderer] result in
+                _ = renderer
+                timeout.cancel()
+                continuation.resume(with: result)
             }
-            let url = try await group.next()!
-            group.cancelAll()
-            return url
         }
     }
 }
 
 // MARK: - SpeechRenderer
 
-/// Wraps AVSpeechSynthesizer write callback, retaining the synthesizer for the duration of rendering.
+/// Drives AVSpeechSynthesizer.write and accumulates PCM buffers into a .caf file.
+/// Thread-safe: the synth callback can fire on any queue.
 private final class SpeechRenderer: @unchecked Sendable {
     private let synthesizer = AVSpeechSynthesizer()
     private let utterance: AVSpeechUtterance
     private let outputURL: URL
+    private let lock = NSLock()
     private var audioFile: AVAudioFile?
     private var completion: ((Result<URL, Error>) -> Void)?
     private var finished = false
@@ -54,43 +50,67 @@ private final class SpeechRenderer: @unchecked Sendable {
     }
 
     func render(completion: @escaping @Sendable (Result<URL, Error>) -> Void) {
+        lock.lock()
         self.completion = completion
+        lock.unlock()
         synthesizer.write(utterance) { [weak self] buffer in
             self?.handleBuffer(buffer)
         }
     }
 
+    /// Force-stop the synthesizer and resume the caller with a timeout error.
+    func stop() {
+        synthesizer.stopSpeaking(at: .immediate)
+        finish(with: .failure(DJVoiceError.renderTimeout))
+    }
+
     private func handleBuffer(_ buffer: AVAudioBuffer) {
-        guard !finished else { return }
         guard let pcmBuffer = buffer as? AVAudioPCMBuffer else { return }
 
         if pcmBuffer.frameLength == 0 {
-            // Terminator. Only treat as success if we actually wrote audio.
-            // AVSpeechSynthesizer sometimes emits a spurious empty buffer before any real audio.
-            if audioFile != nil {
-                finished = true
-                completion?(.success(outputURL))
-                completion = nil
+            // Terminator. Only complete if we actually wrote audio — AVSpeechSynthesizer
+            // can emit a spurious empty buffer before any real audio.
+            if currentAudioFile() != nil {
+                finish(with: .success(outputURL))
             }
-            // Else: ignore — wait for actual audio buffers
             return
         }
 
         do {
-            if audioFile == nil {
-                audioFile = try AVAudioFile(forWriting: outputURL, settings: pcmBuffer.format.settings)
+            if currentAudioFile() == nil {
+                let file = try AVAudioFile(forWriting: outputURL, settings: pcmBuffer.format.settings)
+                setAudioFile(file)
             }
-            try audioFile?.write(from: pcmBuffer)
+            try currentAudioFile()?.write(from: pcmBuffer)
         } catch {
-            finished = true
-            completion?(.failure(error))
-            completion = nil
+            finish(with: .failure(error))
         }
+    }
+
+    private func currentAudioFile() -> AVAudioFile? {
+        lock.lock(); defer { lock.unlock() }
+        return audioFile
+    }
+
+    private func setAudioFile(_ file: AVAudioFile) {
+        lock.lock(); defer { lock.unlock() }
+        audioFile = file
+    }
+
+    private func finish(with result: Result<URL, Error>) {
+        lock.lock()
+        if finished {
+            lock.unlock()
+            return
+        }
+        finished = true
+        let cb = completion
+        completion = nil
+        lock.unlock()
+        cb?(result)
     }
 }
 
 enum DJVoiceError: Error {
-    case invalidFormat
-    case noAudioGenerated
     case renderTimeout
 }

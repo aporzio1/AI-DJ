@@ -6,16 +6,5 @@ struct AIDJApp: App {
         WindowGroup {
             RootView()
         }
-#if os(macOS)
-        .commands {
-            CommandGroup(after: .appInfo) {
-                Divider()
-                Button("Skip DJ Segment") {
-                    // Handled via notification or environment object in a future pass
-                }
-                .keyboardShortcut("d", modifiers: [.command, .shift])
-            }
-        }
-#endif
     }
 }

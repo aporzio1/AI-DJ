@@ -4,12 +4,19 @@ import Foundation
 /// On any failure in the generation pipeline, degrades gracefully (never stops music).
 actor Producer {
 
+    struct Config: Sendable {
+        var djEnabled: Bool
+        var newsEnabled: Bool
+        static let `default` = Config(djEnabled: true, newsEnabled: true)
+    }
+
     private let coordinator: PlaybackCoordinator
     private let brain: any DJBrainProtocol
     private let voice: any DJVoiceProtocol
     private let rssFetcher: any RSSFetcherProtocol
     private let persona: DJPersona
     private var listenerName: String?
+    private var config: Config = .default
 
     private var recentTracks: [AIDJ.Track] = []
     private var monitorTask: Task<Void, Never>?
@@ -22,7 +29,8 @@ actor Producer {
         voice: any DJVoiceProtocol,
         rssFetcher: any RSSFetcherProtocol,
         persona: DJPersona = .default,
-        listenerName: String? = nil
+        listenerName: String? = nil,
+        config: Config = .default
     ) {
         self.coordinator = coordinator
         self.brain = brain
@@ -30,22 +38,7 @@ actor Producer {
         self.rssFetcher = rssFetcher
         self.persona = persona
         self.listenerName = listenerName
-    }
-
-    func updateListenerName(_ name: String?) {
-        listenerName = name
-    }
-
-    /// Generate and insert a DJ intro at position 0 of the queue, to play BEFORE the first track.
-    func primeOpeningIntro() async {
-        let queue = await coordinator.queue
-        guard let firstTrack = queue.first, case .track(let upcoming) = firstTrack else { return }
-        print("[Producer] Priming opening intro for '\(upcoming.title)'")
-        hasGivenIntro = true
-        tracksSinceLastSegment = 0
-        guard let segment = await generateSegment(upcomingTrack: upcoming) else { return }
-        await coordinator.prependAndSelect(.djSegment(segment))
-        print("[Producer] Opening intro inserted at index 0")
+        self.config = config
     }
 
     // MARK: Lifecycle
@@ -68,12 +61,35 @@ actor Producer {
         monitorTask = nil
     }
 
-    // MARK: Private
+    func updateListenerName(_ name: String?) {
+        listenerName = name
+    }
+
+    func updateConfig(_ newConfig: Config) {
+        config = newConfig
+    }
+
+    func primeOpeningIntro() async {
+        guard config.djEnabled else {
+            print("[Producer] DJ disabled — skipping opening intro")
+            return
+        }
+        let queue = await coordinator.queue
+        guard let firstTrack = queue.first, case .track(let upcoming) = firstTrack else { return }
+        print("[Producer] Priming opening intro for '\(upcoming.title)'")
+        guard let segment = await generateSegment(upcomingTrack: upcoming) else { return }
+        await coordinator.prependAndSelect(.djSegment(segment))
+        hasGivenIntro = true
+        tracksSinceLastSegment = 0
+        print("[Producer] Opening intro inserted at index 0")
+    }
 
     /// Exposed for unit tests only.
     func handleWillAdvanceForTesting(_ event: WillAdvanceEvent) async {
         await handleWillAdvance(event)
     }
+
+    // MARK: Private
 
     private func handleWillAdvance(_ event: WillAdvanceEvent) async {
         let track = event.currentTrack
@@ -85,25 +101,35 @@ actor Producer {
         let nextItem = queue[event.nextTrackIndex]
         guard case .track(let upcomingTrack) = nextItem else { return }
 
-        // Try to prime a DJ segment; degrade gracefully on any failure
-        if let segment = await primeSegment(upcomingTrack: upcomingTrack) {
-            await coordinator.insertAfterCurrent(.djSegment(segment))
+        guard let segment = await primeSegment(upcomingTrack: upcomingTrack) else { return }
+
+        // Verify the upcoming track is still where we expect before inserting.
+        // If generation took too long and the coordinator already advanced past it,
+        // drop the segment rather than inserting at a stale slot.
+        let refreshedQueue = await coordinator.queue
+        let currentIdx = await coordinator.currentIndex
+        guard refreshedQueue.indices.contains(event.nextTrackIndex),
+              case .track(let stillThere) = refreshedQueue[event.nextTrackIndex],
+              stillThere.id == upcomingTrack.id,
+              event.nextTrackIndex > currentIdx else {
+            print("[Producer] Upcoming track moved/gone — dropping segment")
+            return
         }
+
+        await coordinator.insertAfterCurrent(.djSegment(segment))
     }
 
     private func shouldGenerate() -> Bool {
-        // First transition always gets a DJ intro
+        guard config.djEnabled else { return false }
         if !hasGivenIntro {
             hasGivenIntro = true
             tracksSinceLastSegment = 0
             return true
         }
-        // After 3 straight skips, force a segment so the DJ stays present
         if tracksSinceLastSegment >= 3 {
             tracksSinceLastSegment = 0
             return true
         }
-        // Otherwise 50/50
         if Bool.random() {
             tracksSinceLastSegment = 0
             return true
@@ -121,7 +147,9 @@ actor Producer {
     }
 
     private func generateSegment(upcomingTrack: AIDJ.Track) async -> DJSegment? {
-        let headline = try? await rssFetcher.fetchHeadlines().first
+        let headline: NewsHeadline? = config.newsEnabled
+            ? try? await rssFetcher.fetchHeadlines().first
+            : nil
 
         let context = DJContext(
             persona: persona,
@@ -159,8 +187,8 @@ actor Producer {
     }
 
     private func estimateDuration(script: String) -> TimeInterval {
-        // Rough estimate: ~130 words/min average speaking rate
+        let wpm = 130.0
         let words = script.split(separator: " ").count
-        return max(1.0, Double(words) / 130.0 * 60.0)
+        return max(1.0, Double(words) / wpm * 60.0)
     }
 }
