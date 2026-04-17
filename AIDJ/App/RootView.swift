@@ -37,6 +37,11 @@ struct RootView: View {
                     }
                     .onChange(of: settings.djEnabled) { _, _ in updateProducerConfig() }
                     .onChange(of: settings.newsEnabled) { _, _ in updateProducerConfig() }
+                    .onChange(of: settings.voiceIdentifier) { _, newID in
+                        if let p = producer {
+                            Task { await p.updateVoice(newID.isEmpty ? nil : newID) }
+                        }
+                    }
                     .sheet(isPresented: $showingNowPlaying) {
                         NavigationStack {
                             NowPlayingView(vm: nowPlaying)
@@ -88,6 +93,9 @@ struct RootView: View {
         queueVM = QueueViewModel(coordinator: c)
         libraryVM = LibraryViewModel(musicService: musicService, coordinator: c, producer: p)
         Task { await p.start() }
+        if !settings.voiceIdentifier.isEmpty {
+            Task { await p.updateVoice(settings.voiceIdentifier) }
+        }
         Task.detached(priority: .utility) { [djBrain] in await djBrain.warmUp() }
         isReady = true
         Log.app.info("isReady = true")

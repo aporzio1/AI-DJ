@@ -1,9 +1,49 @@
 import SwiftUI
+import AVFoundation
+
+private struct VoiceOption: Identifiable, Hashable {
+    let id: String           // AVSpeechSynthesisVoice identifier
+    let name: String
+    let quality: Quality
+
+    enum Quality: Int, Comparable {
+        case compact, enhanced, premium
+        static func < (l: Self, r: Self) -> Bool { l.rawValue < r.rawValue }
+        var label: String {
+            switch self {
+            case .premium:  "Premium"
+            case .enhanced: "Enhanced"
+            case .compact:  "Compact"
+            }
+        }
+    }
+
+    var displayName: String { "\(name) — \(quality.label)" }
+
+    static func installedEnglish() -> [VoiceOption] {
+        AVSpeechSynthesisVoice.speechVoices()
+            .filter { $0.language.hasPrefix("en") }
+            .map {
+                let q: Quality
+                switch $0.quality {
+                case .premium:  q = .premium
+                case .enhanced: q = .enhanced
+                default:        q = .compact
+                }
+                return VoiceOption(id: $0.identifier, name: $0.name, quality: q)
+            }
+            .sorted { lhs, rhs in
+                if lhs.quality != rhs.quality { return lhs.quality > rhs.quality }
+                return lhs.name < rhs.name
+            }
+    }
+}
 
 struct SettingsView: View {
     @State private var vm: SettingsViewModel
     @State private var newFeedURL = ""
     @State private var showingOPMLImporter = false
+    @State private var availableVoices: [VoiceOption] = []
 
     init(vm: SettingsViewModel) {
         self._vm = State(initialValue: vm)
@@ -12,6 +52,7 @@ struct SettingsView: View {
     var body: some View {
         Form {
             djSection
+            voiceSection
             newsSection
             if vm.djEnabled && vm.newsEnabled {
                 feedsSection
@@ -22,6 +63,7 @@ struct SettingsView: View {
         }
         .formStyle(.grouped)
         .navigationTitle("Settings")
+        .onAppear { availableVoices = VoiceOption.installedEnglish() }
 #if os(macOS)
         .fileImporter(isPresented: $showingOPMLImporter,
                       allowedContentTypes: [.xml, .data],
@@ -53,6 +95,47 @@ struct SettingsView: View {
         } footer: {
             Text("The DJ introduces tracks and adds commentary between songs. Your name may be used occasionally to personalize greetings.")
         }
+    }
+
+    // MARK: - Voice
+
+    private var voiceSection: some View {
+        Section {
+            Picker("Voice", selection: $vm.voiceIdentifier) {
+                Text("System Default").tag("")
+                ForEach(availableVoices) { voice in
+                    Text(voice.displayName).tag(voice.id)
+                }
+            }
+            .onChange(of: vm.voiceIdentifier) { _, _ in vm.save() }
+
+            if !hasAnyPremium {
+                Label {
+                    Text(voiceInstallTip)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                } icon: {
+                    Image(systemName: "info.circle")
+                        .foregroundStyle(.secondary)
+                }
+            }
+        } header: {
+            Text("Voice")
+        } footer: {
+            Text("Premium and Enhanced voices sound significantly more natural than default voices.")
+        }
+    }
+
+    private var hasAnyPremium: Bool {
+        availableVoices.contains { $0.quality == .premium || $0.quality == .enhanced }
+    }
+
+    private var voiceInstallTip: String {
+#if os(macOS)
+        "Install higher-quality voices in System Settings → Accessibility → Spoken Content → System Voice → Manage Voices."
+#else
+        "Install higher-quality voices in Settings → Accessibility → Spoken Content → Voices."
+#endif
     }
 
     // MARK: - News

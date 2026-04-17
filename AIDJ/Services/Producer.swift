@@ -17,6 +17,7 @@ actor Producer {
     private let persona: DJPersona
     private var listenerName: String?
     private var config: Config = .default
+    private var voiceOverride: String?
 
     private var recentTracks: [AIDJ.Track] = []
     private var monitorTask: Task<Void, Never>?
@@ -67,6 +68,15 @@ actor Producer {
 
     func updateConfig(_ newConfig: Config) {
         config = newConfig
+    }
+
+    func updateVoice(_ identifier: String?) {
+        voiceOverride = identifier
+    }
+
+    private var currentVoiceIdentifier: String {
+        if let v = voiceOverride, !v.isEmpty { return v }
+        return persona.voicePreset
     }
 
     /// Generate a replacement for the currently-playing DJ segment. Uses the same
@@ -185,7 +195,7 @@ actor Producer {
         }
 
         do {
-            let audioURL = try await voice.renderToFile(script: script, voiceIdentifier: persona.voicePreset)
+            let audioURL = try await voice.renderToFile(script: script, voiceIdentifier: currentVoiceIdentifier)
             Log.producer.debug("DJVoice rendered to \(audioURL.lastPathComponent, privacy: .public)")
             return DJSegment(
                 id: UUID(),

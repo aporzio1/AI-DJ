@@ -9,11 +9,13 @@ final class SettingsViewModel {
     var newsEnabled: Bool = true
     var feedURLStrings: [String] = []
     var listenerName: String = ""
+    var voiceIdentifier: String = ""
 
     private static let feedsKey = "rssFeedURLs"
     private static let djEnabledKey = "djEnabled"
     private static let newsEnabledKey = "newsEnabled"
     private static let listenerNameKey = "listenerName"
+    private static let voiceIdentifierKey = "voiceIdentifier"
 
     init() {
         loadFromUserDefaults()
@@ -56,6 +58,7 @@ final class SettingsViewModel {
         UserDefaults.standard.set(djEnabled, forKey: Self.djEnabledKey)
         UserDefaults.standard.set(newsEnabled, forKey: Self.newsEnabledKey)
         UserDefaults.standard.set(listenerName, forKey: Self.listenerNameKey)
+        UserDefaults.standard.set(voiceIdentifier, forKey: Self.voiceIdentifierKey)
     }
 
     private func loadFromUserDefaults() {
@@ -67,6 +70,13 @@ final class SettingsViewModel {
         } else {
             listenerName = defaultSystemName()
         }
+        voiceIdentifier = UserDefaults.standard.string(forKey: Self.voiceIdentifierKey) ?? ""
+    }
+
+    /// The voice to use for DJ speech. Falls back to the persona preset
+    /// if the user hasn't picked one explicitly.
+    var effectiveVoiceIdentifier: String {
+        voiceIdentifier.isEmpty ? persona.voicePreset : voiceIdentifier
     }
 
     private func defaultSystemName() -> String {
