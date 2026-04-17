@@ -22,9 +22,7 @@ targets:
     entitlements:
       path: AIDJ/Resources/AIDJ.entitlements
       properties:
-        com.apple.developer.music-api: true
         com.apple.security.network.client: true
-        com.apple.security.app-sandbox: true
     info:
       path: AIDJ/Resources/Info.plist
       properties:

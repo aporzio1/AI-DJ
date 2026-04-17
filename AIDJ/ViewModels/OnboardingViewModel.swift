@@ -21,19 +21,22 @@ final class OnboardingViewModel {
     }
 
     func checkStatus() async {
-        // Check Apple Intelligence first (device capability)
+        print("[Onboarding] checkStatus called")
+
         if let reason = appleIntelligenceUnavailabilityReason() {
+            print("[Onboarding] Apple Intelligence unavailable: \(reason)")
             status = .needsAppleIntelligence(reason: reason)
             return
         }
 
-        // Check MusicKit authorization
         let authStatus = musicService.authorizationStatus
+        print("[Onboarding] MusicKit auth status: \(authStatus)")
         if authStatus != .authorized {
             status = .needsMusicKitAuth
             return
         }
 
+        print("[Onboarding] All clear → status = .ready")
         status = .ready
     }
 
