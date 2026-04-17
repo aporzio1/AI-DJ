@@ -14,6 +14,11 @@ final class OnboardingViewModel {
     }
 
     private(set) var status: Status = .checking
+
+    var isReady: Bool {
+        if case .ready = status { return true }
+        return false
+    }
     private let musicService: any MusicKitServiceProtocol
 
     init(musicService: any MusicKitServiceProtocol) {

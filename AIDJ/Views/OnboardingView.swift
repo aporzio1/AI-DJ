@@ -15,8 +15,7 @@ struct OnboardingView: View {
             case .checking:
                 ProgressView("Checking requirements…")
             case .ready:
-                EmptyView()
-                    .onAppear { onReady() }
+                ProgressView("Starting…")
             case .needsMusicKitAuth:
                 blockedView(
                     icon: "music.note",
@@ -42,6 +41,12 @@ struct OnboardingView: View {
             }
         }
         .task { await vm.checkStatus() }
+        .onChange(of: vm.isReady) { _, ready in
+            if ready {
+                print("[OnboardingView] isReady fired → calling onReady()")
+                onReady()
+            }
+        }
     }
 
     private func blockedView(icon: String, title: String, message: String, actionTitle: String, action: @escaping () -> Void) -> some View {
