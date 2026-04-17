@@ -25,10 +25,11 @@ final class DJBrain: DJBrainProtocol {
 
     func generateScript(for context: DJContext) async throws -> String {
         let prompt = buildPrompt(context: context)
+        print("[DJBrain] prompt: \(prompt)")
         let session = LanguageModelSession(instructions: context.persona.styleDescriptor)
         let response = try await session.respond(to: prompt)
         let script = response.content.trimmingCharacters(in: .whitespacesAndNewlines)
-        // Enforce rough length limit
+        print("[DJBrain] raw response: \(script)")
         if script.count > 220 {
             return String(script.prefix(220))
         }

@@ -126,40 +126,66 @@ actor PlaybackCoordinator {
 
     private func playTrack(_ track: Track) async throws {
         state = .playing
-        let duration = track.duration
-        // Background task emits willAdvance at T-5s so Producer can prime the next segment
-        Task { [weak self] in
-            guard let self else { return }
-            let delay = max(0, duration - 5.0)
-            try? await Task.sleep(for: .seconds(delay))
-            await self.emitWillAdvance(track: track)
-        }
+        print("[Coordinator] playTrack '\(track.title)' duration=\(track.duration)s")
         try await musicService.start(track: track)
-        // Approximate wait for track duration; MusicKit drives the actual playback
-        try await Task.sleep(for: .seconds(duration))
+
+        // Poll MusicKit's real playback time. Emit willAdvance at T-5s, then advance when done.
+        var emittedWillAdvance = false
+        while !Task.isCancelled {
+            try await Task.sleep(for: .milliseconds(500))
+            let elapsed = await musicService.currentPlaybackTime
+            let duration = await musicService.currentTrackDuration ?? track.duration
+            let remaining = duration - elapsed
+
+            if !emittedWillAdvance, duration > 0, remaining <= 5.0, remaining > 0 {
+                print("[Coordinator] T-\(String(format: "%.1f", remaining))s — emitting willAdvance")
+                emitWillAdvance(track: track)
+                emittedWillAdvance = true
+            }
+
+            // Track finished: playbackTime past duration OR the player stopped
+            let status = await musicService.playbackStatus
+            if duration > 0 && elapsed >= duration - 0.3 {
+                print("[Coordinator] track reached end by time (elapsed=\(elapsed))")
+                break
+            }
+            if status == .stopped {
+                print("[Coordinator] music service reports stopped")
+                break
+            }
+            if state != .playing {
+                print("[Coordinator] state is \(state), exiting poll loop")
+                return
+            }
+        }
         await advance()
     }
 
     private func playSegment(_ segment: DJSegment) async throws {
         state = .playing
+        print("[Coordinator] playSegment kind=\(segment.kind) script=\"\(segment.script)\"")
         try await musicService.pause()
         try await audioGraph.play(url: segment.audioFileURL)
+        print("[Coordinator] segment done, resuming queue")
         await advance()
     }
 
     private func advance() async {
         guard state == .playing || state == .buffering else { return }
         currentIndex += 1
+        print("[Coordinator] advance → currentIndex=\(currentIndex) (queue=\(queue.count))")
         if currentIndex < queue.count {
             try? await playCurrentItem()
         } else {
             state = .idle
+            print("[Coordinator] queue exhausted → idle")
         }
     }
 
     private func emitWillAdvance(track: Track) {
         let nextIndex = currentIndex + 1
         let event = WillAdvanceEvent(currentTrack: track, nextTrackIndex: nextIndex)
+        print("[Coordinator] emitWillAdvance: \(willAdvanceContinuations.count) subscribers")
         for continuation in willAdvanceContinuations.values {
             continuation.yield(event)
         }

@@ -17,7 +17,8 @@ final class DJVoice: DJVoiceProtocol {
 
         return try await withCheckedThrowingContinuation { continuation in
             let renderer = SpeechRenderer(utterance: utterance, outputURL: outputURL)
-            renderer.render { result in
+            renderer.render { [renderer] result in
+                _ = renderer // keep renderer alive until the buffer callback terminates
                 continuation.resume(with: result)
             }
         }

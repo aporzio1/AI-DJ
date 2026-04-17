@@ -30,12 +30,15 @@ actor Producer {
     // MARK: Lifecycle
 
     func start() {
+        print("[Producer] start() — subscribing to willAdvance events")
         monitorTask?.cancel()
         monitorTask = Task { [weak self] in
             guard let self else { return }
             for await event in await coordinator.willAdvanceEvents {
+                print("[Producer] Received willAdvance for '\(event.currentTrack.title)' → nextIndex=\(event.nextTrackIndex)")
                 await self.handleWillAdvance(event)
             }
+            print("[Producer] willAdvance stream ended")
         }
     }
 
@@ -81,24 +84,27 @@ actor Producer {
         let script: String
         do {
             script = try await brain.generateScript(for: context)
+            print("[Producer] DJBrain script: \"\(script)\"")
         } catch {
-            // DJBrain failed — fall back to canned template
+            print("[Producer] DJBrain failed (\(error)) — falling back to canned template")
             script = "Up next, \(upcomingTrack.title) by \(upcomingTrack.artist)."
         }
 
-        guard let audioURL = try? await voice.renderToFile(script: script, voiceIdentifier: persona.voicePreset) else {
-            // DJVoice failed — skip segment entirely
+        do {
+            let audioURL = try await voice.renderToFile(script: script, voiceIdentifier: persona.voicePreset)
+            print("[Producer] DJVoice rendered to \(audioURL.lastPathComponent)")
+            return DJSegment(
+                id: UUID(),
+                kind: headline != nil ? .news : .announcement,
+                script: script,
+                audioFileURL: audioURL,
+                duration: estimateDuration(script: script),
+                overlapStart: nil
+            )
+        } catch {
+            print("[Producer] DJVoice failed: \(error) — skipping segment")
             return nil
         }
-
-        return DJSegment(
-            id: UUID(),
-            kind: headline != nil ? .news : .announcement,
-            script: script,
-            audioFileURL: audioURL,
-            duration: estimateDuration(script: script),
-            overlapStart: nil
-        )
     }
 
     private func estimateDuration(script: String) -> TimeInterval {
