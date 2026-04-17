@@ -22,24 +22,32 @@ final class AudioGraph: AudioGraphProtocol {
         playbackTask?.cancel()
 
         let file = try AVAudioFile(forReading: url)
+        print("[AudioGraph] opened \(url.lastPathComponent) frames=\(file.length) sr=\(file.processingFormat.sampleRate)")
         guard file.length > 0 else {
-            print("[AudioGraph] file at \(url.lastPathComponent) has 0 frames — skipping playback")
+            print("[AudioGraph] file has 0 frames — skipping playback")
             throw AudioGraphError.emptyFile
         }
 
         if !engine.isRunning {
+            print("[AudioGraph] starting engine")
             try engine.start()
+            print("[AudioGraph] engine started, isRunning=\(engine.isRunning)")
         }
         playerNode.stop()
+        print("[AudioGraph] scheduling file")
         await playerNode.scheduleFile(file, at: nil)
+        print("[AudioGraph] calling play()")
         playerNode.play()
+        print("[AudioGraph] play() called, isPlaying=\(playerNode.isPlaying)")
 
         let duration = file.duration
+        print("[AudioGraph] sleeping for \(duration + 0.15)s")
         let task = Task<Void, Error> {
             try await Task.sleep(for: .seconds(duration + 0.15))
         }
         playbackTask = task
         try await task.value
+        print("[AudioGraph] play() complete")
     }
 
     func stop() {
