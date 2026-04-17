@@ -59,19 +59,15 @@ struct NowPlayingView: View {
 
     @ViewBuilder
     private var artworkView: some View {
-        if let url = artworkURL {
-            AsyncImage(url: url) { image in
-                image.resizable().aspectRatio(contentMode: .fit)
-            } placeholder: {
+        Group {
+            if let artwork = vm.currentArtwork {
+                ArtworkImage(artwork, width: 260, height: 260)
+            } else {
                 artworkPlaceholder
             }
-            .frame(width: 260, height: 260)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-        } else {
-            artworkPlaceholder
-                .frame(width: 260, height: 260)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
         }
+        .frame(width: 260, height: 260)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
     private var artworkPlaceholder: some View {
@@ -82,11 +78,6 @@ struct NowPlayingView: View {
                     .font(.largeTitle)
                     .foregroundStyle(.tertiary)
             }
-    }
-
-    private var artworkURL: URL? {
-        guard let item = vm.currentItem, case .track(let t) = item else { return nil }
-        return t.artworkURL
     }
 
     private var infoView: some View {

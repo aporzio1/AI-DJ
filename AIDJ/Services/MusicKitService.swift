@@ -6,6 +6,7 @@ final class MusicKitService: MusicKitServiceProtocol {
 
     private let player = ApplicationMusicPlayer.shared
     private var observationTask: Task<Void, Never>?
+    private var artworkCache: [String: Artwork] = [:]
 
     var authorizationStatus: MusicAuthorization.Status {
         MusicAuthorization.currentStatus
@@ -62,7 +63,18 @@ final class MusicKitService: MusicKitServiceProtocol {
 
     var currentTrack: Track? {
         guard case .song(let song) = player.queue.currentEntry?.item else { return nil }
+        cacheArtwork(for: song)
         return Track(song: song)
+    }
+
+    func artwork(for trackId: String) -> Artwork? {
+        artworkCache[trackId]
+    }
+
+    private func cacheArtwork(for song: Song) {
+        if let art = song.artwork {
+            artworkCache[song.id.rawValue] = art
+        }
     }
 
     var playbackStatus: MusicPlaybackStatus {
@@ -94,7 +106,12 @@ final class MusicKitService: MusicKitServiceProtocol {
         let response = try await request.response()
         guard let playlist = response.items.first else { return [] }
         let detailed = try await playlist.with([.tracks])
-        return detailed.tracks?.compactMap(\.asTrack) ?? []
+        let songs = detailed.tracks?.compactMap { track -> Song? in
+            if case .song(let s) = track { return s }
+            return nil
+        } ?? []
+        for song in songs { cacheArtwork(for: song) }
+        return songs.map(Track.init(song:))
     }
 }
 

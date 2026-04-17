@@ -1,4 +1,5 @@
 import Foundation
+import MusicKit
 
 @Observable
 @MainActor
@@ -9,12 +10,15 @@ final class NowPlayingViewModel {
     private(set) var isDJSpeaking: Bool = false
     private(set) var playbackTime: TimeInterval = 0
     private(set) var duration: TimeInterval = 0
+    private(set) var currentArtwork: Artwork?
 
     private let coordinator: PlaybackCoordinator
+    private let musicService: any MusicKitServiceProtocol
     private var monitorTask: Task<Void, Never>?
 
-    init(coordinator: PlaybackCoordinator) {
+    init(coordinator: PlaybackCoordinator, musicService: any MusicKitServiceProtocol) {
         self.coordinator = coordinator
+        self.musicService = musicService
     }
 
     func startObserving() {
@@ -37,6 +41,10 @@ final class NowPlayingViewModel {
                     self.isDJSpeaking = {
                         if case .djSegment = item { return state == .playing }
                         return false
+                    }()
+                    self.currentArtwork = {
+                        if case .track(let t) = item { return self.musicService.artwork(for: t.id) }
+                        return nil
                     }()
                 }
                 try? await Task.sleep(for: .milliseconds(250))
