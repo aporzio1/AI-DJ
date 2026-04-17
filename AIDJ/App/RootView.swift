@@ -23,6 +23,9 @@ struct RootView: View {
     // Onboarding VM — also stable
     @State private var onboardingVM: OnboardingViewModel?
 
+    // macOS sidebar selection
+    @State private var selectedTab: AppTab = .nowPlaying
+
     var body: some View {
         Group {
             if isReady, let nowPlaying = nowPlayingVM, let queue = queueVM, let library = libraryVM {
@@ -63,14 +66,20 @@ struct RootView: View {
     private func mainContent(nowPlaying: NowPlayingViewModel, queue: QueueViewModel, library: LibraryViewModel) -> some View {
 #if os(macOS)
         NavigationSplitView {
-            List {
-                Text("Now Playing").tag(AppTab.nowPlaying)
-                Text("Queue").tag(AppTab.queue)
-                Text("Library").tag(AppTab.library)
-                Text("Settings").tag(AppTab.settings)
+            List(selection: $selectedTab) {
+                Label("Now Playing", systemImage: "music.note").tag(AppTab.nowPlaying)
+                Label("Queue",       systemImage: "list.bullet").tag(AppTab.queue)
+                Label("Library",     systemImage: "music.note.list").tag(AppTab.library)
+                Label("Settings",    systemImage: "gear").tag(AppTab.settings)
             }
+            .navigationTitle("AI DJ")
         } detail: {
-            NowPlayingView(vm: nowPlaying)
+            switch selectedTab {
+            case .nowPlaying: NowPlayingView(vm: nowPlaying)
+            case .queue:      QueueView(vm: queue)
+            case .library:    LibraryView(vm: library)
+            case .settings:   SettingsView(vm: settings)
+            }
         }
 #else
         TabView {
