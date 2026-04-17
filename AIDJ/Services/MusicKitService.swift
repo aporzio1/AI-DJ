@@ -129,12 +129,26 @@ final class MusicKitService: MusicKitServiceProtocol {
         let response = try await request.response()
         guard let playlist = response.items.first else { return [] }
         let detailed = try await playlist.with([.tracks])
-        let songs = detailed.tracks?.compactMap { track -> Song? in
+        let allSongs = detailed.tracks?.compactMap { track -> Song? in
             if case .song(let s) = track { return s }
             return nil
         } ?? []
-        for song in songs { cacheArtwork(for: song) }
-        return songs.map(Track.init(song:))
+        let playable = allSongs.filter { $0.playParameters != nil }
+        let skipped = allSongs.count - playable.count
+        if skipped > 0 {
+            Log.musicKit.info("songs(inPlaylist): skipped \(skipped) unplayable tracks of \(allSongs.count)")
+        }
+        for song in playable { cacheArtwork(for: song) }
+        return playable.map(Track.init(song:))
+    }
+
+    func isPlayable(trackId: String) async -> Bool {
+        do {
+            let song = try await resolveSong(id: trackId)
+            return song.playParameters != nil
+        } catch {
+            return false
+        }
     }
 }
 

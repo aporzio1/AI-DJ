@@ -155,6 +155,10 @@ actor PlaybackCoordinator {
         await musicService.currentTrackDuration
     }
 
+    func isPlayable(trackId: String) async -> Bool {
+        await musicService.isPlayable(trackId: trackId)
+    }
+
     // MARK: Private
 
     private func playCurrentItem() async throws {

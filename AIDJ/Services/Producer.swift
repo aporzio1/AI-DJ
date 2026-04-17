@@ -121,27 +121,57 @@ actor Producer {
         recentTracks.append(track)
         if recentTracks.count > 5 { recentTracks.removeFirst() }
 
-        let queue = await coordinator.queue
-        guard event.nextTrackIndex < queue.count else { return }
-        let nextItem = queue[event.nextTrackIndex]
-        guard case .track(let upcomingTrack) = nextItem else { return }
+        // Look ahead from event.nextTrackIndex until we find a playable track.
+        // Drop any unplayable tracks from the queue as we go so the coordinator
+        // doesn't try to play them later. Cap lookahead at 10 to avoid stalls.
+        guard let upcomingTrack = await findNextPlayableTrack(from: event.nextTrackIndex) else {
+            Log.producer.info("No playable track ahead — skipping intro")
+            return
+        }
 
         guard let segment = await primeSegment(upcomingTrack: upcomingTrack) else { return }
 
-        // Verify the upcoming track is still where we expect before inserting.
-        // If generation took too long and the coordinator already advanced past it,
-        // drop the segment rather than inserting at a stale slot.
+        // Verify the upcoming track is still at the slot after current before inserting.
+        // If the coordinator advanced past it during generation, drop the segment.
         let refreshedQueue = await coordinator.queue
         let currentIdx = await coordinator.currentIndex
-        guard refreshedQueue.indices.contains(event.nextTrackIndex),
-              case .track(let stillThere) = refreshedQueue[event.nextTrackIndex],
-              stillThere.id == upcomingTrack.id,
-              event.nextTrackIndex > currentIdx else {
+        let expectedIdx = currentIdx + 1
+        guard refreshedQueue.indices.contains(expectedIdx),
+              case .track(let stillThere) = refreshedQueue[expectedIdx],
+              stillThere.id == upcomingTrack.id else {
             Log.producer.info("Upcoming track moved/gone — dropping segment")
             return
         }
 
         await coordinator.insertAfterCurrent(.djSegment(segment))
+    }
+
+    /// Scans the queue from `startIndex` forward, removing unplayable tracks, and returns
+    /// the first playable track (or nil if none in the next 10 positions).
+    private func findNextPlayableTrack(from startIndex: Int) async -> AIDJ.Track? {
+        let maxLookahead = 10
+        var attempts = 0
+        while attempts < maxLookahead {
+            let queue = await coordinator.queue
+            guard startIndex < queue.count else { return nil }
+            let item = queue[startIndex]
+            guard case .track(let candidate) = item else {
+                // Not a track (shouldn't happen here but be defensive)
+                return nil
+            }
+            // Check coordinator's musicService via the existing hook
+            if await coordinatorIsTrackPlayable(candidate) {
+                return candidate
+            }
+            Log.producer.info("Track '\(candidate.title, privacy: .public)' is unplayable — removing from queue")
+            await coordinator.removeItem(at: startIndex)
+            attempts += 1
+        }
+        return nil
+    }
+
+    private func coordinatorIsTrackPlayable(_ track: AIDJ.Track) async -> Bool {
+        await coordinator.isPlayable(trackId: track.id)
     }
 
     private func shouldGenerate() -> Bool {

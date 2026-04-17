@@ -35,6 +35,11 @@ protocol MusicKitServiceProtocol: AnyObject, Sendable {
     func songs(inPlaylistWith id: String) async throws -> [Track]
     func searchCatalogSongs(query: String, limit: Int) async throws -> [Track]
 
+    /// Returns true if MusicKit thinks this track can actually be played right now.
+    /// Library or catalog items with nil playParameters are unavailable (region,
+    /// rights, removal, or stale cloud reference).
+    func isPlayable(trackId: String) async -> Bool
+
     /// Returns cached MusicKit Artwork for a previously-fetched track, or nil if not cached.
     /// Used to drive ArtworkImage which handles the `musicKit://` URLs that AsyncImage can't.
     func artwork(for trackId: String) -> Artwork?
