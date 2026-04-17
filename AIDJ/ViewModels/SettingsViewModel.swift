@@ -10,12 +10,19 @@ final class SettingsViewModel {
     var feedURLStrings: [String] = []
     var listenerName: String = ""
     var voiceIdentifier: String = ""
+    var ttsProvider: TTSProvider = .system
+    var openAIVoice: String = OpenAITTSVoice.alloy.rawValue
+    var openAIModel: String = OpenAITTSModel.tts_1.rawValue
+    var openAIAPIKey: String = ""   // mirrored in Keychain; this is the in-memory copy for the SecureField
 
     private static let feedsKey = "rssFeedURLs"
     private static let djEnabledKey = "djEnabled"
     private static let newsEnabledKey = "newsEnabled"
     private static let listenerNameKey = "listenerName"
     private static let voiceIdentifierKey = "voiceIdentifier"
+    private static let ttsProviderKey = "ttsProvider"
+    private static let openAIVoiceKey = "openAIVoice"
+    private static let openAIModelKey = "openAIModel"
 
     init() {
         loadFromUserDefaults()
@@ -59,6 +66,10 @@ final class SettingsViewModel {
         UserDefaults.standard.set(newsEnabled, forKey: Self.newsEnabledKey)
         UserDefaults.standard.set(listenerName, forKey: Self.listenerNameKey)
         UserDefaults.standard.set(voiceIdentifier, forKey: Self.voiceIdentifierKey)
+        UserDefaults.standard.set(ttsProvider.rawValue, forKey: Self.ttsProviderKey)
+        UserDefaults.standard.set(openAIVoice, forKey: Self.openAIVoiceKey)
+        UserDefaults.standard.set(openAIModel, forKey: Self.openAIModelKey)
+        // API key is persisted to Keychain via saveAPIKey(); not echoed to UserDefaults.
     }
 
     private func loadFromUserDefaults() {
@@ -71,6 +82,22 @@ final class SettingsViewModel {
             listenerName = defaultSystemName()
         }
         voiceIdentifier = UserDefaults.standard.string(forKey: Self.voiceIdentifierKey) ?? ""
+        if let raw = UserDefaults.standard.string(forKey: Self.ttsProviderKey),
+           let p = TTSProvider(rawValue: raw) {
+            ttsProvider = p
+        }
+        openAIVoice = UserDefaults.standard.string(forKey: Self.openAIVoiceKey) ?? OpenAITTSVoice.alloy.rawValue
+        openAIModel = UserDefaults.standard.string(forKey: Self.openAIModelKey) ?? OpenAITTSModel.tts_1.rawValue
+        openAIAPIKey = Keychain.get(KeychainKey.openAIAPIKey) ?? ""
+    }
+
+    /// Persist the OpenAI API key to Keychain. Called from the Settings view.
+    func saveAPIKey() {
+        if openAIAPIKey.isEmpty {
+            Keychain.remove(KeychainKey.openAIAPIKey)
+        } else {
+            Keychain.set(openAIAPIKey, forKey: KeychainKey.openAIAPIKey)
+        }
     }
 
     /// The voice to use for DJ speech. Falls back to the persona preset

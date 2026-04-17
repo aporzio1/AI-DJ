@@ -1,7 +1,8 @@
 import Foundation
 import AVFoundation
 
-final class DJVoice: DJVoiceProtocol {
+/// Renders DJ scripts using the OS-provided AVSpeechSynthesizer.
+final class SystemDJVoice: DJVoiceProtocol {
 
     func renderToFile(script: String, voiceIdentifier: String) async throws -> URL {
         let utterance = AVSpeechUtterance(string: script)

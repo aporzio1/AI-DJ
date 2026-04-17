@@ -111,22 +111,18 @@ struct SettingsView: View {
 
     private var voiceSection: some View {
         Section {
-            Picker("Voice", selection: $vm.voiceIdentifier) {
-                Text("System Default").tag("")
-                ForEach(availableVoices) { voice in
-                    Text(voice.displayName).tag(voice.id)
+            Picker("Provider", selection: $vm.ttsProvider) {
+                ForEach(TTSProvider.allCases) { provider in
+                    Text(provider.displayName).tag(provider)
                 }
             }
-            .onChange(of: vm.voiceIdentifier) { _, _ in vm.save() }
+            .onChange(of: vm.ttsProvider) { _, _ in vm.save() }
 
-#if os(macOS)
-            Button {
-                openSpokenContentSettings()
-            } label: {
-                Label("Open System Settings — Spoken Content", systemImage: "arrow.up.forward.app")
+            if vm.ttsProvider == .system {
+                systemVoiceRows
+            } else if vm.ttsProvider == .openAI {
+                openAIRows
             }
-            .buttonStyle(.bordered)
-#endif
         } header: {
             Text("Voice")
         } footer: {
@@ -135,7 +131,67 @@ struct SettingsView: View {
     }
 
     @ViewBuilder
+    private var systemVoiceRows: some View {
+        Picker("Voice", selection: $vm.voiceIdentifier) {
+            Text("System Default").tag("")
+            ForEach(availableVoices) { voice in
+                Text(voice.displayName).tag(voice.id)
+            }
+        }
+        .onChange(of: vm.voiceIdentifier) { _, _ in vm.save() }
+
+#if os(macOS)
+        Button {
+            openSpokenContentSettings()
+        } label: {
+            Label("Open System Settings — Spoken Content", systemImage: "arrow.up.forward.app")
+        }
+        .buttonStyle(.bordered)
+#endif
+    }
+
+    @ViewBuilder
+    private var openAIRows: some View {
+        HStack {
+            Text("API Key")
+            Spacer(minLength: 16)
+            SecureField("sk-…", text: $vm.openAIAPIKey)
+                .textFieldStyle(.plain)
+                .multilineTextAlignment(.trailing)
+                .frame(maxWidth: 320)
+                .onSubmit { vm.saveAPIKey() }
+        }
+        Button("Save API Key") { vm.saveAPIKey() }
+            .buttonStyle(.bordered)
+            .disabled(vm.openAIAPIKey.isEmpty)
+
+        Picker("Model", selection: $vm.openAIModel) {
+            ForEach(OpenAITTSModel.allCases) { model in
+                Text(model.displayName).tag(model.rawValue)
+            }
+        }
+        .onChange(of: vm.openAIModel) { _, _ in vm.save() }
+
+        Picker("Voice", selection: $vm.openAIVoice) {
+            ForEach(OpenAITTSVoice.allCases) { voice in
+                Text(voice.displayName).tag(voice.rawValue)
+            }
+        }
+        .onChange(of: vm.openAIVoice) { _, _ in vm.save() }
+    }
+
+    @ViewBuilder
     private var voiceFooter: some View {
+        switch vm.ttsProvider {
+        case .system:
+            systemVoiceFooter
+        case .openAI:
+            Text("Runs in the cloud. Requires an OpenAI API key. Costs roughly ¢0.6 per DJ segment on the Standard model; HD is double. Paste your key above — it's stored in the macOS Keychain, not in UserDefaults or logs.")
+        }
+    }
+
+    @ViewBuilder
+    private var systemVoiceFooter: some View {
 #if os(macOS)
         VStack(alignment: .leading, spacing: 8) {
             Text("Premium voices sound much more natural. To download one:")

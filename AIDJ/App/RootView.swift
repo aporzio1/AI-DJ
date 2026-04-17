@@ -7,7 +7,7 @@ struct RootView: View {
     @State private var musicService = MusicKitService()
     @State private var audioGraph = AudioGraph()
     @State private var djBrain = DJBrain()
-    @State private var djVoice = DJVoice()
+    @State private var djVoice = DJVoiceRouter()
     @State private var settings = SettingsViewModel()
 
     // Post-onboarding actors
@@ -40,6 +40,16 @@ struct RootView: View {
                     .onChange(of: settings.voiceIdentifier) { _, newID in
                         if let p = producer {
                             Task { await p.updateVoice(newID.isEmpty ? nil : newID) }
+                        }
+                    }
+                    .onChange(of: settings.ttsProvider) { _, newProvider in
+                        djVoice.provider = newProvider
+                        applyOpenAIVoiceSelection()
+                    }
+                    .onChange(of: settings.openAIVoice) { _, _ in applyOpenAIVoiceSelection() }
+                    .onChange(of: settings.openAIModel) { _, newRaw in
+                        if let model = OpenAITTSModel(rawValue: newRaw) {
+                            djVoice.setOpenAIModel(model)
                         }
                     }
                     .sheet(isPresented: $showingNowPlaying) {
@@ -93,12 +103,29 @@ struct RootView: View {
         queueVM = QueueViewModel(coordinator: c)
         libraryVM = LibraryViewModel(musicService: musicService, coordinator: c, producer: p)
         Task { await p.start() }
-        if !settings.voiceIdentifier.isEmpty {
+        // Apply persisted voice + provider settings on boot
+        djVoice.provider = settings.ttsProvider
+        if let model = OpenAITTSModel(rawValue: settings.openAIModel) {
+            djVoice.setOpenAIModel(model)
+        }
+        applyOpenAIVoiceSelection()
+        if !settings.voiceIdentifier.isEmpty, settings.ttsProvider == .system {
             Task { await p.updateVoice(settings.voiceIdentifier) }
         }
         Task.detached(priority: .utility) { [djBrain] in await djBrain.warmUp() }
         isReady = true
         Log.app.info("isReady = true")
+    }
+
+    /// Pick the right voice identifier for the current provider and push it to Producer.
+    private func applyOpenAIVoiceSelection() {
+        guard let p = producer else { return }
+        let id: String
+        switch settings.ttsProvider {
+        case .system:  id = settings.voiceIdentifier
+        case .openAI:  id = settings.openAIVoice
+        }
+        Task { await p.updateVoice(id.isEmpty ? nil : id) }
     }
 
     private func producerConfig() -> Producer.Config {
