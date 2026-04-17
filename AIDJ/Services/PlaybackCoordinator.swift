@@ -224,7 +224,11 @@ actor PlaybackCoordinator {
                 Log.coordinator.debug("poll[gen=\(myGen)]: elapsed=\(elapsed, format: .fixed(precision: 1)) / \(duration, format: .fixed(precision: 1)) (remaining=\(remaining, format: .fixed(precision: 1)))")
             }
 
-            if !emittedWillAdvance, duration > 0, remaining <= 5.0, remaining > 0 {
+            // Fire willAdvance with a wide lead time so segment generation
+            // (which can take 10+ seconds for cloud TTS like OpenAI) has room
+            // to finish before the track ends. The advance timer still pins
+            // the actual handoff to the track's real end.
+            if !emittedWillAdvance, duration > 0, remaining <= 20.0, remaining > 0 {
                 Log.coordinator.info("T-\(remaining, format: .fixed(precision: 1))s — emitting willAdvance (gen=\(myGen))")
                 emitWillAdvance(track: track)
                 emittedWillAdvance = true
