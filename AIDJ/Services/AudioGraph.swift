@@ -25,20 +25,34 @@ actor AudioGraph: AudioGraphProtocol {
             throw AudioGraphError.emptyFile
         }
 
+        // Decode the whole file into a PCM buffer. scheduleBuffer is more reliable
+        // than scheduleFile for compressed formats (MP3, AAC), and lets us reconnect
+        // the player node with whatever format the buffer actually has — which avoids
+        // silent-output issues when segments arrive in different formats (CAF from
+        // system TTS, MP3 from OpenAI TTS).
+        let format = file.processingFormat
+        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(file.length)) else {
+            throw AudioGraphError.bufferAllocationFailed
+        }
+        try file.read(into: buffer)
+
+        playerNode.stop()
+        engine.disconnectNodeOutput(playerNode)
+        engine.connect(playerNode, to: engine.mainMixerNode, format: buffer.format)
+
         if !engine.isRunning {
             Log.audio.debug("starting engine")
             try engine.start()
         }
-        playerNode.stop()
 
         await withTaskCancellationHandler {
             await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
                 self.pendingContinuation = continuation
-                playerNode.scheduleFile(file, at: nil, completionCallbackType: .dataPlayedBack) { [weak self] _ in
+                playerNode.scheduleBuffer(buffer, at: nil, completionCallbackType: .dataPlayedBack) { [weak self] _ in
                     Task(priority: .utility) { await self?.resumePending() }
                 }
                 playerNode.play()
-                Log.audio.debug("play() called, isPlaying=\(self.playerNode.isPlaying)")
+                Log.audio.debug("play() called, isPlaying=\(self.playerNode.isPlaying) format=\(String(describing: buffer.format), privacy: .public)")
             }
             Log.audio.debug("play() complete")
         } onCancel: {
@@ -66,4 +80,5 @@ actor AudioGraph: AudioGraphProtocol {
 
 enum AudioGraphError: Error {
     case emptyFile
+    case bufferAllocationFailed
 }
