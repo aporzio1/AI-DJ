@@ -108,6 +108,7 @@ actor PlaybackCoordinator {
     }
 
     func seek(to time: TimeInterval) async throws {
+        print("[Coordinator] seek(to: \(String(format: "%.1f", time)))")
         try await musicService.seek(to: time)
     }
 
@@ -141,13 +142,19 @@ actor PlaybackCoordinator {
         print("[Coordinator] playTrack '\(track.title)' duration=\(track.duration)s")
         try await musicService.start(track: track)
 
-        // Poll MusicKit's real playback time. Emit willAdvance at T-5s, then advance when done.
         var emittedWillAdvance = false
+        var tickCount = 0
         while !Task.isCancelled {
             try await Task.sleep(for: .milliseconds(500))
+            tickCount += 1
             let elapsed = await musicService.currentPlaybackTime
             let duration = await musicService.currentTrackDuration ?? track.duration
             let remaining = duration - elapsed
+
+            // Heartbeat every 5 seconds so we can see the poll loop is alive
+            if tickCount % 10 == 0 {
+                print("[Coordinator] poll: elapsed=\(String(format: "%.1f", elapsed)) / \(String(format: "%.1f", duration)) (remaining=\(String(format: "%.1f", remaining)))")
+            }
 
             if !emittedWillAdvance, duration > 0, remaining <= 5.0, remaining > 0 {
                 print("[Coordinator] T-\(String(format: "%.1f", remaining))s — emitting willAdvance")
@@ -155,7 +162,6 @@ actor PlaybackCoordinator {
                 emittedWillAdvance = true
             }
 
-            // Track finished: playbackTime past duration OR the player stopped
             let status = await musicService.playbackStatus
             if duration > 0 && elapsed >= duration - 0.3 {
                 print("[Coordinator] track reached end by time (elapsed=\(elapsed))")

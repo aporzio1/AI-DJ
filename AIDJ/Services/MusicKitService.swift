@@ -41,7 +41,9 @@ final class MusicKitService: MusicKitServiceProtocol {
     }
 
     func seek(to time: TimeInterval) async throws {
+        print("[MusicKit] seek: setting playbackTime to \(time) (was \(player.playbackTime))")
         player.playbackTime = time
+        print("[MusicKit] seek: playbackTime is now \(player.playbackTime)")
     }
 
     // MARK: State
