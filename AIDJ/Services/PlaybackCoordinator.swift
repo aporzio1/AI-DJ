@@ -23,6 +23,10 @@ actor PlaybackCoordinator {
     private(set) var currentIndex: Int = 0
     private(set) var state: CoordinatorState = .idle
 
+    // Incremented every time a new playback starts. In-flight loops check this to detect
+    // when they've been superseded and should exit without advancing.
+    private var playbackGeneration: Int = 0
+
     // MARK: Advance notifications (Producer subscribes here)
 
     private var willAdvanceContinuations: [UUID: AsyncStream<WillAdvanceEvent>.Continuation] = [:]
@@ -153,8 +157,10 @@ actor PlaybackCoordinator {
     }
 
     private func playTrack(_ track: Track) async throws {
+        playbackGeneration += 1
+        let myGen = playbackGeneration
         state = .playing
-        print("[Coordinator] playTrack '\(track.title)' duration=\(track.duration)s")
+        print("[Coordinator] playTrack '\(track.title)' duration=\(track.duration)s (gen=\(myGen))")
         try await musicService.start(track: track)
 
         var emittedWillAdvance = false
@@ -166,6 +172,12 @@ actor PlaybackCoordinator {
 
         while !Task.isCancelled {
             try await Task.sleep(for: .milliseconds(500))
+
+            if playbackGeneration != myGen {
+                print("[Coordinator] playTrack superseded (gen \(myGen) → \(playbackGeneration)) — exiting")
+                return
+            }
+
             tickCount += 1
             let elapsed = await musicService.currentPlaybackTime
             let duration = await musicService.currentTrackDuration ?? track.duration
@@ -173,50 +185,58 @@ actor PlaybackCoordinator {
             maxElapsedSeen = max(maxElapsedSeen, elapsed)
 
             if tickCount % 10 == 0 {
-                print("[Coordinator] poll: elapsed=\(String(format: "%.1f", elapsed)) / \(String(format: "%.1f", duration)) (remaining=\(String(format: "%.1f", remaining)))")
+                print("[Coordinator] poll[gen=\(myGen)]: elapsed=\(String(format: "%.1f", elapsed)) / \(String(format: "%.1f", duration)) (remaining=\(String(format: "%.1f", remaining)))")
             }
 
             if !emittedWillAdvance, duration > 0, remaining <= 5.0, remaining > 0 {
-                print("[Coordinator] T-\(String(format: "%.1f", remaining))s — emitting willAdvance")
+                print("[Coordinator] T-\(String(format: "%.1f", remaining))s — emitting willAdvance (gen=\(myGen))")
                 emitWillAdvance(track: track)
                 emittedWillAdvance = true
                 willAdvanceRemaining = remaining
                 willAdvanceFiredAt = clock.now
             }
 
-            // Primary end-of-track detection: wall-clock timer from when willAdvance fired.
-            // MusicKit's playbackTime resets to 0 when the queue empties, so we can't rely on it.
             if let firedAt = willAdvanceFiredAt {
                 let sinceFired = clock.now - firedAt
                 if sinceFired >= .seconds(willAdvanceRemaining + 1.5) {
-                    print("[Coordinator] willAdvance timer elapsed — advancing")
+                    print("[Coordinator] willAdvance timer elapsed — advancing (gen=\(myGen))")
                     break
                 }
             }
 
-            // Secondary signal: elapsed dropped to near zero AFTER we had progressed well into the track
             if maxElapsedSeen > 10, elapsed < 1.0 {
-                print("[Coordinator] playbackTime reset after progress — track ended")
+                print("[Coordinator] playbackTime reset after progress — track ended (gen=\(myGen))")
                 break
             }
 
             if state != .playing {
-                print("[Coordinator] state is \(state), exiting poll loop")
+                print("[Coordinator] state is \(state), exiting poll loop (gen=\(myGen))")
                 return
             }
+        }
+        // Only advance if we're still the current generation
+        guard playbackGeneration == myGen else {
+            print("[Coordinator] playTrack(gen=\(myGen)) skipping advance — superseded")
+            return
         }
         await advance()
     }
 
     private func playSegment(_ segment: DJSegment) async throws {
+        playbackGeneration += 1
+        let myGen = playbackGeneration
         state = .playing
-        print("[Coordinator] playSegment kind=\(segment.kind) script=\"\(segment.script)\"")
+        print("[Coordinator] playSegment kind=\(segment.kind) script=\"\(segment.script)\" (gen=\(myGen))")
         try? await musicService.pause()
         do {
             try await audioGraph.play(url: segment.audioFileURL)
-            print("[Coordinator] segment done, resuming queue")
+            print("[Coordinator] segment done, resuming queue (gen=\(myGen))")
         } catch {
-            print("[Coordinator] segment playback failed: \(error) — advancing anyway")
+            print("[Coordinator] segment playback failed: \(error) — advancing anyway (gen=\(myGen))")
+        }
+        guard playbackGeneration == myGen else {
+            print("[Coordinator] playSegment(gen=\(myGen)) skipping advance — superseded")
+            return
         }
         await advance()
     }
