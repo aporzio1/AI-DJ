@@ -21,39 +21,58 @@ func appleIntelligenceUnavailabilityReason() -> String? {
     }
 }
 
+@Generable
+struct DJScriptResponse {
+    @Guide(description: "A short DJ intro, 1-2 sentences total, no more than 30 words. Conversational and punchy.")
+    let script: String
+}
+
 final class DJBrain: DJBrainProtocol {
 
     func generateScript(for context: DJContext) async throws -> String {
         let prompt = buildPrompt(context: context)
         print("[DJBrain] prompt: \(prompt)")
-        let session = LanguageModelSession(instructions: context.persona.styleDescriptor)
-        let response = try await session.respond(to: prompt)
-        let script = response.content.trimmingCharacters(in: .whitespacesAndNewlines)
+        let instructions = """
+        \(context.persona.styleDescriptor)
+        Rules: Output 1-2 sentences only. Never more than 30 words total. No intros like "Here's" or "And now"—just say it.
+        """
+        let session = LanguageModelSession(instructions: instructions)
+        let response = try await session.respond(to: prompt, generating: DJScriptResponse.self)
+        let script = response.content.script.trimmingCharacters(in: .whitespacesAndNewlines)
         print("[DJBrain] raw response: \(script)")
-        if script.count > 220 {
-            return String(script.prefix(220))
-        }
-        return script
+        return truncateAtSentenceBoundary(script, maxChars: 220)
     }
 
     private func buildPrompt(context: DJContext) -> String {
         var parts: [String] = []
-
-        parts.append("You're about to introduce '\(context.upcomingTrack.title)' by \(context.upcomingTrack.artist).")
-        parts.append("Time of day: \(context.timeOfDay.rawValue).")
+        parts.append("Introduce '\(context.upcomingTrack.title)' by \(context.upcomingTrack.artist).")
+        parts.append("Time: \(context.timeOfDay.rawValue).")
 
         if !context.recentTracks.isEmpty {
             let recent = context.recentTracks.prefix(3)
                 .map { "\($0.title) by \($0.artist)" }
                 .joined(separator: ", ")
-            parts.append("Recent tracks: \(recent).")
+            parts.append("Just played: \(recent).")
         }
 
         if let headline = context.newsHeadline {
-            parts.append("News hook (optional): \(headline.title) — \(headline.summary.prefix(100)).")
+            parts.append("Optional news hook: \(headline.title).")
         }
 
-        parts.append("Write a short DJ intro. Two sentences max. Sound natural and conversational.")
         return parts.joined(separator: " ")
+    }
+
+    private func truncateAtSentenceBoundary(_ text: String, maxChars: Int) -> String {
+        guard text.count > maxChars else { return text }
+        let prefix = String(text.prefix(maxChars))
+        // Try to cut at the last sentence-ending punctuation
+        if let lastTerminator = prefix.lastIndex(where: { ".!?".contains($0) }) {
+            return String(prefix[...lastTerminator])
+        }
+        // Fall back to cutting at last space
+        if let lastSpace = prefix.lastIndex(of: " ") {
+            return String(prefix[..<lastSpace]) + "…"
+        }
+        return prefix
     }
 }
