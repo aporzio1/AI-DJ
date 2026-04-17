@@ -29,6 +29,17 @@ struct DJScriptResponse {
 
 final class DJBrain: DJBrainProtocol {
 
+    /// Touch the on-device LLM once to force model load. Dramatically reduces
+    /// first-segment latency (cold start can take 30-60s; warm is ~1-3s).
+    func warmUp() async {
+        let start = ContinuousClock.now
+        print("[DJBrain] warming up Foundation Models…")
+        let session = LanguageModelSession(instructions: "You are a radio DJ.")
+        _ = try? await session.respond(to: "Say hi in three words.")
+        let elapsed = ContinuousClock.now - start
+        print("[DJBrain] warm-up complete in \(elapsed)")
+    }
+
     func generateScript(for context: DJContext) async throws -> String {
         let prompt = buildPrompt(context: context)
         print("[DJBrain] prompt: \(prompt)")
@@ -41,9 +52,11 @@ final class DJBrain: DJBrainProtocol {
         Never say stuff like "Here's a script" or "Let me introduce"—just go.
         """
         let session = LanguageModelSession(instructions: instructions)
+        let genStart = ContinuousClock.now
         let response = try await session.respond(to: prompt, generating: DJScriptResponse.self)
+        let elapsed = ContinuousClock.now - genStart
         let script = response.content.script.trimmingCharacters(in: .whitespacesAndNewlines)
-        print("[DJBrain] raw response: \(script)")
+        print("[DJBrain] generated in \(elapsed): \(script)")
         return truncateAtSentenceBoundary(script, maxChars: 500)
     }
 

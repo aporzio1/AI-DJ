@@ -73,6 +73,7 @@ struct RootView: View {
         queueVM = QueueViewModel(coordinator: c)
         libraryVM = LibraryViewModel(musicService: musicService, coordinator: c, producer: p)
         Task { await p.start() }
+        Task.detached(priority: .utility) { [djBrain] in await djBrain.warmUp() }
         isReady = true
         print("[RootView] isReady = true")
     }
