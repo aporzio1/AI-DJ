@@ -51,6 +51,7 @@ final class DJBrain: DJBrainProtocol {
         between segments, not the length. Never produce one-liners or fragments.
         Never say "Here's a script" or "Let me introduce" — just go.
         Song titles like "7\" Mix" or "(Remastered)" are not part of your script; read the song naturally.
+        Do not use emojis, emoticons, or decorative symbols — your output is spoken aloud by a text-to-speech engine.
         """
         let session = LanguageModelSession(instructions: instructions)
         let genStart = ContinuousClock.now
@@ -58,7 +59,14 @@ final class DJBrain: DJBrainProtocol {
         let elapsed = ContinuousClock.now - genStart
         let script = response.content.script.trimmingCharacters(in: .whitespacesAndNewlines)
         print("[DJBrain] generated in \(elapsed): \(script)")
-        return truncateAtSentenceBoundary(script, maxChars: 500)
+        let clean = stripEmoji(script).trimmingCharacters(in: .whitespacesAndNewlines)
+        return truncateAtSentenceBoundary(clean, maxChars: 500)
+    }
+
+    private func stripEmoji(_ text: String) -> String {
+        String(text.unicodeScalars.filter { scalar in
+            !scalar.properties.isEmojiPresentation && !scalar.properties.isEmojiModifier
+        })
     }
 
     private func buildPrompt(context: DJContext) -> String {
