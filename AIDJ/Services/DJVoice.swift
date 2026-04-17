@@ -65,6 +65,7 @@ private final class SpeechRenderer: @unchecked Sendable {
     }
 
     private func handleBuffer(_ buffer: AVAudioBuffer) {
+        if isFinished() { return }
         guard let pcmBuffer = buffer as? AVAudioPCMBuffer else { return }
 
         if pcmBuffer.frameLength == 0 {
@@ -97,6 +98,11 @@ private final class SpeechRenderer: @unchecked Sendable {
         audioFile = file
     }
 
+    private func isFinished() -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        return finished
+    }
+
     private func finish(with result: Result<URL, Error>) {
         lock.lock()
         if finished {
@@ -106,6 +112,10 @@ private final class SpeechRenderer: @unchecked Sendable {
         finished = true
         let cb = completion
         completion = nil
+        // Drop the write handle BEFORE resuming the caller so AVAudioFile.deinit
+        // flushes to disk. Otherwise the reader (AudioGraph) can open the file
+        // while writes are still buffered and hear silence.
+        audioFile = nil
         lock.unlock()
         cb?(result)
     }

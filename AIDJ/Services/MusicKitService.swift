@@ -18,14 +18,17 @@ final class MusicKitService: MusicKitServiceProtocol {
     // MARK: Playback control
 
     func start(track: Track) async throws {
+        print("[MusicKit] start(track: '\(track.title)')")
         var request = MusicLibraryRequest<Song>()
         request.filter(matching: \.id, equalTo: MusicItemID(rawValue: track.id))
         let response = try await request.response()
         guard let song = response.items.first else {
+            print("[MusicKit] start failed: track not found")
             throw MusicKitServiceError.trackNotFound(id: track.id)
         }
         player.queue = ApplicationMusicPlayer.Queue(for: [song])
         try await player.play()
+        print("[MusicKit] player.play() returned, playbackTime=\(player.playbackTime) status=\(player.state.playbackStatus)")
     }
 
     func pause() async throws {
