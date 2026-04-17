@@ -18,7 +18,8 @@ final class MusicKitService: MusicKitServiceProtocol {
     // MARK: Playback control
 
     func start(track: Track) async throws {
-        let request = MusicCatalogResourceRequest<Song>(matching: \.id, equalTo: MusicItemID(rawValue: track.id))
+        var request = MusicLibraryRequest<Song>()
+        request.filter(matching: \.id, equalTo: MusicItemID(rawValue: track.id))
         let response = try await request.response()
         guard let song = response.items.first else {
             throw MusicKitServiceError.trackNotFound(id: track.id)
