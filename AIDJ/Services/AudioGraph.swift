@@ -1,8 +1,7 @@
 import Foundation
 import AVFoundation
 
-@MainActor
-final class AudioGraph: AudioGraphProtocol {
+actor AudioGraph: AudioGraphProtocol {
 
     private let engine = AVAudioEngine()
     private let playerNode = AVAudioPlayerNode()
@@ -28,28 +27,30 @@ final class AudioGraph: AudioGraphProtocol {
         if !engine.isRunning {
             print("[AudioGraph] starting engine")
             try engine.start()
-            print("[AudioGraph] engine started, isRunning=\(engine.isRunning)")
+            print("[AudioGraph] engine started")
         }
         playerNode.stop()
 
-        try await withTaskCancellationHandler {
+        await withTaskCancellationHandler {
             await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
                 print("[AudioGraph] scheduling file with completion callback")
                 playerNode.scheduleFile(file, at: nil, completionCallbackType: .dataPlayedBack) { _ in
-                    print("[AudioGraph] completion callback fired")
                     continuation.resume()
                 }
-                print("[AudioGraph] calling play()")
                 playerNode.play()
                 print("[AudioGraph] play() called, isPlaying=\(self.playerNode.isPlaying)")
             }
             print("[AudioGraph] play() complete")
         } onCancel: {
-            Task { @MainActor in self.playerNode.stop() }
+            Task { await self.stopPlayer() }
         }
     }
 
     func stop() {
+        playerNode.stop()
+    }
+
+    private func stopPlayer() {
         playerNode.stop()
     }
 }
