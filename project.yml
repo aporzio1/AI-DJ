@@ -1,0 +1,44 @@
+name: AI DJ
+options:
+  bundleIdPrefix: com.andrewporzio
+  createIntermediateGroups: true
+
+targets:
+  AIDJ:
+    type: application
+    supportedDestinations: [iOS, macOS]
+    deploymentTarget:
+      iOS: "26.0"
+      macOS: "26.0"
+    sources:
+      - path: AIDJ
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.andrewporzio.aidj
+        SWIFT_VERSION: "6.0"
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        PRODUCT_NAME: "AI DJ"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    entitlements:
+      path: AIDJ/Resources/AIDJ.entitlements
+      properties:
+        com.apple.developer.music-api: true
+        com.apple.security.network.client: true
+        com.apple.security.app-sandbox: true
+    info:
+      path: AIDJ/Resources/Info.plist
+      properties:
+        CFBundleDisplayName: AI DJ
+        NSAppleMusicUsageDescription: "AI DJ needs access to your Apple Music library to play music."
+
+  AIDJTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: AIDJTests
+    dependencies:
+      - target: AIDJ
+    settings:
+      base:
+        SWIFT_VERSION: "6.0"
