@@ -22,6 +22,11 @@ final class AudioGraph: AudioGraphProtocol {
         playbackTask?.cancel()
 
         let file = try AVAudioFile(forReading: url)
+        guard file.length > 0 else {
+            print("[AudioGraph] file at \(url.lastPathComponent) has 0 frames — skipping playback")
+            throw AudioGraphError.emptyFile
+        }
+
         if !engine.isRunning {
             try engine.start()
         }
@@ -41,6 +46,10 @@ final class AudioGraph: AudioGraphProtocol {
         playbackTask?.cancel()
         playerNode.stop()
     }
+}
+
+enum AudioGraphError: Error {
+    case emptyFile
 }
 
 private extension AVAudioFile {

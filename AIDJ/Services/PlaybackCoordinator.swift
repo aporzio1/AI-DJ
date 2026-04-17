@@ -65,6 +65,14 @@ actor PlaybackCoordinator {
         }
     }
 
+    func insertAt(_ index: Int, item: PlayableItem) {
+        let clamped = max(0, min(index, queue.count))
+        queue.insert(item, at: clamped)
+        if clamped <= currentIndex {
+            currentIndex += 1
+        }
+    }
+
     func removeItem(at index: Int) {
         guard index >= 0, index < queue.count else { return }
         queue.remove(at: index)
@@ -143,15 +151,20 @@ actor PlaybackCoordinator {
         try await musicService.start(track: track)
 
         var emittedWillAdvance = false
+        var willAdvanceRemaining: TimeInterval = 0
+        var willAdvanceFiredAt: ContinuousClock.Instant? = nil
+        let clock = ContinuousClock()
         var tickCount = 0
+        var maxElapsedSeen: TimeInterval = 0
+
         while !Task.isCancelled {
             try await Task.sleep(for: .milliseconds(500))
             tickCount += 1
             let elapsed = await musicService.currentPlaybackTime
             let duration = await musicService.currentTrackDuration ?? track.duration
             let remaining = duration - elapsed
+            maxElapsedSeen = max(maxElapsedSeen, elapsed)
 
-            // Heartbeat every 5 seconds so we can see the poll loop is alive
             if tickCount % 10 == 0 {
                 print("[Coordinator] poll: elapsed=\(String(format: "%.1f", elapsed)) / \(String(format: "%.1f", duration)) (remaining=\(String(format: "%.1f", remaining)))")
             }
@@ -160,17 +173,26 @@ actor PlaybackCoordinator {
                 print("[Coordinator] T-\(String(format: "%.1f", remaining))s — emitting willAdvance")
                 emitWillAdvance(track: track)
                 emittedWillAdvance = true
+                willAdvanceRemaining = remaining
+                willAdvanceFiredAt = clock.now
             }
 
-            let status = await musicService.playbackStatus
-            if duration > 0 && elapsed >= duration - 0.3 {
-                print("[Coordinator] track reached end by time (elapsed=\(elapsed))")
+            // Primary end-of-track detection: wall-clock timer from when willAdvance fired.
+            // MusicKit's playbackTime resets to 0 when the queue empties, so we can't rely on it.
+            if let firedAt = willAdvanceFiredAt {
+                let sinceFired = clock.now - firedAt
+                if sinceFired >= .seconds(willAdvanceRemaining + 1.5) {
+                    print("[Coordinator] willAdvance timer elapsed — advancing")
+                    break
+                }
+            }
+
+            // Secondary signal: elapsed dropped to near zero AFTER we had progressed well into the track
+            if maxElapsedSeen > 10, elapsed < 1.0 {
+                print("[Coordinator] playbackTime reset after progress — track ended")
                 break
             }
-            if status == .stopped {
-                print("[Coordinator] music service reports stopped")
-                break
-            }
+
             if state != .playing {
                 print("[Coordinator] state is \(state), exiting poll loop")
                 return
@@ -182,9 +204,13 @@ actor PlaybackCoordinator {
     private func playSegment(_ segment: DJSegment) async throws {
         state = .playing
         print("[Coordinator] playSegment kind=\(segment.kind) script=\"\(segment.script)\"")
-        try await musicService.pause()
-        try await audioGraph.play(url: segment.audioFileURL)
-        print("[Coordinator] segment done, resuming queue")
+        try? await musicService.pause()
+        do {
+            try await audioGraph.play(url: segment.audioFileURL)
+            print("[Coordinator] segment done, resuming queue")
+        } catch {
+            print("[Coordinator] segment playback failed: \(error) — advancing anyway")
+        }
         await advance()
     }
 

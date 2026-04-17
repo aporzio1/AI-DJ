@@ -15,12 +15,24 @@ final class DJVoice: DJVoiceProtocol {
             .appendingPathComponent(UUID().uuidString)
             .appendingPathExtension("caf")
 
-        return try await withCheckedThrowingContinuation { continuation in
-            let renderer = SpeechRenderer(utterance: utterance, outputURL: outputURL)
-            renderer.render { [renderer] result in
-                _ = renderer // keep renderer alive until the buffer callback terminates
-                continuation.resume(with: result)
+        let renderer = SpeechRenderer(utterance: utterance, outputURL: outputURL)
+
+        return try await withThrowingTaskGroup(of: URL.self) { group in
+            group.addTask {
+                try await withCheckedThrowingContinuation { continuation in
+                    renderer.render { [renderer] result in
+                        _ = renderer // keep alive until callback fires
+                        continuation.resume(with: result)
+                    }
+                }
             }
+            group.addTask {
+                try await Task.sleep(for: .seconds(15))
+                throw DJVoiceError.renderTimeout
+            }
+            let url = try await group.next()!
+            group.cancelAll()
+            return url
         }
     }
 }
@@ -53,21 +65,20 @@ private final class SpeechRenderer: @unchecked Sendable {
         guard let pcmBuffer = buffer as? AVAudioPCMBuffer else { return }
 
         if pcmBuffer.frameLength == 0 {
-            finished = true
-            completion?(.success(outputURL))
-            completion = nil
+            // Terminator. Only treat as success if we actually wrote audio.
+            // AVSpeechSynthesizer sometimes emits a spurious empty buffer before any real audio.
+            if audioFile != nil {
+                finished = true
+                completion?(.success(outputURL))
+                completion = nil
+            }
+            // Else: ignore — wait for actual audio buffers
             return
         }
 
         do {
             if audioFile == nil {
-                guard let format = pcmBuffer.format.settings as [String: Any]? else {
-                    finished = true
-                    completion?(.failure(DJVoiceError.invalidFormat))
-                    completion = nil
-                    return
-                }
-                audioFile = try AVAudioFile(forWriting: outputURL, settings: format)
+                audioFile = try AVAudioFile(forWriting: outputURL, settings: pcmBuffer.format.settings)
             }
             try audioFile?.write(from: pcmBuffer)
         } catch {
@@ -80,4 +91,6 @@ private final class SpeechRenderer: @unchecked Sendable {
 
 enum DJVoiceError: Error {
     case invalidFormat
+    case noAudioGenerated
+    case renderTimeout
 }

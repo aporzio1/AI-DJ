@@ -12,10 +12,12 @@ final class LibraryViewModel {
 
     private let musicService: any MusicKitServiceProtocol
     private let coordinator: PlaybackCoordinator
+    private let producer: Producer?
 
-    init(musicService: any MusicKitServiceProtocol, coordinator: PlaybackCoordinator) {
+    init(musicService: any MusicKitServiceProtocol, coordinator: PlaybackCoordinator, producer: Producer? = nil) {
         self.musicService = musicService
         self.coordinator = coordinator
+        self.producer = producer
     }
 
     func loadPlaylists() async {
@@ -48,6 +50,10 @@ final class LibraryViewModel {
         await selectPlaylist(playlist)
         let items = songs.map { PlayableItem.track($0) }
         await coordinator.replaceQueue(items)
+        // Prime an opening DJ intro before the first track plays
+        if let producer {
+            await producer.primeOpeningIntro()
+        }
         try? await coordinator.play()
     }
 }

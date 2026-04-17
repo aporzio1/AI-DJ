@@ -68,7 +68,7 @@ struct RootView: View {
         producer = p
         nowPlayingVM = NowPlayingViewModel(coordinator: c)
         queueVM = QueueViewModel(coordinator: c)
-        libraryVM = LibraryViewModel(musicService: musicService, coordinator: c)
+        libraryVM = LibraryViewModel(musicService: musicService, coordinator: c, producer: p)
         Task { await p.start() }
         isReady = true
         print("[RootView] isReady = true")

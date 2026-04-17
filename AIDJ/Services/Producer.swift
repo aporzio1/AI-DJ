@@ -36,6 +36,17 @@ actor Producer {
         listenerName = name
     }
 
+    /// Generate and insert a DJ intro at position 0 of the queue, to play BEFORE the first track.
+    func primeOpeningIntro() async {
+        let queue = await coordinator.queue
+        guard let firstTrack = queue.first, case .track(let upcoming) = firstTrack else { return }
+        print("[Producer] Priming opening intro for '\(upcoming.title)'")
+        hasGivenIntro = true
+        tracksSinceLastSegment = 0
+        guard let segment = await generateSegment(upcomingTrack: upcoming) else { return }
+        await coordinator.insertAt(0, item: .djSegment(segment))
+    }
+
     // MARK: Lifecycle
 
     func start() {
@@ -105,7 +116,10 @@ actor Producer {
             print("[Producer] Skipping DJ for this transition (tracksSinceLast=\(tracksSinceLastSegment))")
             return nil
         }
+        return await generateSegment(upcomingTrack: upcomingTrack)
+    }
 
+    private func generateSegment(upcomingTrack: AIDJ.Track) async -> DJSegment? {
         let headline = try? await rssFetcher.fetchHeadlines().first
 
         let context = DJContext(
