@@ -26,22 +26,22 @@ final class OnboardingViewModel {
     }
 
     func checkStatus() async {
-        print("[Onboarding] checkStatus called")
+        Log.onboarding.info("checkStatus called")
 
         if let reason = appleIntelligenceUnavailabilityReason() {
-            print("[Onboarding] Apple Intelligence unavailable: \(reason)")
+            Log.onboarding.error("Apple Intelligence unavailable: \(reason, privacy: .public)")
             status = .needsAppleIntelligence(reason: reason)
             return
         }
 
         let authStatus = musicService.authorizationStatus
-        print("[Onboarding] MusicKit auth status: \(authStatus)")
+        Log.onboarding.info("MusicKit auth status: \(String(describing: authStatus), privacy: .public)")
         if authStatus != .authorized {
             status = .needsMusicKitAuth
             return
         }
 
-        print("[Onboarding] All clear → status = .ready")
+        Log.onboarding.info("All clear → status = .ready")
         status = .ready
     }
 

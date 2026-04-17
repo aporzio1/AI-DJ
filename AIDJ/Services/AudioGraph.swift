@@ -19,30 +19,28 @@ actor AudioGraph: AudioGraphProtocol {
 
     func play(url: URL) async throws {
         let file = try AVAudioFile(forReading: url)
-        print("[AudioGraph] opened \(url.lastPathComponent) frames=\(file.length) sr=\(file.processingFormat.sampleRate)")
+        Log.audio.debug("opened \(url.lastPathComponent, privacy: .public) frames=\(file.length) sr=\(file.processingFormat.sampleRate)")
         guard file.length > 0 else {
-            print("[AudioGraph] file has 0 frames — skipping playback")
+            Log.audio.error("file has 0 frames — skipping playback")
             throw AudioGraphError.emptyFile
         }
 
         if !engine.isRunning {
-            print("[AudioGraph] starting engine")
+            Log.audio.debug("starting engine")
             try engine.start()
-            print("[AudioGraph] engine started")
         }
         playerNode.stop()
 
         await withTaskCancellationHandler {
             await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-                print("[AudioGraph] scheduling file with completion callback")
                 self.pendingContinuation = continuation
                 playerNode.scheduleFile(file, at: nil, completionCallbackType: .dataPlayedBack) { [weak self] _ in
                     Task { await self?.resumePending() }
                 }
                 playerNode.play()
-                print("[AudioGraph] play() called, isPlaying=\(self.playerNode.isPlaying)")
+                Log.audio.debug("play() called, isPlaying=\(self.playerNode.isPlaying)")
             }
-            print("[AudioGraph] play() complete")
+            Log.audio.debug("play() complete")
         } onCancel: {
             Task { await self.stopAndResume() }
         }

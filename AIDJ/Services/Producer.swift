@@ -44,15 +44,15 @@ actor Producer {
     // MARK: Lifecycle
 
     func start() {
-        print("[Producer] start() — subscribing to willAdvance events")
+        Log.producer.info("start() — subscribing to willAdvance events")
         monitorTask?.cancel()
         monitorTask = Task { [weak self] in
             guard let self else { return }
             for await event in await coordinator.willAdvanceEvents {
-                print("[Producer] Received willAdvance for '\(event.currentTrack.title)' → nextIndex=\(event.nextTrackIndex)")
+                Log.producer.info("Received willAdvance for '\(event.currentTrack.title, privacy: .public)' → nextIndex=\(event.nextTrackIndex)")
                 await self.handleWillAdvance(event)
             }
-            print("[Producer] willAdvance stream ended")
+            Log.producer.info("willAdvance stream ended")
         }
     }
 
@@ -80,23 +80,23 @@ actor Producer {
         guard currentIdx + 1 < queue.count, case .track(let upcoming) = queue[currentIdx + 1] else {
             return nil
         }
-        print("[Producer] regenerating segment for '\(upcoming.title)'")
+        Log.producer.info("regenerating segment for '\(upcoming.title, privacy: .public)'")
         return await generateSegment(upcomingTrack: upcoming)
     }
 
     func primeOpeningIntro() async {
         guard config.djEnabled else {
-            print("[Producer] DJ disabled — skipping opening intro")
+            Log.producer.info("DJ disabled — skipping opening intro")
             return
         }
         let queue = await coordinator.queue
         guard let firstTrack = queue.first, case .track(let upcoming) = firstTrack else { return }
-        print("[Producer] Priming opening intro for '\(upcoming.title)'")
+        Log.producer.info("Priming opening intro for '\(upcoming.title, privacy: .public)'")
         guard let segment = await generateSegment(upcomingTrack: upcoming) else { return }
         await coordinator.prependAndSelect(.djSegment(segment))
         hasGivenIntro = true
         tracksSinceLastSegment = 0
-        print("[Producer] Opening intro inserted at index 0")
+        Log.producer.info("Opening intro inserted at index 0")
     }
 
     /// Exposed for unit tests only.
@@ -127,7 +127,7 @@ actor Producer {
               case .track(let stillThere) = refreshedQueue[event.nextTrackIndex],
               stillThere.id == upcomingTrack.id,
               event.nextTrackIndex > currentIdx else {
-            print("[Producer] Upcoming track moved/gone — dropping segment")
+            Log.producer.info("Upcoming track moved/gone — dropping segment")
             return
         }
 
@@ -155,7 +155,7 @@ actor Producer {
 
     private func primeSegment(upcomingTrack: AIDJ.Track) async -> DJSegment? {
         guard shouldGenerate() else {
-            print("[Producer] Skipping DJ for this transition (tracksSinceLast=\(tracksSinceLastSegment))")
+            Log.producer.debug("Skipping DJ for this transition (tracksSinceLast=\(self.tracksSinceLastSegment))")
             return nil
         }
         return await generateSegment(upcomingTrack: upcomingTrack)
@@ -178,15 +178,15 @@ actor Producer {
         let script: String
         do {
             script = try await brain.generateScript(for: context)
-            print("[Producer] DJBrain script: \"\(script)\"")
+            Log.producer.info("DJBrain script: \"\(script, privacy: .public)\"")
         } catch {
-            print("[Producer] DJBrain failed (\(error)) — falling back to canned template")
+            Log.producer.error("DJBrain failed (\(error, privacy: .public)) — falling back to canned template")
             script = "Up next, \(upcomingTrack.title) by \(upcomingTrack.artist)."
         }
 
         do {
             let audioURL = try await voice.renderToFile(script: script, voiceIdentifier: persona.voicePreset)
-            print("[Producer] DJVoice rendered to \(audioURL.lastPathComponent)")
+            Log.producer.debug("DJVoice rendered to \(audioURL.lastPathComponent, privacy: .public)")
             return DJSegment(
                 id: UUID(),
                 kind: headline != nil ? .news : .announcement,
@@ -196,7 +196,7 @@ actor Producer {
                 overlapStart: nil
             )
         } catch {
-            print("[Producer] DJVoice failed: \(error) — skipping segment")
+            Log.producer.error("DJVoice failed: \(error, privacy: .public) — skipping segment")
             return nil
         }
     }

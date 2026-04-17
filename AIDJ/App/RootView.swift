@@ -30,7 +30,7 @@ struct RootView: View {
         Group {
             if isReady, let nowPlaying = nowPlayingVM, let queue = queueVM, let library = libraryVM {
                 mainContent(nowPlaying: nowPlaying, queue: queue, library: library)
-                    .onAppear { print("[RootView] Main content appeared") }
+                    .onAppear { Log.app.info("Main content appeared") }
                     .onChange(of: settings.listenerName) { _, newName in
                         if let p = producer {
                             Task { await p.updateListenerName(newName.isEmpty ? nil : newName) }
@@ -48,14 +48,14 @@ struct RootView: View {
         }
         .task {
             if onboardingVM == nil {
-                print("[RootView] Creating OnboardingViewModel")
+                Log.app.info("Creating OnboardingViewModel")
                 onboardingVM = OnboardingViewModel(musicService: musicService)
             }
         }
     }
 
     private func handleReady() {
-        print("[RootView] handleReady called — wiring coordinator + producer (listener=\(settings.listenerName))")
+        Log.app.info("handleReady — wiring coordinator + producer (listener=\(settings.listenerName, privacy: .public))")
         let c = PlaybackCoordinator(musicService: musicService, audioGraph: audioGraph)
         let rss = RSSFetcher(feedURLs: settings.feedURLs)
         let p = Producer(
@@ -75,7 +75,7 @@ struct RootView: View {
         Task { await p.start() }
         Task.detached(priority: .utility) { [djBrain] in await djBrain.warmUp() }
         isReady = true
-        print("[RootView] isReady = true")
+        Log.app.info("isReady = true")
     }
 
     private func producerConfig() -> Producer.Config {

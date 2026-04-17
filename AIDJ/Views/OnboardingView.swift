@@ -43,7 +43,7 @@ struct OnboardingView: View {
         .task { await vm.checkStatus() }
         .onChange(of: vm.isReady) { _, ready in
             if ready {
-                print("[OnboardingView] isReady fired → calling onReady()")
+                Log.onboarding.info("isReady fired → calling onReady()")
                 onReady()
             }
         }

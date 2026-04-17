@@ -127,7 +127,7 @@ actor PlaybackCoordinator {
     }
 
     func seek(to time: TimeInterval) async throws {
-        print("[Coordinator] seek(to: \(String(format: "%.1f", time)))")
+        Log.coordinator.debug("seek(to: \(time, format: .fixed(precision: 1)))")
         try await musicService.seek(to: time)
     }
 
@@ -135,13 +135,13 @@ actor PlaybackCoordinator {
     /// No-op if the current item is not a segment.
     func swapCurrentSegment(with newSegment: DJSegment) async {
         guard currentIndex < queue.count, case .djSegment = queue[currentIndex] else {
-            print("[Coordinator] swapCurrentSegment: current item is not a segment")
+            Log.coordinator.info("swapCurrentSegment: current item is not a segment")
             return
         }
-        print("[Coordinator] swapping current segment with fresh one")
+        Log.coordinator.info("swapping current segment with fresh one")
         queue[currentIndex] = .djSegment(newSegment)
-        playbackGeneration += 1   // invalidate any in-flight playSegment
-        await audioGraph.stop()   // unblock the current playback
+        playbackGeneration += 1
+        await audioGraph.stop()
         if state == .playing || state == .buffering {
             try? await playCurrentItem()
         }
@@ -176,7 +176,7 @@ actor PlaybackCoordinator {
         playbackGeneration += 1
         let myGen = playbackGeneration
         state = .playing
-        print("[Coordinator] playTrack '\(track.title)' duration=\(track.duration)s (gen=\(myGen))")
+        Log.coordinator.info("playTrack '\(track.title, privacy: .public)' duration=\(track.duration)s (gen=\(myGen))")
         try await musicService.start(track: track)
 
         var emittedWillAdvance = false
@@ -190,7 +190,7 @@ actor PlaybackCoordinator {
             try await Task.sleep(for: .milliseconds(500))
 
             if playbackGeneration != myGen {
-                print("[Coordinator] playTrack superseded (gen \(myGen) → \(playbackGeneration)) — exiting")
+                Log.coordinator.info("playTrack superseded (gen \(myGen) → \(self.playbackGeneration)) — exiting")
                 return
             }
 
@@ -198,7 +198,7 @@ actor PlaybackCoordinator {
             // playbackTime to 0 would otherwise falsely trigger the reset heuristic
             // and auto-advance to the next track.
             if state != .playing {
-                print("[Coordinator] state is \(state), exiting poll loop (gen=\(myGen))")
+                Log.coordinator.info("state is \(String(describing: self.state), privacy: .public), exiting poll loop (gen=\(myGen))")
                 return
             }
 
@@ -209,11 +209,11 @@ actor PlaybackCoordinator {
             maxElapsedSeen = max(maxElapsedSeen, elapsed)
 
             if tickCount % 10 == 0 {
-                print("[Coordinator] poll[gen=\(myGen)]: elapsed=\(String(format: "%.1f", elapsed)) / \(String(format: "%.1f", duration)) (remaining=\(String(format: "%.1f", remaining)))")
+                Log.coordinator.debug("poll[gen=\(myGen)]: elapsed=\(elapsed, format: .fixed(precision: 1)) / \(duration, format: .fixed(precision: 1)) (remaining=\(remaining, format: .fixed(precision: 1)))")
             }
 
             if !emittedWillAdvance, duration > 0, remaining <= 5.0, remaining > 0 {
-                print("[Coordinator] T-\(String(format: "%.1f", remaining))s — emitting willAdvance (gen=\(myGen))")
+                Log.coordinator.info("T-\(remaining, format: .fixed(precision: 1))s — emitting willAdvance (gen=\(myGen))")
                 emitWillAdvance(track: track)
                 emittedWillAdvance = true
                 willAdvanceRemaining = remaining
@@ -223,19 +223,18 @@ actor PlaybackCoordinator {
             if let firedAt = willAdvanceFiredAt {
                 let sinceFired = clock.now - firedAt
                 if sinceFired >= .seconds(willAdvanceRemaining + 1.5) {
-                    print("[Coordinator] willAdvance timer elapsed — advancing (gen=\(myGen))")
+                    Log.coordinator.info("willAdvance timer elapsed — advancing (gen=\(myGen))")
                     break
                 }
             }
 
             if maxElapsedSeen > 10, elapsed < 1.0 {
-                print("[Coordinator] playbackTime reset after progress — track ended (gen=\(myGen))")
+                Log.coordinator.info("playbackTime reset after progress — track ended (gen=\(myGen))")
                 break
             }
         }
-        // Only advance if we're still the current generation
         guard playbackGeneration == myGen else {
-            print("[Coordinator] playTrack(gen=\(myGen)) skipping advance — superseded")
+            Log.coordinator.info("playTrack(gen=\(myGen)) skipping advance — superseded")
             return
         }
         await advance()
@@ -245,16 +244,16 @@ actor PlaybackCoordinator {
         playbackGeneration += 1
         let myGen = playbackGeneration
         state = .playing
-        print("[Coordinator] playSegment kind=\(segment.kind) script=\"\(segment.script)\" (gen=\(myGen))")
+        Log.coordinator.info("playSegment kind=\(String(describing: segment.kind), privacy: .public) script=\"\(segment.script, privacy: .public)\" (gen=\(myGen))")
         try? await musicService.pause()
         do {
             try await audioGraph.play(url: segment.audioFileURL)
-            print("[Coordinator] segment done, resuming queue (gen=\(myGen))")
+            Log.coordinator.info("segment done, resuming queue (gen=\(myGen))")
         } catch {
-            print("[Coordinator] segment playback failed: \(error) — advancing anyway (gen=\(myGen))")
+            Log.coordinator.error("segment playback failed: \(error, privacy: .public) — advancing anyway (gen=\(myGen))")
         }
         guard playbackGeneration == myGen else {
-            print("[Coordinator] playSegment(gen=\(myGen)) skipping advance — superseded")
+            Log.coordinator.info("playSegment(gen=\(myGen)) skipping advance — superseded")
             return
         }
         await advance()
@@ -263,19 +262,19 @@ actor PlaybackCoordinator {
     private func advance() async {
         guard state == .playing || state == .buffering else { return }
         currentIndex += 1
-        print("[Coordinator] advance → currentIndex=\(currentIndex) (queue=\(queue.count))")
+        Log.coordinator.info("advance → currentIndex=\(self.currentIndex) (queue=\(self.queue.count))")
         if currentIndex < queue.count {
             try? await playCurrentItem()
         } else {
             state = .idle
-            print("[Coordinator] queue exhausted → idle")
+            Log.coordinator.info("queue exhausted → idle")
         }
     }
 
     private func emitWillAdvance(track: Track) {
         let nextIndex = currentIndex + 1
         let event = WillAdvanceEvent(currentTrack: track, nextTrackIndex: nextIndex)
-        print("[Coordinator] emitWillAdvance: \(willAdvanceContinuations.count) subscribers")
+        Log.coordinator.debug("emitWillAdvance: \(self.willAdvanceContinuations.count) subscribers")
         for continuation in willAdvanceContinuations.values {
             continuation.yield(event)
         }

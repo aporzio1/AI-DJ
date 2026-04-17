@@ -33,16 +33,16 @@ final class DJBrain: DJBrainProtocol {
     /// first-segment latency (cold start can take 30-60s; warm is ~1-3s).
     func warmUp() async {
         let start = ContinuousClock.now
-        print("[DJBrain] warming up Foundation Models…")
+        Log.brain.info("warming up Foundation Models…")
         let session = LanguageModelSession(instructions: "You are a radio DJ.")
         _ = try? await session.respond(to: "Say hi in three words.")
         let elapsed = ContinuousClock.now - start
-        print("[DJBrain] warm-up complete in \(elapsed)")
+        Log.brain.info("warm-up complete in \(String(describing: elapsed), privacy: .public)")
     }
 
     func generateScript(for context: DJContext) async throws -> String {
         let prompt = buildPrompt(context: context)
-        print("[DJBrain] prompt: \(prompt)")
+        Log.brain.debug("prompt: \(prompt, privacy: .public)")
         let instructions = """
         \(context.persona.styleDescriptor)
 
@@ -58,7 +58,7 @@ final class DJBrain: DJBrainProtocol {
         let response = try await session.respond(to: prompt, generating: DJScriptResponse.self)
         let elapsed = ContinuousClock.now - genStart
         let script = response.content.script.trimmingCharacters(in: .whitespacesAndNewlines)
-        print("[DJBrain] generated in \(elapsed): \(script)")
+        Log.brain.info("generated in \(String(describing: elapsed), privacy: .public): \(script, privacy: .public)")
         let clean = stripEmoji(script).trimmingCharacters(in: .whitespacesAndNewlines)
         return truncateAtSentenceBoundary(clean, maxChars: 500)
     }

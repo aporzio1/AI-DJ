@@ -19,17 +19,17 @@ final class MusicKitService: MusicKitServiceProtocol {
     // MARK: Playback control
 
     func start(track: Track) async throws {
-        print("[MusicKit] start(track: '\(track.title)')")
+        Log.musicKit.info("start(track: '\(track.title, privacy: .public)')")
         var request = MusicLibraryRequest<Song>()
         request.filter(matching: \.id, equalTo: MusicItemID(rawValue: track.id))
         let response = try await request.response()
         guard let song = response.items.first else {
-            print("[MusicKit] start failed: track not found")
+            Log.musicKit.error("start failed: track not found")
             throw MusicKitServiceError.trackNotFound(id: track.id)
         }
         player.queue = ApplicationMusicPlayer.Queue(for: [song])
         try await player.play()
-        print("[MusicKit] player.play() returned, playbackTime=\(player.playbackTime) status=\(player.state.playbackStatus)")
+        Log.musicKit.debug("player.play() returned, playbackTime=\(self.player.playbackTime) status=\(String(describing: self.player.state.playbackStatus), privacy: .public)")
     }
 
     func pause() async throws {
@@ -45,9 +45,9 @@ final class MusicKitService: MusicKitServiceProtocol {
     }
 
     func seek(to time: TimeInterval) async throws {
-        print("[MusicKit] seek: setting playbackTime to \(time) (was \(player.playbackTime))")
+        Log.musicKit.debug("seek: setting playbackTime to \(time) (was \(self.player.playbackTime))")
         player.playbackTime = time
-        print("[MusicKit] seek: playbackTime is now \(player.playbackTime)")
+        Log.musicKit.debug("seek: playbackTime is now \(self.player.playbackTime)")
     }
 
     // MARK: State
