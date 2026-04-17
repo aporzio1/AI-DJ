@@ -38,7 +38,7 @@ struct SettingsView: View {
             HStack {
                 Text("Your Name")
                 Spacer(minLength: 16)
-                TextField("e.g. Andrew", text: $vm.listenerName)
+                TextField("", text: $vm.listenerName)
                     .multilineTextAlignment(.trailing)
                     .textFieldStyle(.plain)
                     .frame(maxWidth: 240)
