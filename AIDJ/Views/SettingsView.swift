@@ -44,6 +44,7 @@ struct SettingsView: View {
     @State private var newFeedURL = ""
     @State private var showingOPMLImporter = false
     @State private var availableVoices: [VoiceOption] = []
+    @Environment(\.openURL) private var openURL
 
     init(vm: SettingsViewModel) {
         self._vm = State(initialValue: vm)
@@ -109,34 +110,45 @@ struct SettingsView: View {
             }
             .onChange(of: vm.voiceIdentifier) { _, _ in vm.save() }
 
-            if !hasAnyPremium {
-                Label {
-                    Text(voiceInstallTip)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                } icon: {
-                    Image(systemName: "info.circle")
-                        .foregroundStyle(.secondary)
-                }
+#if os(macOS)
+            Button {
+                openSpokenContentSettings()
+            } label: {
+                Label("Download Voices in System Settings", systemImage: "arrow.up.forward.app")
             }
+            .buttonStyle(.bordered)
+#endif
         } header: {
             Text("Voice")
         } footer: {
-            Text("Premium and Enhanced voices sound significantly more natural than default voices.")
+            Text(voiceFooterText)
         }
     }
 
-    private var hasAnyPremium: Bool {
-        availableVoices.contains { $0.quality == .premium || $0.quality == .enhanced }
-    }
-
-    private var voiceInstallTip: String {
+    private var voiceFooterText: String {
 #if os(macOS)
-        "Install higher-quality voices in System Settings → Accessibility → Spoken Content → System Voice → Manage Voices."
+        return "Premium and Enhanced voices sound significantly more natural than the defaults. Use the button above to open System Settings → Accessibility → Spoken Content → System Voice → Manage Voices, then download a Premium English voice like Ava, Zoe, or Evan."
 #else
-        "Install higher-quality voices in Settings → Accessibility → Spoken Content → Voices."
+        return "Premium and Enhanced voices sound significantly more natural. Install them in Settings → Accessibility → Spoken Content → Voices."
 #endif
     }
+
+#if os(macOS)
+    private func openSpokenContentSettings() {
+        // Try the deep link to Spoken Content first; fall back to Accessibility root.
+        let candidates = [
+            "x-apple.systempreferences:com.apple.Accessibility-Settings.extension?Content_Speech",
+            "x-apple.systempreferences:com.apple.Accessibility-Settings.extension",
+            "x-apple.systempreferences:com.apple.preference.universalaccess"
+        ]
+        for string in candidates {
+            if let url = URL(string: string) {
+                openURL(url)
+                return
+            }
+        }
+    }
+#endif
 
     // MARK: - News
 
