@@ -131,6 +131,22 @@ actor PlaybackCoordinator {
         try await musicService.seek(to: time)
     }
 
+    /// Replace the currently-playing DJ segment with a new one and restart playback.
+    /// No-op if the current item is not a segment.
+    func swapCurrentSegment(with newSegment: DJSegment) async {
+        guard currentIndex < queue.count, case .djSegment = queue[currentIndex] else {
+            print("[Coordinator] swapCurrentSegment: current item is not a segment")
+            return
+        }
+        print("[Coordinator] swapping current segment with fresh one")
+        queue[currentIndex] = .djSegment(newSegment)
+        playbackGeneration += 1   // invalidate any in-flight playSegment
+        await audioGraph.stop()   // unblock the current playback
+        if state == .playing || state == .buffering {
+            try? await playCurrentItem()
+        }
+    }
+
     func musicPlaybackTime() async -> TimeInterval {
         await musicService.currentPlaybackTime
     }

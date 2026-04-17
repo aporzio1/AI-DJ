@@ -69,7 +69,7 @@ struct RootView: View {
         )
         coordinator = c
         producer = p
-        nowPlayingVM = NowPlayingViewModel(coordinator: c, musicService: musicService)
+        nowPlayingVM = NowPlayingViewModel(coordinator: c, musicService: musicService, producer: p)
         queueVM = QueueViewModel(coordinator: c)
         libraryVM = LibraryViewModel(musicService: musicService, coordinator: c, producer: p)
         Task { await p.start() }

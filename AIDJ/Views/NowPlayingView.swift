@@ -109,11 +109,27 @@ struct NowPlayingView: View {
     }
 
     private var djBanner: some View {
-        Label("DJ is speaking…", systemImage: "waveform")
-            .font(.caption.weight(.medium))
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .background(.thinMaterial, in: Capsule())
+        HStack(spacing: 8) {
+            Label("DJ is speaking…", systemImage: "waveform")
+                .font(.caption.weight(.medium))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(.thinMaterial, in: Capsule())
+
+            Button {
+                vm.regenerateDJ()
+            } label: {
+                if vm.isRegenerating {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Label("Regenerate", systemImage: "arrow.clockwise")
+                        .labelStyle(.iconOnly)
+                }
+            }
+            .buttonStyle(.borderless)
+            .disabled(vm.isRegenerating)
+            .help("Generate a different DJ take for this transition")
+        }
     }
 
     private var transportControls: some View {

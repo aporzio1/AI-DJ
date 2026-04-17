@@ -69,6 +69,21 @@ actor Producer {
         config = newConfig
     }
 
+    /// Generate a replacement for the currently-playing DJ segment. Uses the same
+    /// upcoming-track context as the original.
+    func regenerateCurrentSegment() async -> DJSegment? {
+        let queue = await coordinator.queue
+        let currentIdx = await coordinator.currentIndex
+        guard currentIdx < queue.count, case .djSegment = queue[currentIdx] else { return nil }
+
+        // The segment introduces the next track in the queue.
+        guard currentIdx + 1 < queue.count, case .track(let upcoming) = queue[currentIdx + 1] else {
+            return nil
+        }
+        print("[Producer] regenerating segment for '\(upcoming.title)'")
+        return await generateSegment(upcomingTrack: upcoming)
+    }
+
     func primeOpeningIntro() async {
         guard config.djEnabled else {
             print("[Producer] DJ disabled — skipping opening intro")

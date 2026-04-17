@@ -12,13 +12,19 @@ final class NowPlayingViewModel {
     private(set) var duration: TimeInterval = 0
     private(set) var currentArtwork: Artwork?
 
+    private(set) var isRegenerating = false
+
     private let coordinator: PlaybackCoordinator
     private let musicService: any MusicKitServiceProtocol
+    private let producer: Producer?
     private var monitorTask: Task<Void, Never>?
 
-    init(coordinator: PlaybackCoordinator, musicService: any MusicKitServiceProtocol) {
+    init(coordinator: PlaybackCoordinator,
+         musicService: any MusicKitServiceProtocol,
+         producer: Producer? = nil) {
         self.coordinator = coordinator
         self.musicService = musicService
+        self.producer = producer
     }
 
     func startObserving() {
@@ -74,5 +80,16 @@ final class NowPlayingViewModel {
 
     func seek(to time: TimeInterval) {
         Task { try? await coordinator.seek(to: time) }
+    }
+
+    func regenerateDJ() {
+        guard let producer, !isRegenerating else { return }
+        isRegenerating = true
+        Task {
+            if let newSegment = await producer.regenerateCurrentSegment() {
+                await coordinator.swapCurrentSegment(with: newSegment)
+            }
+            isRegenerating = false
+        }
     }
 }

@@ -5,6 +5,7 @@ actor AudioGraph: AudioGraphProtocol {
 
     private let engine = AVAudioEngine()
     private let playerNode = AVAudioPlayerNode()
+    private var pendingContinuation: CheckedContinuation<Void, Never>?
 
     init() {
         engine.attach(playerNode)
@@ -34,24 +35,34 @@ actor AudioGraph: AudioGraphProtocol {
         await withTaskCancellationHandler {
             await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
                 print("[AudioGraph] scheduling file with completion callback")
-                playerNode.scheduleFile(file, at: nil, completionCallbackType: .dataPlayedBack) { _ in
-                    continuation.resume()
+                self.pendingContinuation = continuation
+                playerNode.scheduleFile(file, at: nil, completionCallbackType: .dataPlayedBack) { [weak self] _ in
+                    Task { await self?.resumePending() }
                 }
                 playerNode.play()
                 print("[AudioGraph] play() called, isPlaying=\(self.playerNode.isPlaying)")
             }
             print("[AudioGraph] play() complete")
         } onCancel: {
-            Task { await self.stopPlayer() }
+            Task { await self.stopAndResume() }
         }
     }
 
     func stop() {
         playerNode.stop()
+        resumePending()
     }
 
-    private func stopPlayer() {
+    private func stopAndResume() {
         playerNode.stop()
+        resumePending()
+    }
+
+    private func resumePending() {
+        if let c = pendingContinuation {
+            pendingContinuation = nil
+            c.resume()
+        }
     }
 }
 
