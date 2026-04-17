@@ -23,7 +23,7 @@ func appleIntelligenceUnavailabilityReason() -> String? {
 
 @Generable
 struct DJScriptResponse {
-    @Guide(description: "A short DJ intro, 1-2 sentences total, no more than 30 words. Conversational and punchy.")
+    @Guide(description: "A radio DJ monologue. Vary the length: sometimes a full DJ moment with personality and context (2-4 sentences), sometimes just a quick callout (one sentence). No more than 60 words total.")
     let script: String
 }
 
@@ -34,13 +34,17 @@ final class DJBrain: DJBrainProtocol {
         print("[DJBrain] prompt: \(prompt)")
         let instructions = """
         \(context.persona.styleDescriptor)
-        Rules: Output 1-2 sentences only. Never more than 30 words total. No intros like "Here's" or "And now"—just say it.
+
+        You are a real radio DJ. Bring energy and personality. Reference the music, the time of day, or the vibe.
+        Mix up your length: some segments should be a full DJ moment (2-4 sentences, ~40-60 words), others a
+        quick callout (one short sentence). Real DJs don't sound the same every time.
+        Never say stuff like "Here's a script" or "Let me introduce"—just go.
         """
         let session = LanguageModelSession(instructions: instructions)
         let response = try await session.respond(to: prompt, generating: DJScriptResponse.self)
         let script = response.content.script.trimmingCharacters(in: .whitespacesAndNewlines)
         print("[DJBrain] raw response: \(script)")
-        return truncateAtSentenceBoundary(script, maxChars: 220)
+        return truncateAtSentenceBoundary(script, maxChars: 500)
     }
 
     private func buildPrompt(context: DJContext) -> String {

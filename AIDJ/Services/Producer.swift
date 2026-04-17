@@ -13,6 +13,8 @@ actor Producer {
 
     private var recentTracks: [AIDJ.Track] = []
     private var monitorTask: Task<Void, Never>?
+    private var tracksSinceLastSegment = 0
+    private var hasGivenIntro = false
 
     init(
         coordinator: PlaybackCoordinator,
@@ -77,7 +79,33 @@ actor Producer {
         }
     }
 
+    private func shouldGenerate() -> Bool {
+        // First transition always gets a DJ intro
+        if !hasGivenIntro {
+            hasGivenIntro = true
+            tracksSinceLastSegment = 0
+            return true
+        }
+        // After 3 straight skips, force a segment so the DJ stays present
+        if tracksSinceLastSegment >= 3 {
+            tracksSinceLastSegment = 0
+            return true
+        }
+        // Otherwise 50/50
+        if Bool.random() {
+            tracksSinceLastSegment = 0
+            return true
+        }
+        tracksSinceLastSegment += 1
+        return false
+    }
+
     private func primeSegment(upcomingTrack: AIDJ.Track) async -> DJSegment? {
+        guard shouldGenerate() else {
+            print("[Producer] Skipping DJ for this transition (tracksSinceLast=\(tracksSinceLastSegment))")
+            return nil
+        }
+
         let headline = try? await rssFetcher.fetchHeadlines().first
 
         let context = DJContext(
