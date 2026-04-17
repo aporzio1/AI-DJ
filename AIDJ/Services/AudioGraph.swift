@@ -42,17 +42,18 @@ actor AudioGraph: AudioGraphProtocol {
             }
             Log.audio.debug("play() complete")
         } onCancel: {
-            // Stop the player directly (thread-safe); resume the continuation via the actor.
-            playerNode.stop()
-            Task(priority: .utility) { await self.resumePending() }
+            stop()
         }
     }
 
-    /// Nonisolated so callers at any QoS don't block the actor's executor on the
-    /// synchronous CoreAudio stop (which runs at default QoS → priority inversion).
+    /// Nonisolated so callers at any QoS don't block on CoreAudio teardown.
+    /// The actual stop is deferred to a utility-priority Task so the caller
+    /// returns immediately (audio stops within a few ms on the background).
     nonisolated func stop() {
-        playerNode.stop()
-        Task(priority: .utility) { await self.resumePending() }
+        Task(priority: .utility) { [self] in
+            self.playerNode.stop()
+            await self.resumePending()
+        }
     }
 
     private func resumePending() {
