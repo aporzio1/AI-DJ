@@ -23,7 +23,7 @@ func appleIntelligenceUnavailabilityReason() -> String? {
 
 @Generable
 struct DJScriptResponse {
-    @Guide(description: "A radio DJ monologue. Vary the length: sometimes a full DJ moment with personality and context (2-4 sentences), sometimes just a quick callout (one sentence). No more than 60 words total.")
+    @Guide(description: "A radio DJ monologue: 2 to 4 complete sentences, 30-70 words. Reference the music, the time of day, or the vibe. Always a complete thought — never a fragment.")
     let script: String
 }
 
@@ -46,10 +46,11 @@ final class DJBrain: DJBrainProtocol {
         let instructions = """
         \(context.persona.styleDescriptor)
 
-        You are a real radio DJ. Bring energy and personality. Reference the music, the time of day, or the vibe.
-        Mix up your length: some segments should be a full DJ moment (2-4 sentences, ~40-60 words), others a
-        quick callout (one short sentence). Real DJs don't sound the same every time.
-        Never say stuff like "Here's a script" or "Let me introduce"—just go.
+        You are a real radio DJ. Bring energy and personality — reference the music, the time of day, the vibe,
+        or what was just playing. Always 2 to 4 complete sentences, 30-70 words. Vary WHAT you talk about
+        between segments, not the length. Never produce one-liners or fragments.
+        Never say "Here's a script" or "Let me introduce" — just go.
+        Song titles like "7\" Mix" or "(Remastered)" are not part of your script; read the song naturally.
         """
         let session = LanguageModelSession(instructions: instructions)
         let genStart = ContinuousClock.now
@@ -62,7 +63,7 @@ final class DJBrain: DJBrainProtocol {
 
     private func buildPrompt(context: DJContext) -> String {
         var parts: [String] = []
-        parts.append("Introduce '\(context.upcomingTrack.title)' by \(context.upcomingTrack.artist).")
+        parts.append("Introduce '\(cleanTitle(context.upcomingTrack.title))' by \(context.upcomingTrack.artist).")
         parts.append("Time: \(context.timeOfDay.rawValue).")
 
         if let name = context.listenerName, !name.isEmpty {
@@ -71,7 +72,7 @@ final class DJBrain: DJBrainProtocol {
 
         if !context.recentTracks.isEmpty {
             let recent = context.recentTracks.prefix(3)
-                .map { "\($0.title) by \($0.artist)" }
+                .map { "\(cleanTitle($0.title)) by \($0.artist)" }
                 .joined(separator: ", ")
             parts.append("Just played: \(recent).")
         }
@@ -81,6 +82,16 @@ final class DJBrain: DJBrainProtocol {
         }
 
         return parts.joined(separator: " ")
+    }
+
+    /// Strips parenthetical remix/version tags and quote characters that confuse the model.
+    private func cleanTitle(_ title: String) -> String {
+        var cleaned = title
+        if let parenIndex = cleaned.firstIndex(of: "(") {
+            cleaned = String(cleaned[..<parenIndex])
+        }
+        cleaned = cleaned.replacingOccurrences(of: "\"", with: "")
+        return cleaned.trimmingCharacters(in: .whitespaces)
     }
 
     private func truncateAtSentenceBoundary(_ text: String, maxChars: Int) -> String {
