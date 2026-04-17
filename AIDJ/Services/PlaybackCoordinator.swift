@@ -68,9 +68,16 @@ actor PlaybackCoordinator {
     func insertAt(_ index: Int, item: PlayableItem) {
         let clamped = max(0, min(index, queue.count))
         queue.insert(item, at: clamped)
-        if clamped <= currentIndex {
+        if clamped < currentIndex {
             currentIndex += 1
         }
+    }
+
+    /// Prepends an item at index 0 AND sets currentIndex to 0.
+    /// Safe to call only when idle — used to prepend an opening DJ segment.
+    func prependAndSelect(_ item: PlayableItem) {
+        queue.insert(item, at: 0)
+        currentIndex = 0
     }
 
     func removeItem(at index: Int) {

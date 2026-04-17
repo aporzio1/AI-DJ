@@ -44,7 +44,8 @@ actor Producer {
         hasGivenIntro = true
         tracksSinceLastSegment = 0
         guard let segment = await generateSegment(upcomingTrack: upcoming) else { return }
-        await coordinator.insertAt(0, item: .djSegment(segment))
+        await coordinator.prependAndSelect(.djSegment(segment))
+        print("[Producer] Opening intro inserted at index 0")
     }
 
     // MARK: Lifecycle
