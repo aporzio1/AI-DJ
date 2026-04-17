@@ -3,8 +3,8 @@ import AVFoundation
 
 actor AudioGraph: AudioGraphProtocol {
 
-    private let engine = AVAudioEngine()
-    private let playerNode = AVAudioPlayerNode()
+    nonisolated(unsafe) private let engine = AVAudioEngine()
+    nonisolated(unsafe) private let playerNode = AVAudioPlayerNode()
     private var pendingContinuation: CheckedContinuation<Void, Never>?
 
     init() {
@@ -35,25 +35,24 @@ actor AudioGraph: AudioGraphProtocol {
             await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
                 self.pendingContinuation = continuation
                 playerNode.scheduleFile(file, at: nil, completionCallbackType: .dataPlayedBack) { [weak self] _ in
-                    Task { await self?.resumePending() }
+                    Task(priority: .utility) { await self?.resumePending() }
                 }
                 playerNode.play()
                 Log.audio.debug("play() called, isPlaying=\(self.playerNode.isPlaying)")
             }
             Log.audio.debug("play() complete")
         } onCancel: {
-            Task { await self.stopAndResume() }
+            // Stop the player directly (thread-safe); resume the continuation via the actor.
+            playerNode.stop()
+            Task(priority: .utility) { await self.resumePending() }
         }
     }
 
-    func stop() {
+    /// Nonisolated so callers at any QoS don't block the actor's executor on the
+    /// synchronous CoreAudio stop (which runs at default QoS → priority inversion).
+    nonisolated func stop() {
         playerNode.stop()
-        resumePending()
-    }
-
-    private func stopAndResume() {
-        playerNode.stop()
-        resumePending()
+        Task(priority: .utility) { await self.resumePending() }
     }
 
     private func resumePending() {

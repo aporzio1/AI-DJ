@@ -104,7 +104,7 @@ actor PlaybackCoordinator {
         guard state == .playing else { return }
         state = .paused
         try await musicService.stop()
-        await audioGraph.stop()
+        audioGraph.stop()
     }
 
     func skip() async throws {
@@ -141,7 +141,7 @@ actor PlaybackCoordinator {
         Log.coordinator.info("swapping current segment with fresh one")
         queue[currentIndex] = .djSegment(newSegment)
         playbackGeneration += 1
-        await audioGraph.stop()
+        audioGraph.stop()
         if state == .playing || state == .buffering {
             try? await playCurrentItem()
         }
