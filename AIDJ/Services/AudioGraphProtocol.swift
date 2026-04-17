@@ -1,6 +1,7 @@
 import Foundation
 
-protocol AudioGraphProtocol: AnyObject, Sendable {
+@MainActor
+protocol AudioGraphProtocol: AnyObject {
     /// Plays the audio file at `url`. Returns when playback completes.
     func play(url: URL) async throws
     func stop()

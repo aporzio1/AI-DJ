@@ -13,7 +13,8 @@ struct PlaylistInfo: Identifiable, Sendable {
     let artworkURL: URL?
 }
 
-protocol MusicKitServiceProtocol: AnyObject, Sendable {
+@MainActor
+protocol MusicKitServiceProtocol: AnyObject {
     var authorizationStatus: MusicAuthorization.Status { get }
 
     func requestAuthorization() async -> MusicAuthorization.Status
