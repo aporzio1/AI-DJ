@@ -35,11 +35,32 @@ struct MiniPlayerBar: View {
         .padding(.vertical, 8)
         .frame(height: 64)
         .background(.ultraThinMaterial)
-        .overlay(alignment: .top) { Divider() }
+        .overlay(alignment: .top) { progressLine }
         .contentShape(Rectangle())
         .onTapGesture { onTap() }
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isButton)
+    }
+
+    // MARK: - Progress
+
+    private var progressLine: some View {
+        GeometryReader { geo in
+            ZStack(alignment: .leading) {
+                Rectangle()
+                    .fill(.quaternary)
+                Rectangle()
+                    .fill(Color.accentColor)
+                    .frame(width: geo.size.width * progress)
+                    .animation(.linear(duration: 0.25), value: progress)
+            }
+        }
+        .frame(height: 2)
+    }
+
+    private var progress: CGFloat {
+        guard vm.duration > 0 else { return 0 }
+        return CGFloat(min(1.0, max(0.0, vm.playbackTime / vm.duration)))
     }
 
     // MARK: - Subviews
