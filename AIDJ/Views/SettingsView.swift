@@ -114,22 +114,33 @@ struct SettingsView: View {
             Button {
                 openSpokenContentSettings()
             } label: {
-                Label("Download Voices in System Settings", systemImage: "arrow.up.forward.app")
+                Label("Open System Settings — Spoken Content", systemImage: "arrow.up.forward.app")
             }
             .buttonStyle(.bordered)
 #endif
         } header: {
             Text("Voice")
         } footer: {
-            Text(voiceFooterText)
+            voiceFooter
         }
     }
 
-    private var voiceFooterText: String {
+    @ViewBuilder
+    private var voiceFooter: some View {
 #if os(macOS)
-        return "Premium and Enhanced voices sound significantly more natural than the defaults. Use the button above to open System Settings → Accessibility → Spoken Content → System Voice → Manage Voices, then download a Premium English voice like Ava, Zoe, or Evan."
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Premium voices sound much more natural. To download one:")
+            VStack(alignment: .leading, spacing: 4) {
+                Text("1. Click the button above to open Spoken Content")
+                Text("2. Click the **System Voice** pop-up menu")
+                Text("3. Scroll to the bottom and choose **Manage Voices…** (or **Customize…**)")
+                Text("4. Check a Premium English voice like **Ava**, **Zoe**, or **Evan** under English (United States)")
+                Text("5. Wait for the download, then return here and pick it from the list")
+            }
+            .padding(.leading, 4)
+        }
 #else
-        return "Premium and Enhanced voices sound significantly more natural. Install them in Settings → Accessibility → Spoken Content → Voices."
+        Text("Install higher-quality voices in the Settings app: Accessibility → Spoken Content → Voices → English → download any Premium voice.")
 #endif
     }
 
