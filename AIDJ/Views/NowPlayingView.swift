@@ -1,0 +1,114 @@
+import SwiftUI
+import MusicKit
+
+struct NowPlayingView: View {
+    @State private var vm: NowPlayingViewModel
+
+    init(vm: NowPlayingViewModel) {
+        self._vm = State(initialValue: vm)
+    }
+
+    var body: some View {
+        VStack(spacing: 24) {
+            artworkView
+            infoView
+            if vm.isDJSpeaking {
+                djBanner
+            }
+            transportControls
+        }
+        .padding()
+        .onAppear { vm.startObserving() }
+        .onDisappear { vm.stopObserving() }
+    }
+
+    @ViewBuilder
+    private var artworkView: some View {
+        if let url = artworkURL {
+            AsyncImage(url: url) { image in
+                image.resizable().aspectRatio(contentMode: .fit)
+            } placeholder: {
+                artworkPlaceholder
+            }
+            .frame(width: 260, height: 260)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+        } else {
+            artworkPlaceholder
+                .frame(width: 260, height: 260)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+        }
+    }
+
+    private var artworkPlaceholder: some View {
+        Rectangle()
+            .fill(.quaternary)
+            .overlay {
+                Image(systemName: "music.note")
+                    .font(.largeTitle)
+                    .foregroundStyle(.tertiary)
+            }
+    }
+
+    private var artworkURL: URL? {
+        guard let item = vm.currentItem, case .track(let t) = item else { return nil }
+        return t.artworkURL
+    }
+
+    private var infoView: some View {
+        VStack(spacing: 4) {
+            Text(currentTitle)
+                .font(.title3.weight(.semibold))
+                .lineLimit(1)
+            Text(currentSubtitle)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
+    }
+
+    private var currentTitle: String {
+        switch vm.currentItem {
+        case .track(let t):     return t.title
+        case .djSegment:        return "DJ"
+        case nil:               return "Nothing Playing"
+        }
+    }
+
+    private var currentSubtitle: String {
+        switch vm.currentItem {
+        case .track(let t):     return "\(t.artist) — \(t.album)"
+        case .djSegment(let s): return s.kind.rawValue.capitalized
+        case nil:               return ""
+        }
+    }
+
+    private var djBanner: some View {
+        Label("DJ is speaking…", systemImage: "waveform")
+            .font(.caption.weight(.medium))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(.thinMaterial, in: Capsule())
+    }
+
+    private var transportControls: some View {
+        HStack(spacing: 32) {
+            Button { vm.previous() } label: {
+                Image(systemName: "backward.fill").font(.title2)
+            }
+            Button {
+                if vm.playbackState == .playing {
+                    vm.pause()
+                } else {
+                    vm.play()
+                }
+            } label: {
+                Image(systemName: vm.playbackState == .playing ? "pause.circle.fill" : "play.circle.fill")
+                    .font(.system(size: 52))
+            }
+            Button { vm.skip() } label: {
+                Image(systemName: "forward.fill").font(.title2)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+}

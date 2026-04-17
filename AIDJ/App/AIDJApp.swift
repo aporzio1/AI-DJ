@@ -8,7 +8,13 @@ struct AIDJApp: App {
         }
 #if os(macOS)
         .commands {
-            CommandGroup(replacing: .appInfo) {}
+            CommandGroup(after: .appInfo) {
+                Divider()
+                Button("Skip DJ Segment") {
+                    // Handled via notification or environment object in a future pass
+                }
+                .keyboardShortcut("d", modifiers: [.command, .shift])
+            }
         }
 #endif
     }
