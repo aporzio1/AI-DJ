@@ -52,6 +52,8 @@ final class DJBrain: DJBrainProtocol {
         Never say "Here's a script" or "Let me introduce" — just go.
         Song titles like "7\" Mix" or "(Remastered)" are not part of your script; read the song naturally.
         Do not use emojis, emoticons, or decorative symbols — your output is spoken aloud by a text-to-speech engine.
+        If a news hook is provided, weave it in casually — NEVER recite the headline verbatim. Skip news hooks
+        that don't fit naturally; silence is fine.
         """
         let session = LanguageModelSession(instructions: instructions)
         let genStart = ContinuousClock.now
@@ -86,7 +88,7 @@ final class DJBrain: DJBrainProtocol {
         }
 
         if let headline = context.newsHeadline {
-            parts.append("Optional news hook: \(headline.title).")
+            parts.append("Optional news hook — paraphrase in your own words, do NOT recite this verbatim: \"\(cleanHeadline(headline.title))\"")
         }
 
         return parts.joined(separator: " ")
@@ -99,6 +101,18 @@ final class DJBrain: DJBrainProtocol {
             cleaned = String(cleaned[..<parenIndex])
         }
         cleaned = cleaned.replacingOccurrences(of: "\"", with: "")
+        return cleaned.trimmingCharacters(in: .whitespaces)
+    }
+
+    /// Strip awkward prefixes so the DJ doesn't read "Show HN: …" aloud.
+    private func cleanHeadline(_ title: String) -> String {
+        var cleaned = title
+        let prefixes = ["Show HN:", "Ask HN:", "Tell HN:", "Launch HN:", "[PDF]", "[Video]"]
+        for prefix in prefixes {
+            if cleaned.hasPrefix(prefix) {
+                cleaned = String(cleaned.dropFirst(prefix.count))
+            }
+        }
         return cleaned.trimmingCharacters(in: .whitespaces)
     }
 

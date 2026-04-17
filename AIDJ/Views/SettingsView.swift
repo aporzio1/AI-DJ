@@ -64,7 +64,16 @@ struct SettingsView: View {
         }
         .formStyle(.grouped)
         .navigationTitle("Settings")
-        .onAppear { availableVoices = VoiceOption.installedEnglish() }
+        .onAppear {
+            availableVoices = VoiceOption.installedEnglish()
+            // If the previously-saved voice isn't installed anymore, fall back to default
+            // so the Picker doesn't show an "invalid selection" warning.
+            if !vm.voiceIdentifier.isEmpty,
+               !availableVoices.contains(where: { $0.id == vm.voiceIdentifier }) {
+                vm.voiceIdentifier = ""
+                vm.save()
+            }
+        }
 #if os(macOS)
         .fileImporter(isPresented: $showingOPMLImporter,
                       allowedContentTypes: [.xml, .data],

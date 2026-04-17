@@ -166,7 +166,15 @@ actor PlaybackCoordinator {
         let item = queue[currentIndex]
         switch item {
         case .track(let track):
-            try await playTrack(track)
+            do {
+                try await playTrack(track)
+            } catch {
+                // MusicKit can fail for a specific track (unavailable in region,
+                // removed from catalog, network blip, etc.). Don't stall the queue —
+                // log and move to the next item.
+                Log.coordinator.error("playTrack failed for '\(track.title, privacy: .public)': \(error, privacy: .public) — skipping")
+                await advance()
+            }
         case .djSegment(let segment):
             try await playSegment(segment)
         }
