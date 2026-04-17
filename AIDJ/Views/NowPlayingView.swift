@@ -20,8 +20,6 @@ struct NowPlayingView: View {
             transportControls
         }
         .padding()
-        .onAppear { vm.startObserving() }
-        .onDisappear { vm.stopObserving() }
     }
 
     private var progressSlider: some View {

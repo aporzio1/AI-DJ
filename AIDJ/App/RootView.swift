@@ -19,12 +19,11 @@ struct RootView: View {
     @State private var nowPlayingVM: NowPlayingViewModel?
     @State private var queueVM: QueueViewModel?
     @State private var libraryVM: LibraryViewModel?
-
-    // Onboarding VM — also stable
     @State private var onboardingVM: OnboardingViewModel?
 
-    // macOS sidebar selection
-    @State private var selectedTab: AppTab = .nowPlaying
+    // Top-level nav
+    @State private var selectedTab: AppTab = .library
+    @State private var showingNowPlaying = false
 
     var body: some View {
         Group {
@@ -38,6 +37,20 @@ struct RootView: View {
                     }
                     .onChange(of: settings.djEnabled) { _, _ in updateProducerConfig() }
                     .onChange(of: settings.newsEnabled) { _, _ in updateProducerConfig() }
+                    .sheet(isPresented: $showingNowPlaying) {
+                        NavigationStack {
+                            NowPlayingView(vm: nowPlaying)
+                                .navigationTitle("Now Playing")
+                                .toolbar {
+                                    ToolbarItem(placement: .confirmationAction) {
+                                        Button("Done") { showingNowPlaying = false }
+                                    }
+                                }
+                        }
+#if os(macOS)
+                        .frame(minWidth: 440, minHeight: 600)
+#endif
+                    }
             } else {
                 if let vm = onboardingVM {
                     OnboardingView(vm: vm, onReady: handleReady)
@@ -69,7 +82,9 @@ struct RootView: View {
         )
         coordinator = c
         producer = p
-        nowPlayingVM = NowPlayingViewModel(coordinator: c, musicService: musicService, producer: p)
+        let npVM = NowPlayingViewModel(coordinator: c, musicService: musicService, producer: p)
+        npVM.startObserving()   // keep the mini-player state fresh for the whole session
+        nowPlayingVM = npVM
         queueVM = QueueViewModel(coordinator: c)
         libraryVM = LibraryViewModel(musicService: musicService, coordinator: c, producer: p)
         Task { await p.start() }
@@ -89,38 +104,57 @@ struct RootView: View {
         }
     }
 
+    // MARK: - Main content
+
     @ViewBuilder
-    private func mainContent(nowPlaying: NowPlayingViewModel, queue: QueueViewModel, library: LibraryViewModel) -> some View {
+    private func mainContent(nowPlaying: NowPlayingViewModel,
+                             queue: QueueViewModel,
+                             library: LibraryViewModel) -> some View {
 #if os(macOS)
         NavigationSplitView {
             List(selection: $selectedTab) {
-                Label("Now Playing", systemImage: "music.note").tag(AppTab.nowPlaying)
-                Label("Queue",       systemImage: "list.bullet").tag(AppTab.queue)
-                Label("Library",     systemImage: "music.note.list").tag(AppTab.library)
-                Label("Settings",    systemImage: "gear").tag(AppTab.settings)
+                Label("Library",  systemImage: "music.note.list").tag(AppTab.library)
+                Label("Queue",    systemImage: "list.bullet").tag(AppTab.queue)
+                Label("Settings", systemImage: "gear").tag(AppTab.settings)
             }
             .navigationTitle("AI DJ")
         } detail: {
-            switch selectedTab {
-            case .nowPlaying: NowPlayingView(vm: nowPlaying)
-            case .queue:      QueueView(vm: queue)
-            case .library:    LibraryView(vm: library)
-            case .settings:   SettingsView(vm: settings)
+            VStack(spacing: 0) {
+                detailContent(nowPlaying: nowPlaying, queue: queue, library: library)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                MiniPlayerBar(vm: nowPlaying) { showingNowPlaying = true }
             }
         }
 #else
-        TabView {
-            NowPlayingView(vm: nowPlaying)
-                .tabItem { Label("Now Playing", systemImage: "music.note") }
-            NavigationStack { QueueView(vm: queue) }
-                .tabItem { Label("Queue", systemImage: "list.bullet") }
+        TabView(selection: $selectedTab) {
             NavigationStack { LibraryView(vm: library) }
                 .tabItem { Label("Library", systemImage: "music.note.list") }
+                .tag(AppTab.library)
+            NavigationStack { QueueView(vm: queue) }
+                .tabItem { Label("Queue", systemImage: "list.bullet") }
+                .tag(AppTab.queue)
             NavigationStack { SettingsView(vm: settings) }
                 .tabItem { Label("Settings", systemImage: "gear") }
+                .tag(AppTab.settings)
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            MiniPlayerBar(vm: nowPlaying) { showingNowPlaying = true }
         }
 #endif
     }
+
+    @ViewBuilder
+    private func detailContent(nowPlaying: NowPlayingViewModel,
+                               queue: QueueViewModel,
+                               library: LibraryViewModel) -> some View {
+        switch selectedTab {
+        case .library:  LibraryView(vm: library)
+        case .queue:    QueueView(vm: queue)
+        case .settings: SettingsView(vm: settings)
+        }
+    }
 }
 
-private enum AppTab { case nowPlaying, queue, library, settings }
+private enum AppTab: Hashable {
+    case library, queue, settings
+}

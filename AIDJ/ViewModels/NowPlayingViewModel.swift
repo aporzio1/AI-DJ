@@ -28,7 +28,7 @@ final class NowPlayingViewModel {
     }
 
     func startObserving() {
-        monitorTask?.cancel()
+        guard monitorTask == nil else { return }
         monitorTask = Task { [weak self] in
             guard let self else { return }
             while !Task.isCancelled {
@@ -60,6 +60,7 @@ final class NowPlayingViewModel {
 
     func stopObserving() {
         monitorTask?.cancel()
+        monitorTask = nil
     }
 
     func play() {
