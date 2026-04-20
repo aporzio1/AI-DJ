@@ -22,6 +22,7 @@ actor PlaybackCoordinator {
     private(set) var queue: [PlayableItem] = []
     private(set) var currentIndex: Int = 0
     private(set) var state: CoordinatorState = .idle
+    private(set) var repeatMode: RepeatMode = .off
 
     // Incremented every time a new playback starts. In-flight loops check this to detect
     // when they've been superseded and should exit without advancing.
@@ -131,6 +132,23 @@ actor PlaybackCoordinator {
         try await musicService.seek(to: time)
     }
 
+    // MARK: Shuffle + Repeat
+
+    /// Shuffles everything after the currently-playing item. History stays in
+    /// place; the current item stays where it is so playback doesn't restart.
+    func shuffleUpcoming() {
+        guard currentIndex + 1 < queue.count else { return }
+        let head = Array(queue.prefix(currentIndex + 1))
+        let tail = Array(queue.suffix(from: currentIndex + 1)).shuffled()
+        queue = head + tail
+        Log.coordinator.info("shuffleUpcoming: reshuffled \(tail.count) items after currentIndex=\(self.currentIndex)")
+    }
+
+    func setRepeatMode(_ mode: RepeatMode) {
+        repeatMode = mode
+        Log.coordinator.info("repeatMode → \(String(describing: mode), privacy: .public)")
+    }
+
     /// Replace the currently-playing DJ segment with a new one and restart playback.
     /// No-op if the current item is not a segment.
     func swapCurrentSegment(with newSegment: DJSegment) async {
@@ -229,8 +247,12 @@ actor PlaybackCoordinator {
             // to finish before the track ends. The advance timer still pins
             // the actual handoff to the track's real end.
             if !emittedWillAdvance, duration > 0, remaining <= 20.0, remaining > 0 {
-                Log.coordinator.info("T-\(remaining, format: .fixed(precision: 1))s — emitting willAdvance (gen=\(myGen))")
-                emitWillAdvance(track: track)
+                if repeatMode == .one {
+                    Log.coordinator.info("T-\(remaining, format: .fixed(precision: 1))s — repeat.one, skipping willAdvance emit (gen=\(myGen))")
+                } else {
+                    Log.coordinator.info("T-\(remaining, format: .fixed(precision: 1))s — emitting willAdvance (gen=\(myGen))")
+                    emitWillAdvance(track: track)
+                }
                 emittedWillAdvance = true
                 willAdvanceRemaining = remaining
                 willAdvanceFiredAt = clock.now
@@ -277,9 +299,23 @@ actor PlaybackCoordinator {
 
     private func advance() async {
         guard state == .playing || state == .buffering else { return }
+
+        // repeat.one replays the current item instead of advancing. Apply only
+        // to tracks — a DJ segment is never worth looping forever.
+        if repeatMode == .one, currentIndex < queue.count,
+           case .track = queue[currentIndex] {
+            Log.coordinator.info("repeat.one → replaying current track")
+            try? await playCurrentItem()
+            return
+        }
+
         currentIndex += 1
         Log.coordinator.info("advance → currentIndex=\(self.currentIndex) (queue=\(self.queue.count))")
         if currentIndex < queue.count {
+            try? await playCurrentItem()
+        } else if repeatMode == .all, !queue.isEmpty {
+            currentIndex = 0
+            Log.coordinator.info("repeat.all → wrapping to start")
             try? await playCurrentItem()
         } else {
             state = .idle

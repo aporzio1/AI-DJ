@@ -11,8 +11,11 @@ final class NowPlayingViewModel {
     private(set) var playbackTime: TimeInterval = 0
     private(set) var duration: TimeInterval = 0
     private(set) var currentArtwork: Artwork?
+    private(set) var repeatMode: RepeatMode = .off
 
     private(set) var isRegenerating = false
+
+    private static let repeatModeKey = "nowPlayingRepeatMode"
 
     private let coordinator: PlaybackCoordinator
     private let musicService: any MusicKitServiceProtocol
@@ -25,6 +28,14 @@ final class NowPlayingViewModel {
         self.coordinator = coordinator
         self.musicService = musicService
         self.producer = producer
+
+        // Hydrate repeat mode from UserDefaults and push it down to the
+        // coordinator so its advance loop honors it from the first track.
+        if let raw = UserDefaults.standard.string(forKey: Self.repeatModeKey),
+           let mode = RepeatMode(rawValue: raw) {
+            self.repeatMode = mode
+            Task { await coordinator.setRepeatMode(mode) }
+        }
     }
 
     func startObserving() {
@@ -81,6 +92,17 @@ final class NowPlayingViewModel {
 
     func seek(to time: TimeInterval) {
         Task { try? await coordinator.seek(to: time) }
+    }
+
+    func shuffleUpcoming() {
+        Task { await coordinator.shuffleUpcoming() }
+    }
+
+    func cycleRepeatMode() {
+        let next = repeatMode.next()
+        repeatMode = next
+        UserDefaults.standard.set(next.rawValue, forKey: Self.repeatModeKey)
+        Task { await coordinator.setRepeatMode(next) }
     }
 
     func regenerateDJ() {

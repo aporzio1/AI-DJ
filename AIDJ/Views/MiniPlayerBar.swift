@@ -57,8 +57,10 @@ struct MiniPlayerBar: View {
 
     @ViewBuilder
     private var progressRow: some View {
-        if vm.duration > 0 {
-            HStack(spacing: 8) {
+        HStack(spacing: 8) {
+            shuffleButton
+
+            if vm.duration > 0 {
                 Text(formatTime(displayedTime))
                     .font(.caption2.monospacedDigit())
                     .foregroundStyle(.secondary)
@@ -76,20 +78,52 @@ struct MiniPlayerBar: View {
                     .font(.caption2.monospacedDigit())
                     .foregroundStyle(.secondary)
                     .frame(width: 42, alignment: .trailing)
+            } else {
+                Rectangle()
+                    .fill(.quaternary)
+                    .frame(height: 2)
+                    .frame(maxWidth: .infinity)
             }
-            .onAppear { scrubValue = vm.playbackTime }
-            .onChange(of: vm.playbackTime) { _, newValue in
-                // Poller updates — only accept when user isn't actively dragging.
-                if !isScrubbing { scrubValue = newValue }
-            }
-        } else {
-            // DJ segments and idle state get a thin quiescent bar so the row
-            // doesn't pop in and out and shift the layout.
-            Rectangle()
-                .fill(.quaternary)
-                .frame(height: 2)
-                .padding(.vertical, 8)
+
+            repeatButton
         }
+        .onAppear { scrubValue = vm.playbackTime }
+        .onChange(of: vm.playbackTime) { _, newValue in
+            // Poller updates — only accept when user isn't actively dragging.
+            if !isScrubbing { scrubValue = newValue }
+        }
+    }
+
+    // MARK: - Shuffle / Repeat
+
+    private var shuffleButton: some View {
+        Button {
+            vm.shuffleUpcoming()
+        } label: {
+            Image(systemName: "shuffle")
+                .font(.footnote.weight(.semibold))
+                .frame(width: 32, height: 32)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(.secondary)
+        .onTapGesture { vm.shuffleUpcoming() }  // tap-eat to prevent row expansion
+        .accessibilityLabel("Shuffle upcoming")
+    }
+
+    private var repeatButton: some View {
+        Button {
+            vm.cycleRepeatMode()
+        } label: {
+            Image(systemName: vm.repeatMode.systemImage)
+                .font(.footnote.weight(.semibold))
+                .frame(width: 32, height: 32)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(vm.repeatMode.isActive ? Color.accentColor : .secondary)
+        .onTapGesture { vm.cycleRepeatMode() }
+        .accessibilityLabel(vm.repeatMode.accessibilityLabel)
     }
 
     private var displayedTime: TimeInterval {

@@ -2,7 +2,7 @@
 
 **Owner:** Andrew P
 **PM Agent:** `aidj-pm` (see `.claude/agents/aidj-pm.md`)
-**Last updated:** 2026-04-20 (DJ frequency setting: Go on Option A, single-commit scope)
+**Last updated:** 2026-04-20 (MiniPlayerBar expansion: Split into 3 phases — progress slider+layout, shuffle+repeat, thumbs)
 
 ---
 
@@ -62,6 +62,9 @@ Reverse-chronological. Commit hashes are 7-char.
 | Editable personas — Phase 1: make Alex editable | Let the user rename the single existing persona and rewrite its `styleDescriptor` ("instructions"). Persist `DJPersona` as Codable JSON in UserDefaults. Add an editor sheet from the Settings Persona row (replaces the current disabled `LabeledContent`). Add `Producer.updatePersona(_:)` so changes take effect on the next `willAdvance` without relaunch. Cap styleDescriptor at ~500 chars with counter. Do NOT expose `voicePreset` in the editor — it's already overridden by the main voice picker via `effectiveVoiceIdentifier`. | Scope decided 2026-04-20; ready to plan |
 | Editable personas — Phase 2: multi-persona | Introduce a persona list with an active-picker, built-in read-only presets (Chill / Hype / News Anchor / Alex-default), and user-created custom personas (duplicate / add / delete). Store `[DJPersona] + activePersonaID` in UserDefaults. Built-ins are rehydrated from code on every launch (cannot drift). Deleting the active persona falls back to `DJPersona.default`. Delete requires `confirmationDialog`. | Scope decided 2026-04-20; blocked on Phase 1 |
 | DJ frequency setting | New Settings row: 4-preset segmented picker (Rarely / Balanced / Often / Every Song) controlling how often DJ comes in between songs. Maps to `(maxGap, randomChance)` pairs consumed by `Producer.shouldGenerate`. New `DJFrequency` enum + `djFrequency` field on `Producer.Config`; `SettingsViewModel` persists via `@AppStorage` and hot-reloads via existing `producer.updateConfig(_:)`. Default `.balanced` = current behavior (maxGap 3, 50% coin flip). Single commit, ~30 min. | Scope decided 2026-04-20; ready to implement |
+| MiniPlayerBar — Phase 1: progress slider + two-row layout | Replace the 2pt top progress line with a draggable `Slider` below the text (~4-6pt track). Re-layout bar to two rows: row 1 artwork+title/subtitle, row 2 transport. Height grows ~64pt → ~88pt. Drag-in-flight gate on `NowPlayingViewModel` so the 250 ms poller doesn't fight the thumb. `coordinator.seek` already supported. Single commit, ~45 min. | Scope decided 2026-04-20; ready to implement |
+| MiniPlayerBar — Phase 2: shuffle + repeat | Add `isShuffled: Bool` and `repeatMode: off/all/one` state (persisted via `@AppStorage` on VM). Shuffle transforms queue from `currentIndex+1` forward, preserving history. Repeat wires into `PlaybackCoordinator.advance()`. Interaction risk: on `.one`, Producer's `willAdvance` hook should NOT run — gate the emit. UI: two icon buttons on the transport row (segmented bookends around prev/play/skip). Single commit, ~2 hrs. | Scope decided 2026-04-20; blocked on Phase 1 |
+| MiniPlayerBar — Phase 3: thumbs feedback | New `TrackFeedback` store: `[trackID: .up/.down]` in UserDefaults, keyed by `Track.id`. Thumbs-down = record + auto-skip. Producer reads last-N feedback and injects `"Recently liked: X, Y. Recently disliked: Z."` into the DJ prompt (only when non-empty). Thumbs live on the expanded `NowPlayingView`, NOT on the bar (bar is getting crowded; feedback is not glanceable transport). No MusicKit rating write-through (API half-deprecated); no permanent ban (backlog if requested). Single commit, ~90 min. | Scope decided 2026-04-20; blocked on Phases 1-2 |
 
 ---
 
