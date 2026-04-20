@@ -97,6 +97,18 @@ actor PlaybackCoordinator {
 
     func play() async throws {
         guard !queue.isEmpty else { return }
+        // Resume in place if we were paused on a track — avoid the
+        // start(track:) call, which rebuilds the MusicKit queue and
+        // restarts the song from the beginning.
+        if state == .paused,
+           currentIndex < queue.count,
+           case .track(let track) = queue[currentIndex] {
+            let resumePoint = await musicService.currentPlaybackTime
+            Log.coordinator.info("play() — resuming '\(track.title, privacy: .public)' at \(resumePoint)s")
+            try await musicService.resume()
+            try await monitorTrackUntilEnd(track: track)
+            return
+        }
         state = .playing
         try await playCurrentItem()
     }
@@ -104,7 +116,11 @@ actor PlaybackCoordinator {
     func pause() async throws {
         guard state == .playing else { return }
         state = .paused
-        try await musicService.stop()
+        // Preserve position for tracks; DJ segments have no seek-resume so
+        // their audioGraph output just gets stopped.
+        if currentIndex < queue.count, case .track = queue[currentIndex] {
+            try await musicService.pause()
+        }
         audioGraph.stop()
     }
 
@@ -203,11 +219,19 @@ actor PlaybackCoordinator {
     }
 
     private func playTrack(_ track: Track) async throws {
+        state = .playing
+        Log.coordinator.info("playTrack '\(track.title, privacy: .public)' duration=\(track.duration)s")
+        try await musicService.start(track: track)
+        try await monitorTrackUntilEnd(track: track)
+    }
+
+    /// Polls MusicKit while a track is playing, emits willAdvance near the
+    /// end, and advances when the track actually finishes. Shared between
+    /// the cold-start path (playTrack → start + monitor) and the
+    /// resume-from-pause path (play → resume + monitor).
+    private func monitorTrackUntilEnd(track: Track) async throws {
         playbackGeneration += 1
         let myGen = playbackGeneration
-        state = .playing
-        Log.coordinator.info("playTrack '\(track.title, privacy: .public)' duration=\(track.duration)s (gen=\(myGen))")
-        try await musicService.start(track: track)
 
         var emittedWillAdvance = false
         var willAdvanceRemaining: TimeInterval = 0
@@ -220,7 +244,7 @@ actor PlaybackCoordinator {
             try await Task.sleep(for: .milliseconds(500))
 
             if playbackGeneration != myGen {
-                Log.coordinator.info("playTrack superseded (gen \(myGen) → \(self.playbackGeneration)) — exiting")
+                Log.coordinator.info("monitor superseded (gen \(myGen) → \(self.playbackGeneration)) — exiting")
                 return
             }
 
@@ -272,7 +296,7 @@ actor PlaybackCoordinator {
             }
         }
         guard playbackGeneration == myGen else {
-            Log.coordinator.info("playTrack(gen=\(myGen)) skipping advance — superseded")
+            Log.coordinator.info("monitor(gen=\(myGen)) skipping advance — superseded")
             return
         }
         await advance()
