@@ -57,6 +57,7 @@ struct SettingsView: View {
     @State private var kokoroPreviewPlayer: AVAudioPlayer?
 
     @State private var showingPersonaList = false
+    @State private var feedPendingRemoval: String?
 
     private enum KokoroPreviewState: Equatable {
         case idle, rendering, playing
@@ -486,7 +487,7 @@ struct SettingsView: View {
             }
             Spacer(minLength: 8)
             Button(role: .destructive) {
-                deleteFeed(urlString: urlString)
+                feedPendingRemoval = urlString
             } label: {
                 Image(systemName: "minus.circle.fill")
                     .foregroundStyle(.red)
@@ -496,6 +497,24 @@ struct SettingsView: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Remove feed")
+        }
+        .confirmationDialog(
+            "Remove this feed?",
+            isPresented: Binding(
+                get: { feedPendingRemoval == urlString },
+                set: { if !$0 { feedPendingRemoval = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Remove", role: .destructive) {
+                deleteFeed(urlString: urlString)
+                feedPendingRemoval = nil
+            }
+            Button("Cancel", role: .cancel) {
+                feedPendingRemoval = nil
+            }
+        } message: {
+            Text(hostName(for: urlString))
         }
         .padding(.vertical, 4)
     }

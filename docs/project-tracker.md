@@ -2,7 +2,7 @@
 
 **Owner:** Andrew P
 **PM Agent:** `aidj-pm` (see `.claude/agents/aidj-pm.md`)
-**Last updated:** 2026-04-20 (MiniPlayerBar expansion: Split into 3 phases — progress slider+layout, shuffle+repeat, thumbs)
+**Last updated:** 2026-04-20 (HIG audit triage — Split into 2 commits: P1 violations + double-fire bug, then P2 spacing drift)
 
 ---
 
@@ -65,6 +65,8 @@ Reverse-chronological. Commit hashes are 7-char.
 | MiniPlayerBar — Phase 1: progress slider + two-row layout | Replace the 2pt top progress line with a draggable `Slider` below the text (~4-6pt track). Re-layout bar to two rows: row 1 artwork+title/subtitle, row 2 transport. Height grows ~64pt → ~88pt. Drag-in-flight gate on `NowPlayingViewModel` so the 250 ms poller doesn't fight the thumb. `coordinator.seek` already supported. Single commit, ~45 min. | Scope decided 2026-04-20; ready to implement |
 | MiniPlayerBar — Phase 2: shuffle + repeat | Add `isShuffled: Bool` and `repeatMode: off/all/one` state (persisted via `@AppStorage` on VM). Shuffle transforms queue from `currentIndex+1` forward, preserving history. Repeat wires into `PlaybackCoordinator.advance()`. Interaction risk: on `.one`, Producer's `willAdvance` hook should NOT run — gate the emit. UI: two icon buttons on the transport row (segmented bookends around prev/play/skip). Single commit, ~2 hrs. | Scope decided 2026-04-20; blocked on Phase 1 |
 | MiniPlayerBar — Phase 3: thumbs feedback | New `TrackFeedback` store: `[trackID: .up/.down]` in UserDefaults, keyed by `Track.id`. Thumbs-down = record + auto-skip. Producer reads last-N feedback and injects `"Recently liked: X, Y. Recently disliked: Z."` into the DJ prompt (only when non-empty). Thumbs live on the expanded `NowPlayingView`, NOT on the bar (bar is getting crowded; feedback is not glanceable transport). No MusicKit rating write-through (API half-deprecated); no permanent ban (backlog if requested). Single commit, ~90 min. | Scope decided 2026-04-20; blocked on Phases 1-2 |
+| HIG audit fixes — Commit 1: P1 violations + double-fire bug | 13 real violations across 5 files + 1 correctness bug. (a) Tap targets: `NowPlayingView` transport prev/skip + `MiniPlayerBar` shuffle/repeat (32pt→44pt) + `QueueView` segment dismiss — apply `.frame(minWidth: 44, minHeight: 44)` pattern matching MiniPlayerBar transport. (b) Accessibility labels: `NowPlayingView` prev/play-pause/skip, Regenerate (`.help` is macOS-only — add `.accessibilityLabel`), `QueueView` segment dismiss. (c) Destructive confirmation on `SettingsView` RSS trash button (`confirmationDialog`). (d) Remove redundant `.onTapGesture` from `MiniPlayerBar.shuffleButton`/`repeatButton` — `Button` already handles tap; double-fire is a real correctness bug. Single commit, ~45 min. | Scope decided 2026-04-20; ready to implement |
+| HIG audit fixes — Commit 2: P2 spacing drift | 6 mechanical 4pt-grid fixes: `LibraryCardView.swift:19` (6→8), `NowPlayingView.swift:150` (6→8), `SettingsView.swift:245` (6→8), `PersonaListView.swift:92` (6→8), `PersonaListView.swift:99` (6→8), `PersonaListView.swift:100` (2→4). Soft-call resolution: keep `spacing: 2` in the 7 title/subtitle stacks — tight label pairs are an established iOS idiom (see Apple Music, Podcasts), bumping to 4 would visibly loosen typography for no accessibility gain. Single commit, ~15 min. | Scope decided 2026-04-20; ready to implement, independent of Commit 1 |
 
 ---
 
@@ -100,6 +102,7 @@ Reverse-chronological. Commit hashes are 7-char.
 | K3 | No per-voice mood descriptors for Kokoro | low | Upstream doesn't publish them; anything we add would be subjective |
 | K4 | App-bundle Spotify Client ID would leak | low | Not relevant until Spotify ships. Documented in Spotify plan §3c |
 | K5 | `DJPersona.voicePreset` is dead weight | low | Persona carries a `voicePreset` but `SettingsViewModel.effectiveVoiceIdentifier` ignores it whenever the user has picked a voice in the main voice picker. Keep the field as a seed-default for built-ins, but do not surface it in the upcoming persona editor — two places to set the voice would confuse users. Revisit when/if per-persona default voice becomes a real request |
+| K6 | `.help(...)` used as iOS accessibility hint | low | `NowPlayingView` Regenerate button used `.help(...)` to describe its action — `.help` is a macOS-only tooltip, iOS VoiceOver gets nothing. Lesson: when adding icon-only buttons, reach for `.accessibilityLabel` first; `.help` is a macOS bonus on top. Grep `.help(` periodically to catch recurrences |
 
 ---
 

@@ -162,6 +162,7 @@ struct NowPlayingView: View {
             }
             .buttonStyle(.borderless)
             .disabled(vm.isRegenerating)
+            .accessibilityLabel("Regenerate DJ take")
             .help("Generate a different DJ take for this transition")
         }
     }
@@ -169,8 +170,13 @@ struct NowPlayingView: View {
     private var transportControls: some View {
         HStack(spacing: 32) {
             Button { vm.previous() } label: {
-                Image(systemName: "backward.fill").font(.title2)
+                Image(systemName: "backward.fill")
+                    .font(.title2)
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
             }
+            .accessibilityLabel("Previous")
+
             Button {
                 if vm.playbackState == .playing {
                     vm.pause()
@@ -181,9 +187,15 @@ struct NowPlayingView: View {
                 Image(systemName: vm.playbackState == .playing ? "pause.circle.fill" : "play.circle.fill")
                     .font(.system(size: 52))
             }
+            .accessibilityLabel(vm.playbackState == .playing ? "Pause" : "Play")
+
             Button { vm.skip() } label: {
-                Image(systemName: "forward.fill").font(.title2)
+                Image(systemName: "forward.fill")
+                    .font(.title2)
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
             }
+            .accessibilityLabel("Skip")
         }
         .buttonStyle(.plain)
     }

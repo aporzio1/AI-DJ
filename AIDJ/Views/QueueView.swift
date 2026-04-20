@@ -52,9 +52,13 @@ struct QueueView: View {
                 Button {
                     vm.skipSegment(at: index)
                 } label: {
-                    Image(systemName: "xmark.circle").foregroundStyle(.secondary)
+                    Image(systemName: "xmark.circle")
+                        .foregroundStyle(.secondary)
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Skip DJ segment")
             }
         }
     }

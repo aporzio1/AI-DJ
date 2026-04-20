@@ -102,12 +102,11 @@ struct MiniPlayerBar: View {
         } label: {
             Image(systemName: "shuffle")
                 .font(.footnote.weight(.semibold))
-                .frame(width: 32, height: 32)
+                .frame(minWidth: 44, minHeight: 44)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .foregroundStyle(.secondary)
-        .onTapGesture { vm.shuffleUpcoming() }  // tap-eat to prevent row expansion
         .accessibilityLabel("Shuffle upcoming")
     }
 
@@ -117,12 +116,11 @@ struct MiniPlayerBar: View {
         } label: {
             Image(systemName: vm.repeatMode.systemImage)
                 .font(.footnote.weight(.semibold))
-                .frame(width: 32, height: 32)
+                .frame(minWidth: 44, minHeight: 44)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .foregroundStyle(vm.repeatMode.isActive ? Color.accentColor : .secondary)
-        .onTapGesture { vm.cycleRepeatMode() }
         .accessibilityLabel(vm.repeatMode.accessibilityLabel)
     }
 
