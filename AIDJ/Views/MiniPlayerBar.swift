@@ -47,10 +47,49 @@ struct MiniPlayerBar: View {
                     .accessibilityLabel("DJ speaking")
             }
 
+            thumbsDownButton
+            thumbsUpButton
             playPauseButton
             skipButton
         }
         .frame(minHeight: 48)
+    }
+
+    // MARK: - Thumbs
+
+    private var canRateCurrent: Bool {
+        if case .track = vm.currentItem { return true }
+        return false
+    }
+
+    private var thumbsDownButton: some View {
+        Button {
+            vm.rateCurrentTrack(.down)
+        } label: {
+            Image(systemName: vm.currentFeedback == .down ? "hand.thumbsdown.fill" : "hand.thumbsdown")
+                .font(.footnote.weight(.semibold))
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(vm.currentFeedback == .down ? Color.red : .secondary)
+        .disabled(!canRateCurrent)
+        .accessibilityLabel("Thumbs down")
+    }
+
+    private var thumbsUpButton: some View {
+        Button {
+            vm.rateCurrentTrack(.up)
+        } label: {
+            Image(systemName: vm.currentFeedback == .up ? "hand.thumbsup.fill" : "hand.thumbsup")
+                .font(.footnote.weight(.semibold))
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(vm.currentFeedback == .up ? Color.green : .secondary)
+        .disabled(!canRateCurrent)
+        .accessibilityLabel("Thumbs up")
     }
 
     // MARK: - Row 2: scrubbable progress with time labels
