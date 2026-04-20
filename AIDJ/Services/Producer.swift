@@ -32,6 +32,11 @@ actor Producer {
     private var tracksSinceLastSegment = 0
     private var hasGivenIntro = false
 
+    /// Rolling list of headline URLs we've handed to the DJ recently, so we
+    /// don't inject the same "Anonymous credentials: …" item six segments
+    /// in a row. Oldest-first; cap at 10.
+    private var recentHeadlineURLs: [String] = []
+
     init(
         coordinator: PlaybackCoordinator,
         brain: any DJBrainProtocol,
@@ -108,16 +113,29 @@ actor Producer {
         }
         do {
             let headlines = try await rssFetcher.fetchHeadlines()
-            if let top = headlines.first {
-                Log.producer.info("News headline ready: \"\(top.title, privacy: .public)\" (\(top.source, privacy: .public))")
-                return top
-            } else {
+            guard !headlines.isEmpty else {
                 Log.producer.info("News enabled but fetcher returned 0 headlines — check feed URLs")
                 return nil
             }
+            // Prefer an unused headline. If every headline in the feed has been
+            // used recently (small feeds), fall back to the newest.
+            let recentSet = Set(recentHeadlineURLs)
+            let pick = headlines.first(where: { !recentSet.contains($0.url.absoluteString) }) ?? headlines.first!
+            recordRecentHeadline(pick)
+            Log.producer.info("News headline ready: \"\(pick.title, privacy: .public)\" (\(pick.source, privacy: .public))")
+            return pick
         } catch {
             Log.producer.error("News fetch failed: \(error.localizedDescription, privacy: .public)")
             return nil
+        }
+    }
+
+    private func recordRecentHeadline(_ headline: NewsHeadline) {
+        let key = headline.url.absoluteString
+        recentHeadlineURLs.removeAll { $0 == key }
+        recentHeadlineURLs.append(key)
+        if recentHeadlineURLs.count > 10 {
+            recentHeadlineURLs.removeFirst(recentHeadlineURLs.count - 10)
         }
     }
 
@@ -260,6 +278,7 @@ actor Producer {
             upcomingTrack: upcomingTrack,
             recentTracks: recentTracks,
             timeOfDay: .current(),
+            currentTimeString: DJContext.currentClockString(),
             newsHeadline: headline,
             listenerName: listenerName,
             feedback: feedbackSummary

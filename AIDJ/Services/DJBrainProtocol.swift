@@ -6,6 +6,7 @@ struct DJContext: Sendable {
     let upcomingTrack: Track
     let recentTracks: [Track]     // last N played, oldest-first
     let timeOfDay: TimeOfDay
+    let currentTimeString: String   // e.g. "2:11 PM" — real clock time in the device's locale
     let newsHeadline: NewsHeadline?
     let listenerName: String?
     let feedback: FeedbackSummary?
@@ -22,6 +23,16 @@ struct DJContext: Sendable {
             default:       return .lateNight
             }
         }
+    }
+
+    /// Format the current wall-clock time for the DJ prompt. Locale-aware
+    /// h:mm (a/p) so US English reads "2:11 PM" and 24-hour locales get
+    /// "14:11" naturally.
+    static func currentClockString(now: Date = Date()) -> String {
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        formatter.dateStyle = .none
+        return formatter.string(from: now)
     }
 }
 

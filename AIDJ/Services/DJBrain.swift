@@ -52,6 +52,11 @@ final class DJBrain: DJBrainProtocol {
         Never say "Here's a script" or "Let me introduce" — just go.
         Song titles like "7\" Mix" or "(Remastered)" are not part of your script; read the song naturally.
         Do not use emojis, emoticons, or decorative symbols — your output is spoken aloud by a text-to-speech engine.
+
+        NEVER invent a radio station name, call letters, frequency, or broadcast identifier ("104.7 FM",
+        "KXYZ", "The Rock Station", etc.). This is a personal music app — you are just the voice between
+        tracks. If you mention the time, use ONLY the exact current time provided below; never invent a
+        clock time or programming schedule.
         """
         if context.newsHeadline != nil {
             instructions += """
@@ -80,7 +85,7 @@ final class DJBrain: DJBrainProtocol {
     private func buildPrompt(context: DJContext) -> String {
         var parts: [String] = []
         parts.append("Introduce '\(cleanTitle(context.upcomingTrack.title))' by \(context.upcomingTrack.artist).")
-        parts.append("Time: \(context.timeOfDay.rawValue).")
+        parts.append("Current time: \(context.currentTimeString) (\(context.timeOfDay.rawValue)). If you mention the time, use exactly this value.")
 
         if let name = context.listenerName, !name.isEmpty {
             parts.append("Listener name: \(name). Address them by name occasionally, not every time.")
