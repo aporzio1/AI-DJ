@@ -232,6 +232,9 @@ private extension View {
         onTap: @escaping () -> Void
     ) -> some View {
         self.safeAreaInset(edge: .bottom, spacing: 0) {
+            // Show the bar when there's a queue item (normal playback) OR
+            // a Kokoro download is in flight (so the "Downloading DJ voice…"
+            // indicator is visible even on a fresh app with no queue yet).
             if vm.currentItem != nil || download.isDownloading {
                 MiniPlayerBar(vm: vm, download: download, onTap: onTap)
             }
