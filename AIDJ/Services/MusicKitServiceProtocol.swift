@@ -7,7 +7,7 @@ enum MusicPlaybackStatus: Sendable, Equatable {
 }
 
 /// Lightweight struct representing a playlist entry for library browsing.
-struct PlaylistInfo: Identifiable, Sendable {
+struct PlaylistInfo: Identifiable, Sendable, Hashable {
     let id: String
     let name: String
     let artworkURL: URL?
@@ -34,6 +34,15 @@ protocol MusicKitServiceProtocol: AnyObject, Sendable {
     func playlists() async throws -> [PlaylistInfo]
     func songs(inPlaylistWith id: String) async throws -> [Track]
     func searchCatalogSongs(query: String, limit: Int) async throws -> [Track]
+
+    /// Recently-played items (tracks, playlists, albums, stations). Kept
+    /// provider-neutral so Spotify can provide the same shape later.
+    func recentlyPlayed() async throws -> [LibraryItem]
+
+    /// Provider-neutral artwork for a previously-fetched item, or nil if not cached.
+    /// Phase 1 only wires this up for cached tracks; containers fall back to
+    /// `LibraryItem.fallbackArtworkURL` via the `.url` case.
+    func providerArtwork(for itemId: String) -> ProviderArtwork?
 
     /// Returns true if MusicKit thinks this track can actually be played right now.
     /// Library or catalog items with nil playParameters are unavailable (region,

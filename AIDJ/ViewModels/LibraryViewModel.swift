@@ -7,6 +7,7 @@ final class LibraryViewModel {
     private(set) var playlists: [PlaylistInfo] = []
     private(set) var songs: [AIDJ.Track] = []
     private(set) var selectedPlaylist: PlaylistInfo?
+    private(set) var recentlyPlayed: [LibraryItem] = []
     private(set) var isLoading = false
     private(set) var errorMessage: String?
 
@@ -33,6 +34,28 @@ final class LibraryViewModel {
             errorMessage = error.localizedDescription
         }
         isLoading = false
+    }
+
+    func loadRecentlyPlayed() async {
+        // Non-fatal — surface nothing if the request fails; the rest of Library still works.
+        if let items = try? await musicService.recentlyPlayed() {
+            recentlyPlayed = items
+        }
+    }
+
+    /// Handles a tap on a Library card. Tracks play directly; containers
+    /// are either navigated to (playlist has a detail view) or played as a
+    /// whole — but container playback for albums/stations isn't wired yet
+    /// and these cases are not populated in Phase 1.
+    func playLibraryItem(_ item: LibraryItem) async {
+        switch item {
+        case .track(let t):
+            await playSong(t)
+        case .playlist(let p):
+            await playPlaylist(p)
+        case .album, .station:
+            break  // Phase 2 territory; cards render but don't act yet.
+        }
     }
 
     func selectPlaylist(_ playlist: PlaylistInfo) async {

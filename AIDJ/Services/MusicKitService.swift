@@ -150,6 +150,25 @@ final class MusicKitService: MusicKitServiceProtocol {
             return false
         }
     }
+
+    // MARK: Recently Played
+
+    /// Queries MusicKit for recently-played songs. Phase 1 is tracks-only;
+    /// the LibraryItem enum has cases for playlist/album/station so Phase 2
+    /// (Recommendations) can populate those without touching the card UI.
+    func recentlyPlayed() async throws -> [LibraryItem] {
+        var request = MusicRecentlyPlayedRequest<Song>()
+        request.limit = 20
+        let response = try await request.response()
+        let songs = Array(response.items)
+        for song in songs { cacheArtwork(for: song) }
+        return songs.map { LibraryItem.track(Track(song: $0)) }
+    }
+
+    func providerArtwork(for itemId: String) -> ProviderArtwork? {
+        if let art = artworkCache[itemId] { return .musicKit(art) }
+        return nil
+    }
 }
 
 enum MusicKitServiceError: Error {

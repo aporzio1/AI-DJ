@@ -27,30 +27,62 @@ struct LibraryView: View {
                 await vm.performSearch(query: newValue)
             }
         }
-        .task { await vm.loadPlaylists() }
+        .task {
+            await vm.loadPlaylists()
+            await vm.loadRecentlyPlayed()
+        }
     }
 
     // MARK: - Browse (no query)
 
     @ViewBuilder
     private var playlistsContent: some View {
-        if vm.isLoading && vm.playlists.isEmpty {
+        if vm.isLoading && vm.playlists.isEmpty && vm.recentlyPlayed.isEmpty {
             HStack { Spacer(); ProgressView(); Spacer() }
                 .listRowSeparator(.hidden)
-        } else if let error = vm.errorMessage {
+        } else if let error = vm.errorMessage, vm.playlists.isEmpty {
             ContentUnavailableView(error, systemImage: "exclamationmark.triangle")
-        } else if vm.playlists.isEmpty {
-            ContentUnavailableView(
-                "No Playlists",
-                systemImage: "music.note.list",
-                description: Text("Add playlists in the Music app, then come back.")
-            )
         } else {
-            Section("Playlists") {
-                ForEach(vm.playlists) { playlist in
-                    playlistRow(playlist)
+            if !vm.recentlyPlayed.isEmpty {
+                recentlyPlayedSection
+            }
+
+            if vm.playlists.isEmpty {
+                Section {
+                    ContentUnavailableView(
+                        "No Playlists",
+                        systemImage: "music.note.list",
+                        description: Text("Add playlists in the Music app, then come back.")
+                    )
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
+                }
+            } else {
+                Section("Your Playlists") {
+                    ForEach(vm.playlists) { playlist in
+                        playlistRow(playlist)
+                    }
                 }
             }
+        }
+    }
+
+    private var recentlyPlayedSection: some View {
+        Section("Recently Played") {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(alignment: .top, spacing: 12) {
+                    ForEach(vm.recentlyPlayed) { item in
+                        LibraryCardView(item: item)
+                            .onTapGesture {
+                                Task { await vm.playLibraryItem(item) }
+                            }
+                    }
+                }
+                .padding(.horizontal, 4)
+                .padding(.vertical, 4)
+            }
+            .listRowInsets(EdgeInsets(top: 0, leading: 12, bottom: 0, trailing: 12))
+            .listRowBackground(Color.clear)
         }
     }
 

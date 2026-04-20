@@ -29,6 +29,10 @@ final class FakeMusicService: MusicKitServiceProtocol {
     func searchCatalogSongs(query: String, limit: Int) async throws -> [AIDJ.Track] { [] }
     func isPlayable(trackId: String) async -> Bool { true }
     func artwork(for trackId: String) -> Artwork? { nil }
+
+    var fakeRecentlyPlayed: [LibraryItem] = []
+    func recentlyPlayed() async throws -> [LibraryItem] { fakeRecentlyPlayed }
+    func providerArtwork(for itemId: String) -> ProviderArtwork? { nil }
 }
 
 // MARK: - FakeAudioGraph
