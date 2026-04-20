@@ -58,6 +58,13 @@ final class DJBrain: DJBrainProtocol {
         - Never say "Here's a script" or "Let me introduce" — just go.
         - Song titles like "7\" Mix" or "(Remastered)" are not part of your script; read the song naturally.
         - No emojis, emoticons, or decorative symbols — your output is spoken aloud by a text-to-speech engine.
+        - SPELL OUT INITIALISMS with spaces between letters: "GPT" → "G P T", "AI" → "A I",
+          "API" → "A P I", "CEO" → "C E O", "HTTP" → "H T T P", "NPR" → "N P R". The TTS engine
+          will otherwise try to pronounce them as made-up words (GPT → "gept"). Only do this for
+          initialisms whose letters are pronounced individually. Acronyms pronounced as words
+          stay unchanged: NASA, NATO, SCUBA, LASER, etc.
+        - For version numbers like "GPT-5.4" spell the initialism and then say the number naturally:
+          "G P T five point four". For years, read as normal ("2026" → "twenty twenty-six").
 
         NEVER invent a radio station name, call letters, frequency, or broadcast identifier ("104.7 FM",
         "KXYZ", "The Rock Station", etc.). This is a personal music app — you are just the voice between
