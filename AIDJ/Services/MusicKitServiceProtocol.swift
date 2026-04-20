@@ -36,6 +36,12 @@ protocol MusicKitServiceProtocol: AnyObject, Sendable {
     func songs(inAlbumWith id: String) async throws -> [Track]
     func searchCatalogSongs(query: String, limit: Int) async throws -> [Track]
 
+    /// Resolve a station by id and start it on ApplicationMusicPlayer.
+    /// Stations are open-ended radio, not a finite track queue — they
+    /// bypass the Producer/Coordinator pipeline and the DJ won't talk
+    /// over them. Playback continues until the user skips or stops.
+    func startStation(id: String) async throws
+
     /// Recently-played items (tracks, playlists, albums, stations). Kept
     /// provider-neutral so Spotify can provide the same shape later.
     func recentlyPlayed() async throws -> [LibraryItem]

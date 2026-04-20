@@ -220,6 +220,25 @@ final class MusicKitService: MusicKitServiceProtocol {
         return items
     }
 
+    /// Resolves a station by id in the catalog and starts it on
+    /// ApplicationMusicPlayer directly. Does NOT go through the
+    /// coordinator / Producer pipeline — stations are open-ended radio
+    /// and have a different queue shape than our `[Track]` model. The
+    /// DJ voice doesn't fire while a station is playing.
+    func startStation(id: String) async throws {
+        let request = MusicCatalogResourceRequest<Station>(
+            matching: \.id, equalTo: MusicItemID(rawValue: id)
+        )
+        let response = try await request.response()
+        guard let station = response.items.first else {
+            Log.musicKit.error("startStation: station id \(id, privacy: .public) not found in catalog")
+            throw MusicKitServiceError.trackNotFound(id: id)
+        }
+        Log.musicKit.info("startStation '\(station.name, privacy: .public)'")
+        player.queue = ApplicationMusicPlayer.Queue(for: [station])
+        try await player.play()
+    }
+
     /// Resolves a catalog or library album to its songs for queue-based
     /// playback. Used by the Library card tap when a recommendation is an
     /// album rather than a playlist.

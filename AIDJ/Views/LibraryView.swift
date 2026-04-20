@@ -91,9 +91,9 @@ struct LibraryView: View {
         }
     }
 
-    /// Playlists navigate to their detail view; tracks and albums play on
-    /// tap; stations still render dim (station playback needs separate
-    /// queue plumbing on ApplicationMusicPlayer).
+    /// Playlists navigate to their detail view; tracks, albums, and
+    /// stations play on tap. Stations start ApplicationMusicPlayer in
+    /// radio mode, bypassing our Producer/Coordinator queue.
     @ViewBuilder
     private func cardWrapper(for item: LibraryItem) -> some View {
         switch item {
@@ -104,14 +104,11 @@ struct LibraryView: View {
                 LibraryCardView(item: item)
             }
             .buttonStyle(.plain)
-        case .track, .album:
+        case .track, .album, .station:
             LibraryCardView(item: item)
                 .onTapGesture {
                     Task { await vm.playLibraryItem(item) }
                 }
-        case .station:
-            LibraryCardView(item: item)
-                .opacity(0.6)
         }
     }
 

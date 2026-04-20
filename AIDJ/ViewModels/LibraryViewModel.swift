@@ -103,8 +103,23 @@ final class LibraryViewModel {
             await playPlaylist(p)
         case .album(let a):
             await playAlbum(a)
-        case .station:
-            break  // Station playback requires different queue plumbing; deferred.
+        case .station(let s):
+            await playStation(s)
+        }
+    }
+
+    /// Starts a radio station via MusicKit. Stations bypass the Producer
+    /// and Coordinator — they're open-ended radio, not a finite queue —
+    /// so the DJ voice doesn't fire over station content. The user can
+    /// still hit Skip or pause via the mini-player transport; those go
+    /// to ApplicationMusicPlayer directly.
+    func playStation(_ station: StationInfo) async {
+        errorMessage = nil
+        do {
+            await coordinator.replaceQueue([])   // clear any existing DJ/track queue
+            try await musicService.startStation(id: station.id)
+        } catch {
+            errorMessage = error.localizedDescription
         }
     }
 
