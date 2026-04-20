@@ -58,6 +58,8 @@ struct SettingsView: View {
 
     @State private var showingPersonaList = false
     @State private var feedPendingRemoval: String?
+    @State private var showingResetOnboardingConfirm = false
+    @State private var showingResetOnboardingDone = false
 
     private enum KokoroPreviewState: Equatable {
         case idle, rendering, playing
@@ -445,7 +447,7 @@ struct SettingsView: View {
             ))
 
             Button("Reset Onboarding") {
-                OnboardingViewModel.resetOnboardingFlag()
+                showingResetOnboardingConfirm = true
             }
             .buttonStyle(.bordered)
             .accessibilityHint("Relaunch the app to see the first-launch wizard again.")
@@ -453,6 +455,24 @@ struct SettingsView: View {
             Text("iCloud")
         } footer: {
             Text("Syncs your preferences — DJ and news settings, feed URLs, personas, voice selection — across devices signed in to the same iCloud account. Your OpenAI API key stays on this device. \"Reset Onboarding\" takes effect next launch.")
+        }
+        .confirmationDialog(
+            "Reset onboarding?",
+            isPresented: $showingResetOnboardingConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Reset", role: .destructive) {
+                OnboardingViewModel.resetOnboardingFlag()
+                showingResetOnboardingDone = true
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("The first-launch wizard will run the next time you open the app. Your existing settings will not be erased.")
+        }
+        .alert("Onboarding Reset", isPresented: $showingResetOnboardingDone) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Quit and reopen AI DJ to see the first-launch wizard.")
         }
     }
 
