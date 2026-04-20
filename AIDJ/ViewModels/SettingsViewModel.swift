@@ -25,6 +25,11 @@ final class SettingsViewModel {
     private static let openAIVoiceKey = "openAIVoice"
     private static let openAIModelKey = "openAIModel"
     private static let kokoroVoiceKey = "kokoroVoice"
+    private static let personaKey = "djPersona"
+
+    /// Soft cap on user-edited prompt instructions. Longer descriptors tend to
+    /// pull the DJ off-topic; the editor enforces this in UI.
+    static let maxStyleDescriptorLength = 500
 
     init() {
         loadFromUserDefaults()
@@ -72,6 +77,9 @@ final class SettingsViewModel {
         UserDefaults.standard.set(openAIVoice, forKey: Self.openAIVoiceKey)
         UserDefaults.standard.set(openAIModel, forKey: Self.openAIModelKey)
         UserDefaults.standard.set(kokoroVoice, forKey: Self.kokoroVoiceKey)
+        if let data = try? JSONEncoder().encode(persona) {
+            UserDefaults.standard.set(data, forKey: Self.personaKey)
+        }
         // API key is persisted to Keychain via saveAPIKey(); not echoed to UserDefaults.
     }
 
@@ -93,6 +101,24 @@ final class SettingsViewModel {
         openAIModel = UserDefaults.standard.string(forKey: Self.openAIModelKey) ?? OpenAITTSModel.tts_1.rawValue
         openAIAPIKey = Keychain.get(KeychainKey.openAIAPIKey) ?? ""
         kokoroVoice = UserDefaults.standard.string(forKey: Self.kokoroVoiceKey) ?? KokoroVoice.defaultVoice.rawValue
+        if let data = UserDefaults.standard.data(forKey: Self.personaKey),
+           let stored = try? JSONDecoder().decode(DJPersona.self, from: data) {
+            persona = stored
+        }
+    }
+
+    // MARK: Persona
+
+    /// Saves an edited persona. Caller is expected to validate name/description
+    /// (name non-empty, styleDescriptor within `maxStyleDescriptorLength`).
+    func updatePersona(name: String, styleDescriptor: String) {
+        persona = DJPersona(
+            id: persona.id,
+            name: name,
+            voicePreset: persona.voicePreset,
+            styleDescriptor: styleDescriptor
+        )
+        saveToUserDefaults()
     }
 
     /// Persist the OpenAI API key to Keychain. Called from the Settings view.

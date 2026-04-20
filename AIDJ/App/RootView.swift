@@ -44,6 +44,11 @@ struct RootView: View {
                             Task { await p.updateVoice(newID.isEmpty ? nil : newID) }
                         }
                     }
+                    .onChange(of: settings.persona) { _, newPersona in
+                        if let p = producer {
+                            Task { await p.updatePersona(newPersona) }
+                        }
+                    }
                     .onChange(of: settings.ttsProvider) { _, newProvider in
                         djVoice.provider = newProvider
                         applyVoiceSelection()

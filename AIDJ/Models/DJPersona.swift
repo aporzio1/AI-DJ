@@ -1,6 +1,6 @@
 import Foundation
 
-struct DJPersona: Identifiable, Codable, Sendable {
+struct DJPersona: Identifiable, Codable, Sendable, Equatable {
     let id: UUID
     let name: String
     let voicePreset: String       // AVSpeechSynthesisVoice identifier

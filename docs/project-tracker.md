@@ -2,7 +2,7 @@
 
 **Owner:** Andrew P
 **PM Agent:** `aidj-pm` (see `.claude/agents/aidj-pm.md`)
-**Last updated:** 2026-04-20 (Phase 1 shipped; Phase 2 scope decided as playlists-only)
+**Last updated:** 2026-04-20 (editable-personas consultation: split into Phase 1 / Phase 2)
 
 ---
 
@@ -59,6 +59,8 @@ Reverse-chronological. Commit hashes are 7-char.
 | Item | Summary | Status |
 |------|---------|--------|
 | Library landing page — Phase 2: Recommendations | Add a Recommendations card row below Recently Played, powered by `MusicPersonalRecommendationsRequest`. **Scope: playlists only** — filter recommendation items to `.playlist` cases, reuse existing `PlaylistDetailView` on tap, no new playback wiring. Album/station recommendations deferred to a later phase (post-Spotify-abstraction). | Scope decided 2026-04-20; implementation not yet started |
+| Editable personas — Phase 1: make Alex editable | Let the user rename the single existing persona and rewrite its `styleDescriptor` ("instructions"). Persist `DJPersona` as Codable JSON in UserDefaults. Add an editor sheet from the Settings Persona row (replaces the current disabled `LabeledContent`). Add `Producer.updatePersona(_:)` so changes take effect on the next `willAdvance` without relaunch. Cap styleDescriptor at ~500 chars with counter. Do NOT expose `voicePreset` in the editor — it's already overridden by the main voice picker via `effectiveVoiceIdentifier`. | Scope decided 2026-04-20; ready to plan |
+| Editable personas — Phase 2: multi-persona | Introduce a persona list with an active-picker, built-in read-only presets (Chill / Hype / News Anchor / Alex-default), and user-created custom personas (duplicate / add / delete). Store `[DJPersona] + activePersonaID` in UserDefaults. Built-ins are rehydrated from code on every launch (cannot drift). Deleting the active persona falls back to `DJPersona.default`. Delete requires `confirmationDialog`. | Scope decided 2026-04-20; blocked on Phase 1 |
 
 ---
 
@@ -93,6 +95,7 @@ Reverse-chronological. Commit hashes are 7-char.
 | K2 | `@preconcurrency import FluidAudio` | low | FluidAudio isn't Swift 6 strict-concurrency-clean. Per-file relaxation is acceptable; revisit if FluidAudio updates |
 | K3 | No per-voice mood descriptors for Kokoro | low | Upstream doesn't publish them; anything we add would be subjective |
 | K4 | App-bundle Spotify Client ID would leak | low | Not relevant until Spotify ships. Documented in Spotify plan §3c |
+| K5 | `DJPersona.voicePreset` is dead weight | low | Persona carries a `voicePreset` but `SettingsViewModel.effectiveVoiceIdentifier` ignores it whenever the user has picked a voice in the main voice picker. Keep the field as a seed-default for built-ins, but do not surface it in the upcoming persona editor — two places to set the voice would confuse users. Revisit when/if per-persona default voice becomes a real request |
 
 ---
 

@@ -56,6 +56,8 @@ struct SettingsView: View {
     @State private var kokoroPreviewState: KokoroPreviewState = .idle
     @State private var kokoroPreviewPlayer: AVAudioPlayer?
 
+    @State private var showingPersonaEditor = false
+
     private enum KokoroPreviewState: Equatable {
         case idle, rendering, playing
     }
@@ -125,13 +127,30 @@ struct SettingsView: View {
                     .onChange(of: vm.listenerName) { _, _ in vm.save() }
             }
 
-            LabeledContent("Persona") {
-                Text(vm.persona.name).foregroundStyle(.secondary)
+            Button {
+                showingPersonaEditor = true
+            } label: {
+                HStack {
+                    Text("Persona")
+                        .foregroundStyle(.primary)
+                    Spacer()
+                    Text(vm.persona.name)
+                        .foregroundStyle(.secondary)
+                    Image(systemName: "chevron.right")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                }
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Edit persona")
         } header: {
             Text("DJ")
         } footer: {
             Text("The DJ introduces tracks and adds commentary between songs. Your name may be used occasionally to personalize greetings.")
+        }
+        .sheet(isPresented: $showingPersonaEditor) {
+            PersonaEditorView(vm: vm)
         }
     }
 

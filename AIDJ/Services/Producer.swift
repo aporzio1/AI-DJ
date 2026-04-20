@@ -14,7 +14,7 @@ actor Producer {
     private let brain: any DJBrainProtocol
     private let voice: any DJVoiceProtocol
     private let rssFetcher: any RSSFetcherProtocol
-    private let persona: DJPersona
+    private var persona: DJPersona
     private var listenerName: String?
     private var config: Config = .default
     private var voiceOverride: String?
@@ -72,6 +72,12 @@ actor Producer {
 
     func updateVoice(_ identifier: String?) {
         voiceOverride = identifier
+    }
+
+    /// Hot-swap the persona. Applied on the next willAdvance — the currently
+    /// playing or queued segment keeps the persona it was generated with.
+    func updatePersona(_ newPersona: DJPersona) {
+        persona = newPersona
     }
 
     private var currentVoiceIdentifier: String {
