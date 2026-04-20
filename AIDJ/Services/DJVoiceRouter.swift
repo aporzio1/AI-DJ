@@ -43,6 +43,12 @@ final class DJVoiceRouter: DJVoiceProtocol, @unchecked Sendable {
         openAI.updateModel(model)
     }
 
+    // MARK: - Kokoro model management (proxied to the inner KokoroDJVoice)
+
+    var isKokoroModelInstalled: Bool { KokoroDJVoice.isModelInstalled }
+    func prepareKokoroModel() async throws { try await kokoro.prepareModel() }
+    func removeKokoroModel() async throws { try await kokoro.removeModel() }
+
     func renderToFile(script: String, voiceIdentifier: String) async throws -> URL {
         let active = provider
         switch active {

@@ -167,7 +167,7 @@ struct RootView: View {
             NavigationStack { QueueView(vm: queue) }
                 .tabItem { Label("Queue", systemImage: "list.bullet") }
                 .tag(AppTab.queue)
-            NavigationStack { SettingsView(vm: settings) }
+            NavigationStack { SettingsView(vm: settings, djVoice: djVoice) }
                 .tabItem { Label("Settings", systemImage: "gear") }
                 .tag(AppTab.settings)
         }
@@ -184,7 +184,7 @@ struct RootView: View {
         switch selectedTab {
         case .library:  LibraryView(vm: library)
         case .queue:    QueueView(vm: queue)
-        case .settings: SettingsView(vm: settings)
+        case .settings: SettingsView(vm: settings, djVoice: djVoice)
         }
     }
 }

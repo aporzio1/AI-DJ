@@ -40,16 +40,24 @@ enum KokoroDJVoiceError: Error, LocalizedError {
 private actor KokoroSynthesizer {
     private var manager: KokoroTtsManager?
 
-    func render(text: String, voice: String?, outputURL: URL) async throws {
-        if manager == nil {
-            do {
-                let m = KokoroTtsManager()
-                try await m.initialize()
-                manager = m
-            } catch {
-                throw KokoroDJVoiceError.initializationFailed(underlying: error)
-            }
+    func ensureInitialized() async throws {
+        if manager != nil { return }
+        do {
+            let m = KokoroTtsManager()
+            try await m.initialize()
+            manager = m
+        } catch {
+            throw KokoroDJVoiceError.initializationFailed(underlying: error)
         }
+    }
+
+    /// Drop the in-memory manager so a subsequent call re-downloads / re-loads.
+    func reset() {
+        manager = nil
+    }
+
+    func render(text: String, voice: String?, outputURL: URL) async throws {
+        try await ensureInitialized()
         do {
             try await manager!.synthesizeToFile(
                 text: text,
@@ -64,8 +72,9 @@ private actor KokoroSynthesizer {
 
 /// On-device TTS using FluidAudio's CoreML Kokoro model.
 /// The model and G2P assets download on first use and cache under
-/// ~/.cache/fluidaudio/Models/kokoro. Initialization is deferred until the
-/// first renderToFile call so app launch isn't blocked by a cold download.
+/// ~/.cache/fluidaudio/Models/kokoro (macOS) or Caches/fluidaudio/Models/kokoro (iOS).
+/// Initialization is deferred until the first renderToFile call so app launch
+/// isn't blocked by a cold download.
 final class KokoroDJVoice: DJVoiceProtocol, Sendable {
 
     private let synth = KokoroSynthesizer()
@@ -82,5 +91,44 @@ final class KokoroDJVoice: DJVoiceProtocol, Sendable {
         let elapsed = ContinuousClock.now - started
         Log.voice.info("Kokoro TTS rendered in \(String(describing: elapsed), privacy: .public) → \(outputURL.lastPathComponent, privacy: .public)")
         return outputURL
+    }
+
+    // MARK: - Model management
+
+    /// Forces a download + load without synthesizing, so the user can pre-stage
+    /// the ~300 MB assets from Settings instead of paying the cost on first segment.
+    func prepareModel() async throws {
+        try await synth.ensureInitialized()
+    }
+
+    /// Drops the cached model files and the in-memory manager. Next render will
+    /// re-download.
+    func removeModel() async throws {
+        await synth.reset()
+        DownloadUtils.clearAllModelCaches()
+        Log.voice.info("Kokoro model cache cleared")
+    }
+
+    /// Whether the Kokoro model directory exists and is non-empty on disk.
+    static var isModelInstalled: Bool {
+        let dir = modelCacheDirectory
+        var isDir: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: dir.path, isDirectory: &isDir), isDir.boolValue else {
+            return false
+        }
+        let contents = (try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? []
+        return !contents.isEmpty
+    }
+
+    /// Mirrors FluidAudio's own TTS cache-location rules. See
+    /// `DownloadUtils.clearAllModelCaches` in the FluidAudio source.
+    private static var modelCacheDirectory: URL {
+        #if os(macOS)
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        return home.appendingPathComponent(".cache/fluidaudio/Models/kokoro")
+        #else
+        let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
+        return caches.appendingPathComponent("fluidaudio/Models/kokoro")
+        #endif
     }
 }

@@ -46,8 +46,17 @@ struct SettingsView: View {
     @State private var availableVoices: [VoiceOption] = []
     @Environment(\.openURL) private var openURL
 
-    init(vm: SettingsViewModel) {
+    // Kokoro model management
+    private let djVoice: DJVoiceRouter
+    @State private var kokoroModelInstalled: Bool = false
+    @State private var kokoroDownloading: Bool = false
+    @State private var kokoroRemoving: Bool = false
+    @State private var kokoroError: String?
+    @State private var showingKokoroRemoveConfirm = false
+
+    init(vm: SettingsViewModel, djVoice: DJVoiceRouter) {
         self._vm = State(initialValue: vm)
+        self.djVoice = djVoice
     }
 
     var body: some View {
@@ -73,6 +82,19 @@ struct SettingsView: View {
                 vm.voiceIdentifier = ""
                 vm.save()
             }
+            kokoroModelInstalled = djVoice.isKokoroModelInstalled
+        }
+        .confirmationDialog(
+            "Remove Kokoro model?",
+            isPresented: $showingKokoroRemoveConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Remove Model", role: .destructive) {
+                Task { await removeKokoroModel() }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Deletes ~300 MB of cached CoreML model files. The next DJ segment using Kokoro will re-download them.")
         }
 #if os(macOS)
         .fileImporter(isPresented: $showingOPMLImporter,
@@ -160,6 +182,75 @@ struct SettingsView: View {
             }
         }
         .onChange(of: vm.kokoroVoice) { _, _ in vm.save() }
+
+        LabeledContent("Model") {
+            HStack(spacing: 6) {
+                Image(systemName: kokoroModelInstalled ? "checkmark.circle.fill" : "arrow.down.circle")
+                    .foregroundStyle(kokoroModelInstalled ? Color.green : Color.secondary)
+                Text(kokoroModelInstalled ? "Installed" : "Not Installed")
+                    .foregroundStyle(.secondary)
+            }
+        }
+
+        if kokoroDownloading {
+            HStack(spacing: 12) {
+                ProgressView()
+#if os(macOS)
+                    .controlSize(.small)
+#endif
+                Text("Downloading model…").foregroundStyle(.secondary)
+            }
+            .frame(minHeight: 44, alignment: .leading)
+        } else {
+            Button {
+                Task { await downloadKokoroModel() }
+            } label: {
+                Label(
+                    kokoroModelInstalled ? "Re-download Model" : "Download Model",
+                    systemImage: "arrow.down.circle"
+                )
+            }
+            .buttonStyle(.bordered)
+            .disabled(kokoroRemoving)
+        }
+
+        Button(role: .destructive) {
+            showingKokoroRemoveConfirm = true
+        } label: {
+            Label("Remove Model", systemImage: "trash")
+        }
+        .buttonStyle(.bordered)
+        .disabled(!kokoroModelInstalled || kokoroDownloading || kokoroRemoving)
+
+        if let err = kokoroError {
+            Text(err)
+                .font(.footnote)
+                .foregroundStyle(.red)
+        }
+    }
+
+    private func downloadKokoroModel() async {
+        kokoroDownloading = true
+        kokoroError = nil
+        do {
+            try await djVoice.prepareKokoroModel()
+            kokoroModelInstalled = djVoice.isKokoroModelInstalled
+        } catch {
+            kokoroError = error.localizedDescription
+        }
+        kokoroDownloading = false
+    }
+
+    private func removeKokoroModel() async {
+        kokoroRemoving = true
+        kokoroError = nil
+        do {
+            try await djVoice.removeKokoroModel()
+            kokoroModelInstalled = djVoice.isKokoroModelInstalled
+        } catch {
+            kokoroError = error.localizedDescription
+        }
+        kokoroRemoving = false
     }
 
     @ViewBuilder
