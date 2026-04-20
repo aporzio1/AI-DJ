@@ -441,10 +441,19 @@ struct SettingsView: View {
         Section {
             Toggle("Include News Headlines", isOn: $vm.newsEnabled)
                 .disabled(!vm.djEnabled)
+
+            Picker("Frequency", selection: $vm.newsFrequency) {
+                ForEach(NewsFrequency.allCases) { freq in
+                    Text(freq.displayName).tag(freq)
+                }
+            }
+            .pickerStyle(.segmented)
+            .disabled(!vm.djEnabled || !vm.newsEnabled)
+            .onChange(of: vm.newsFrequency) { _, _ in vm.save() }
         } header: {
             Text("News")
         } footer: {
-            Text("When enabled, the DJ may reference recent headlines from your RSS feeds.")
+            Text("When enabled, the DJ will reference a recent headline from your RSS feeds. Frequency controls how often a headline is injected into a DJ segment.")
         }
     }
 

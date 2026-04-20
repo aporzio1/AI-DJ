@@ -8,7 +8,13 @@ actor Producer {
         var djEnabled: Bool
         var newsEnabled: Bool
         var djFrequency: DJFrequency = .default
-        static let `default` = Config(djEnabled: true, newsEnabled: true, djFrequency: .default)
+        var newsFrequency: NewsFrequency = .default
+        static let `default` = Config(
+            djEnabled: true,
+            newsEnabled: true,
+            djFrequency: .default,
+            newsFrequency: .default
+        )
     }
 
     private let coordinator: PlaybackCoordinator
@@ -90,10 +96,16 @@ actor Producer {
     }
 
     /// Fetch the newest headline across all feeds, or nil if news is disabled
-    /// or the fetch surfaces no usable item. Errors are logged explicitly so
-    /// a silent DNS/404/parser failure doesn't masquerade as "no news today."
+    /// or the frequency roll fails or the fetch surfaces no usable item.
+    /// Errors are logged explicitly so a silent DNS/404/parser failure
+    /// doesn't masquerade as "no news today."
     private func fetchTopHeadlineIfEnabled() async -> NewsHeadline? {
         guard config.newsEnabled else { return nil }
+        let frequency = config.newsFrequency
+        guard Double.random(in: 0..<1) < frequency.probability else {
+            Log.producer.debug("News frequency roll skipped this segment (\(String(describing: frequency), privacy: .public))")
+            return nil
+        }
         do {
             let headlines = try await rssFetcher.fetchHeadlines()
             if let top = headlines.first {

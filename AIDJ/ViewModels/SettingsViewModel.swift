@@ -9,6 +9,7 @@ final class SettingsViewModel {
     var djEnabled: Bool = true
     var djFrequency: DJFrequency = .default
     var newsEnabled: Bool = true
+    var newsFrequency: NewsFrequency = .default
     var feedURLStrings: [String] = []
     var listenerName: String = ""
     var voiceIdentifier: String = ""
@@ -22,6 +23,7 @@ final class SettingsViewModel {
     private static let djEnabledKey = "djEnabled"
     private static let djFrequencyKey = "djFrequency"
     private static let newsEnabledKey = "newsEnabled"
+    private static let newsFrequencyKey = "newsFrequency"
     private static let listenerNameKey = "listenerName"
     private static let voiceIdentifierKey = "voiceIdentifier"
     private static let ttsProviderKey = "ttsProvider"
@@ -77,6 +79,7 @@ final class SettingsViewModel {
         UserDefaults.standard.set(djEnabled, forKey: Self.djEnabledKey)
         UserDefaults.standard.set(djFrequency.rawValue, forKey: Self.djFrequencyKey)
         UserDefaults.standard.set(newsEnabled, forKey: Self.newsEnabledKey)
+        UserDefaults.standard.set(newsFrequency.rawValue, forKey: Self.newsFrequencyKey)
         UserDefaults.standard.set(listenerName, forKey: Self.listenerNameKey)
         UserDefaults.standard.set(voiceIdentifier, forKey: Self.voiceIdentifierKey)
         UserDefaults.standard.set(ttsProvider.rawValue, forKey: Self.ttsProviderKey)
@@ -98,6 +101,10 @@ final class SettingsViewModel {
             djFrequency = freq
         }
         newsEnabled = UserDefaults.standard.object(forKey: Self.newsEnabledKey) as? Bool ?? true
+        if let raw = UserDefaults.standard.string(forKey: Self.newsFrequencyKey),
+           let freq = NewsFrequency(rawValue: raw) {
+            newsFrequency = freq
+        }
         if let stored = UserDefaults.standard.string(forKey: Self.listenerNameKey), !stored.isEmpty {
             listenerName = stored
         } else {

@@ -42,6 +42,7 @@ struct RootView: View {
                     .onChange(of: settings.djEnabled) { _, _ in updateProducerConfig() }
                     .onChange(of: settings.djFrequency) { _, _ in updateProducerConfig() }
                     .onChange(of: settings.newsEnabled) { _, _ in updateProducerConfig() }
+                    .onChange(of: settings.newsFrequency) { _, _ in updateProducerConfig() }
                     .onChange(of: settings.feedURLStrings) { _, _ in
                         rssFetcher.updateFeeds(settings.feedURLs)
                     }
@@ -145,7 +146,8 @@ struct RootView: View {
         Producer.Config(
             djEnabled: settings.djEnabled,
             newsEnabled: settings.newsEnabled,
-            djFrequency: settings.djFrequency
+            djFrequency: settings.djFrequency,
+            newsFrequency: settings.newsFrequency
         )
     }
 
