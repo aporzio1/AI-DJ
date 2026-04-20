@@ -35,17 +35,34 @@ enum KokoroDJVoiceError: Error, LocalizedError {
     }
 }
 
+/// Wraps a `KokoroTtsManager` in a Sendable holder so the actor can send
+/// references across its own await points without tripping Swift 6's
+/// strict "sending non-Sendable value" check. Safe because all access is
+/// serialized by `KokoroSynthesizer`.
+private final class ManagerBox: @unchecked Sendable {
+    let manager: KokoroTtsManager
+    init(_ manager: KokoroTtsManager) { self.manager = manager }
+
+    func synthesize(text: String, voice: String?, outputURL: URL) async throws {
+        try await manager.synthesizeToFile(
+            text: text,
+            outputURL: outputURL,
+            voice: voice
+        )
+    }
+}
+
 /// Serializes access to the non-Sendable `KokoroTtsManager` and coalesces the
 /// one-time model download behind the first render call.
 private actor KokoroSynthesizer {
-    private var manager: KokoroTtsManager?
+    private var box: ManagerBox?
 
     func ensureInitialized() async throws {
-        if manager != nil { return }
+        if box != nil { return }
         do {
             let m = KokoroTtsManager()
             try await m.initialize()
-            manager = m
+            box = ManagerBox(m)
         } catch {
             throw KokoroDJVoiceError.initializationFailed(underlying: error)
         }
@@ -53,17 +70,13 @@ private actor KokoroSynthesizer {
 
     /// Drop the in-memory manager so a subsequent call re-downloads / re-loads.
     func reset() {
-        manager = nil
+        box = nil
     }
 
     func render(text: String, voice: String?, outputURL: URL) async throws {
         try await ensureInitialized()
         do {
-            try await manager!.synthesizeToFile(
-                text: text,
-                outputURL: outputURL,
-                voice: voice
-            )
+            try await box!.synthesize(text: text, voice: voice, outputURL: outputURL)
         } catch {
             throw KokoroDJVoiceError.synthesisFailed(underlying: error)
         }
