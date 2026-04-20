@@ -182,17 +182,17 @@ struct RootView: View {
 #else
         TabView(selection: $selectedTab) {
             NavigationStack { LibraryView(vm: library) }
+                .miniPlayerBarOverlay(vm: nowPlaying, onTap: { showingNowPlaying = true })
                 .tabItem { Label("Library", systemImage: "music.note.list") }
                 .tag(AppTab.library)
             NavigationStack { QueueView(vm: queue) }
+                .miniPlayerBarOverlay(vm: nowPlaying, onTap: { showingNowPlaying = true })
                 .tabItem { Label("Queue", systemImage: "list.bullet") }
                 .tag(AppTab.queue)
             NavigationStack { SettingsView(vm: settings, djVoice: djVoice) }
+                .miniPlayerBarOverlay(vm: nowPlaying, onTap: { showingNowPlaying = true })
                 .tabItem { Label("Settings", systemImage: "gear") }
                 .tag(AppTab.settings)
-        }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            MiniPlayerBar(vm: nowPlaying) { showingNowPlaying = true }
         }
 #endif
     }
@@ -211,4 +211,18 @@ struct RootView: View {
 
 private enum AppTab: Hashable {
     case library, queue, settings
+}
+
+private extension View {
+    /// Inserts a MiniPlayerBar above the tab bar, but only when there's
+    /// actually something to show. Applied per-tab so the system tab bar
+    /// chrome is never obscured at app launch (empty queue).
+    @MainActor
+    func miniPlayerBarOverlay(vm: NowPlayingViewModel, onTap: @escaping () -> Void) -> some View {
+        self.safeAreaInset(edge: .bottom, spacing: 0) {
+            if vm.currentItem != nil {
+                MiniPlayerBar(vm: vm, onTap: onTap)
+            }
+        }
+    }
 }
