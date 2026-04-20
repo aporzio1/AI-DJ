@@ -23,6 +23,11 @@ actor PlaybackCoordinator {
     private(set) var currentIndex: Int = 0
     private(set) var state: CoordinatorState = .idle
     private(set) var repeatMode: RepeatMode = .off
+    /// True when MusicKit is playing open-ended content (a station) that
+    /// doesn't fit our [PlayableItem] queue model. Transport still works
+    /// via ApplicationMusicPlayer directly; NowPlayingViewModel falls
+    /// back to `musicService.currentTrack` for display.
+    private(set) var externalPlaybackActive: Bool = false
 
     // Incremented every time a new playback starts. In-flight loops check this to detect
     // when they've been superseded and should exit without advancing.
@@ -64,6 +69,22 @@ actor PlaybackCoordinator {
         queue = items
         currentIndex = 0
         state = .idle
+        externalPlaybackActive = false
+    }
+
+    /// Start a station via MusicKit, bypassing our track queue entirely.
+    /// Sets `externalPlaybackActive` so transport (pause / resume / skip)
+    /// knows to route through `musicService` directly, and so the VM
+    /// knows to display MusicKit's current track instead of our (empty)
+    /// queue.
+    func startStation(id: String) async throws {
+        playbackGeneration += 1
+        audioGraph.stop()
+        queue = []
+        currentIndex = 0
+        externalPlaybackActive = true
+        try await musicService.startStation(id: id)
+        state = .playing
     }
 
     func enqueue(_ item: PlayableItem) {
@@ -105,6 +126,15 @@ actor PlaybackCoordinator {
     // MARK: Transport
 
     func play() async throws {
+        // Station / external playback path — transport talks to MusicKit
+        // directly, not to our queue.
+        if externalPlaybackActive {
+            if state == .paused {
+                state = .playing
+                try await musicService.resume()
+            }
+            return
+        }
         guard !queue.isEmpty else { return }
         // Resume in place if we were paused on a track — avoid the
         // start(track:) call, which rebuilds the MusicKit queue and
@@ -125,6 +155,10 @@ actor PlaybackCoordinator {
     func pause() async throws {
         guard state == .playing else { return }
         state = .paused
+        if externalPlaybackActive {
+            try await musicService.pause()
+            return
+        }
         // Preserve position for tracks; DJ segments have no seek-resume so
         // their audioGraph output just gets stopped.
         if currentIndex < queue.count, case .track = queue[currentIndex] {
@@ -134,6 +168,10 @@ actor PlaybackCoordinator {
     }
 
     func skip() async throws {
+        if externalPlaybackActive {
+            try await musicService.skipToNext()
+            return
+        }
         guard currentIndex + 1 < queue.count else {
             state = .idle
             return

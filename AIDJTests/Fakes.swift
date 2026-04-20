@@ -28,6 +28,7 @@ final class FakeMusicService: MusicKitServiceProtocol {
     func songs(inPlaylistWith id: String) async throws -> [AIDJ.Track] { [] }
     func songs(inAlbumWith id: String) async throws -> [AIDJ.Track] { [] }
     func startStation(id: String) async throws {}
+    func skipToNext() async throws {}
     func searchCatalogSongs(query: String, limit: Int) async throws -> [AIDJ.Track] { [] }
     func isPlayable(trackId: String) async -> Bool { true }
     func artwork(for trackId: String) -> Artwork? { nil }

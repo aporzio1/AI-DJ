@@ -50,9 +50,19 @@ final class NowPlayingViewModel {
                 let state = await coordinator.state
                 let index = await coordinator.currentIndex
                 let queue = await coordinator.queue
-                let item = queue.indices.contains(index) ? queue[index] : nil
+                let queuedItem = queue.indices.contains(index) ? queue[index] : nil
+                let external = await coordinator.externalPlaybackActive
                 let time = await coordinator.musicPlaybackTime()
                 let dur = await coordinator.musicTrackDuration() ?? 0
+
+                // Station/external playback: fall back to MusicKit's own
+                // currentTrack so the mini-player shows "Song — Artist"
+                // instead of "Nothing Playing" while a station plays.
+                let externalTrack = external ? self.musicService.currentTrack : nil
+                let item: PlayableItem? = {
+                    if let externalTrack { return .track(externalTrack) }
+                    return queuedItem
+                }()
 
                 // Pre-fetch current-track feedback outside the MainActor hop so
                 // the actor call doesn't block the UI-state apply.

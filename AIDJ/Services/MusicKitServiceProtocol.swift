@@ -42,6 +42,11 @@ protocol MusicKitServiceProtocol: AnyObject, Sendable {
     /// over them. Playback continues until the user skips or stops.
     func startStation(id: String) async throws
 
+    /// Advance to the next track in ApplicationMusicPlayer's internal
+    /// queue. Used while a station is playing so the mini-player skip
+    /// button still works even though we have no track queue of our own.
+    func skipToNext() async throws
+
     /// Recently-played items (tracks, playlists, albums, stations). Kept
     /// provider-neutral so Spotify can provide the same shape later.
     func recentlyPlayed() async throws -> [LibraryItem]

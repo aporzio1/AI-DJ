@@ -57,6 +57,10 @@ final class MusicKitService: MusicKitServiceProtocol {
         player.stop()
     }
 
+    func skipToNext() async throws {
+        try await player.skipToNextEntry()
+    }
+
     func seek(to time: TimeInterval) async throws {
         Log.musicKit.debug("seek: setting playbackTime to \(time) (was \(self.player.playbackTime))")
         player.playbackTime = time

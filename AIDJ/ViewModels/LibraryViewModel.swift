@@ -108,16 +108,16 @@ final class LibraryViewModel {
         }
     }
 
-    /// Starts a radio station via MusicKit. Stations bypass the Producer
-    /// and Coordinator — they're open-ended radio, not a finite queue —
-    /// so the DJ voice doesn't fire over station content. The user can
-    /// still hit Skip or pause via the mini-player transport; those go
-    /// to ApplicationMusicPlayer directly.
+    /// Starts a radio station. Routes through the Coordinator so it can
+    /// flip into externalPlayback mode — that way the VM falls back to
+    /// MusicKit's currentTrack for display and transport still works via
+    /// pause/resume/skip. DJ voice doesn't fire over station content
+    /// (stations are open-ended; we can't insert intros between tracks
+    /// the way we do for queued playlists).
     func playStation(_ station: StationInfo) async {
         errorMessage = nil
         do {
-            await coordinator.replaceQueue([])   // clear any existing DJ/track queue
-            try await musicService.startStation(id: station.id)
+            try await coordinator.startStation(id: station.id)
         } catch {
             errorMessage = error.localizedDescription
         }
