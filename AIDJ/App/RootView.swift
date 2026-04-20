@@ -214,13 +214,15 @@ private enum AppTab: Hashable {
 }
 
 private extension View {
-    /// Inserts a MiniPlayerBar above the tab bar, but only when there's
-    /// actually something to show. Applied per-tab so the system tab bar
-    /// chrome is never obscured at app launch (empty queue).
+    /// Inserts a MiniPlayerBar above the tab bar when there's something to
+    /// show — an active queue item OR an in-flight Kokoro model download
+    /// (so the user sees the "Downloading DJ voice…" indicator even on a
+    /// fresh app where no track has played yet). Applied per-tab so the
+    /// system tab bar chrome is never obscured at app launch.
     @MainActor
     func miniPlayerBarOverlay(vm: NowPlayingViewModel, onTap: @escaping () -> Void) -> some View {
         self.safeAreaInset(edge: .bottom, spacing: 0) {
-            if vm.currentItem != nil {
+            if vm.currentItem != nil || KokoroDownloadState.shared.isDownloading {
                 MiniPlayerBar(vm: vm, onTap: onTap)
             }
         }

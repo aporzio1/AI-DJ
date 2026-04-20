@@ -59,6 +59,12 @@ private actor KokoroSynthesizer {
 
     func ensureInitialized() async throws {
         if box != nil { return }
+        // Flip the shared observable state so the MiniPlayerBar (and any
+        // Settings UI) can show a spinner while the ~300 MB model
+        // downloads + compiles. Defer end() so errors and cancellations
+        // still reset the flag.
+        await KokoroDownloadState.shared.begin()
+        defer { Task { @MainActor in KokoroDownloadState.shared.end() } }
         do {
             let m = KokoroTtsManager()
             try await m.initialize()

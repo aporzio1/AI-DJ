@@ -7,6 +7,7 @@ struct MiniPlayerBar: View {
 
     @State private var isScrubbing = false
     @State private var scrubValue: Double = 0
+    @State private var downloadState = KokoroDownloadState.shared
 
     var body: some View {
         VStack(spacing: 8) {
@@ -190,7 +191,16 @@ struct MiniPlayerBar: View {
     @ViewBuilder
     private var artworkThumb: some View {
         Group {
-            if let art = vm.currentArtwork {
+            if downloadState.isDownloading, vm.currentItem == nil {
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(.quaternary)
+                    .overlay {
+                        ProgressView()
+#if os(macOS)
+                            .controlSize(.small)
+#endif
+                    }
+            } else if let art = vm.currentArtwork {
                 ArtworkImage(art, width: 44, height: 44)
             } else {
                 RoundedRectangle(cornerRadius: 6)
@@ -234,6 +244,11 @@ struct MiniPlayerBar: View {
     // MARK: - Text
 
     private var title: String {
+        // Only hijack the title slot when nothing is playing — don't
+        // overwrite the current track's title mid-song.
+        if downloadState.isDownloading, vm.currentItem == nil {
+            return "Downloading DJ voice…"
+        }
         switch vm.currentItem {
         case .track(let t):     return t.title
         case .djSegment:        return "DJ"
@@ -242,6 +257,9 @@ struct MiniPlayerBar: View {
     }
 
     private var subtitle: String {
+        if downloadState.isDownloading, vm.currentItem == nil {
+            return "Kokoro model (~300 MB) • one time"
+        }
         switch vm.currentItem {
         case .track(let t):     return t.artist
         case .djSegment(let s): return s.kind.rawValue.capitalized
