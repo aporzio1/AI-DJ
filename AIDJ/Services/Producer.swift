@@ -89,6 +89,26 @@ actor Producer {
         return persona.voicePreset
     }
 
+    /// Fetch the newest headline across all feeds, or nil if news is disabled
+    /// or the fetch surfaces no usable item. Errors are logged explicitly so
+    /// a silent DNS/404/parser failure doesn't masquerade as "no news today."
+    private func fetchTopHeadlineIfEnabled() async -> NewsHeadline? {
+        guard config.newsEnabled else { return nil }
+        do {
+            let headlines = try await rssFetcher.fetchHeadlines()
+            if let top = headlines.first {
+                Log.producer.info("News headline ready: \"\(top.title, privacy: .public)\" (\(top.source, privacy: .public))")
+                return top
+            } else {
+                Log.producer.info("News enabled but fetcher returned 0 headlines — check feed URLs")
+                return nil
+            }
+        } catch {
+            Log.producer.error("News fetch failed: \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
+    }
+
     /// Generate a replacement for the currently-playing DJ segment. Uses the same
     /// upcoming-track context as the original.
     func regenerateCurrentSegment() async -> DJSegment? {
@@ -213,9 +233,7 @@ actor Producer {
     }
 
     private func generateSegment(upcomingTrack: AIDJ.Track) async -> DJSegment? {
-        let headline: NewsHeadline? = config.newsEnabled
-            ? try? await rssFetcher.fetchHeadlines().first
-            : nil
+        let headline: NewsHeadline? = await fetchTopHeadlineIfEnabled()
 
         let feedbackSummary: FeedbackSummary?
         if let store = feedbackStore {

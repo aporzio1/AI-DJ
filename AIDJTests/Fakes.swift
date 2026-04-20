@@ -92,10 +92,15 @@ final class FakeDJVoice: DJVoiceProtocol, @unchecked Sendable {
 final class FakeRSSFetcher: RSSFetcherProtocol, @unchecked Sendable {
     var headlines: [NewsHeadline] = []
     var fetchCallCount = 0
+    var updatedFeeds: [URL] = []
 
     func fetchHeadlines() async throws -> [NewsHeadline] {
         fetchCallCount += 1
         return headlines
+    }
+
+    func updateFeeds(_ urls: [URL]) {
+        updatedFeeds = urls
     }
 }
 

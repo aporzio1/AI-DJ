@@ -52,8 +52,8 @@ final class DJBrain: DJBrainProtocol {
         Never say "Here's a script" or "Let me introduce" — just go.
         Song titles like "7\" Mix" or "(Remastered)" are not part of your script; read the song naturally.
         Do not use emojis, emoticons, or decorative symbols — your output is spoken aloud by a text-to-speech engine.
-        If a news hook is provided, weave it in casually — NEVER recite the headline verbatim. Skip news hooks
-        that don't fit naturally; silence is fine.
+        If a news hook is provided, you MUST weave it into the script. Paraphrase naturally — NEVER recite the
+        headline verbatim. Do not ignore a news hook when one is given; the listener has explicitly opted in.
         """
         let session = LanguageModelSession(instructions: instructions)
         let genStart = ContinuousClock.now

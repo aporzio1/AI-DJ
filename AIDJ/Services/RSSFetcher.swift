@@ -1,20 +1,37 @@
 import Foundation
 
-final class RSSFetcher: RSSFetcherProtocol {
-    private let feedURLs: [URL]
+final class RSSFetcher: RSSFetcherProtocol, @unchecked Sendable {
+    private let lock = NSLock()
+    private var _feedURLs: [URL]
     private let session: URLSession
     private let maxHeadlinesPerFeed = 20
 
     init(feedURLs: [URL], session: URLSession = .shared) {
-        self.feedURLs = feedURLs
+        self._feedURLs = feedURLs
         self.session = session
+    }
+
+    func updateFeeds(_ urls: [URL]) {
+        lock.lock()
+        _feedURLs = urls
+        lock.unlock()
+        Log.producer.info("RSSFetcher: feed list updated (\(urls.count) feeds)")
+    }
+
+    private var currentFeeds: [URL] {
+        lock.lock(); defer { lock.unlock() }
+        return _feedURLs
     }
 
     func fetchHeadlines() async throws -> [NewsHeadline] {
         var all: [NewsHeadline] = []
-        for url in feedURLs {
-            let headlines = (try? await fetch(url)) ?? []
-            all.append(contentsOf: headlines)
+        for url in currentFeeds {
+            do {
+                let headlines = try await fetch(url)
+                all.append(contentsOf: headlines)
+            } catch {
+                Log.producer.error("RSSFetcher: \(url.host ?? url.absoluteString, privacy: .public) failed: \(error.localizedDescription, privacy: .public)")
+            }
         }
         // Dedupe by URL string, then sort newest-first
         var seen = Set<String>()

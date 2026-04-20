@@ -12,6 +12,7 @@ struct RootView: View {
     @State private var audioGraph = AudioGraph()
     @State private var djBrain = DJBrain()
     @State private var feedbackStore = TrackFeedbackStore()
+    @State private var rssFetcher = RSSFetcher(feedURLs: [])
 
     // Post-onboarding actors
     @State private var coordinator: PlaybackCoordinator?
@@ -41,6 +42,9 @@ struct RootView: View {
                     .onChange(of: settings.djEnabled) { _, _ in updateProducerConfig() }
                     .onChange(of: settings.djFrequency) { _, _ in updateProducerConfig() }
                     .onChange(of: settings.newsEnabled) { _, _ in updateProducerConfig() }
+                    .onChange(of: settings.feedURLStrings) { _, _ in
+                        rssFetcher.updateFeeds(settings.feedURLs)
+                    }
                     .onChange(of: settings.voiceIdentifier) { _, newID in
                         if let p = producer {
                             Task { await p.updateVoice(newID.isEmpty ? nil : newID) }
@@ -95,12 +99,12 @@ struct RootView: View {
     private func handleReady() {
         Log.app.info("handleReady — wiring coordinator + producer (listener=\(settings.listenerName, privacy: .public))")
         let c = PlaybackCoordinator(musicService: musicService, audioGraph: audioGraph)
-        let rss = RSSFetcher(feedURLs: settings.feedURLs)
+        rssFetcher.updateFeeds(settings.feedURLs)
         let p = Producer(
             coordinator: c,
             brain: djBrain,
             voice: djVoice,
-            rssFetcher: rss,
+            rssFetcher: rssFetcher,
             feedbackStore: feedbackStore,
             persona: settings.persona,
             listenerName: settings.listenerName.isEmpty ? nil : settings.listenerName,
