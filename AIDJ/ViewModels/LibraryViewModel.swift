@@ -39,21 +39,28 @@ final class LibraryViewModel {
 
     /// Stale-while-revalidate: render the cached Recently Played list
     /// immediately, then refresh from MusicKit in the background if the
-    /// cache is missing or older than the TTL. Pass `forceRefresh: true`
-    /// to bypass the TTL (pull-to-refresh / manual refresh button).
+    /// cache is missing, empty, or older than the TTL. Pass
+    /// `forceRefresh: true` to bypass the TTL (pull-to-refresh).
+    ///
+    /// An empty cache payload is always treated as stale — an earlier
+    /// fetch may have failed or returned zero items, and locking the
+    /// section to "empty for 30 min" is worse than just retrying.
+    /// Empty results are also never SAVED to the cache, so a one-off
+    /// failure doesn't poison future launches.
     func loadRecentlyPlayed(forceRefresh: Bool = false) async {
         let cached = LibrarySectionCache.load(.recentlyPlayed)
         if let cached {
             recentlyPlayed = cached.items
         }
-        let shouldRefresh = forceRefresh
-            || cached == nil
-            || !(cached?.isFresh(ttl: LibrarySectionCache.ttl) ?? false)
-        guard shouldRefresh else { return }
+        let isStale = cached.map { !$0.isFresh(ttl: LibrarySectionCache.ttl) } ?? true
+        let isEmpty = cached?.items.isEmpty ?? true
+        guard forceRefresh || isStale || isEmpty else { return }
 
         if let items = try? await musicService.recentlyPlayed() {
             recentlyPlayed = items
-            LibrarySectionCache.save(items, for: .recentlyPlayed)
+            if !items.isEmpty {
+                LibrarySectionCache.save(items, for: .recentlyPlayed)
+            }
         }
         // Silent-stale on failure: leave cached items in place, log nothing
         // user-visible. ContentUnavailableView path only triggers when BOTH
@@ -65,14 +72,15 @@ final class LibraryViewModel {
         if let cached {
             recommendations = cached.items
         }
-        let shouldRefresh = forceRefresh
-            || cached == nil
-            || !(cached?.isFresh(ttl: LibrarySectionCache.ttl) ?? false)
-        guard shouldRefresh else { return }
+        let isStale = cached.map { !$0.isFresh(ttl: LibrarySectionCache.ttl) } ?? true
+        let isEmpty = cached?.items.isEmpty ?? true
+        guard forceRefresh || isStale || isEmpty else { return }
 
         if let items = try? await musicService.recommendations() {
             recommendations = items
-            LibrarySectionCache.save(items, for: .recommendations)
+            if !items.isEmpty {
+                LibrarySectionCache.save(items, for: .recommendations)
+            }
         }
     }
 
