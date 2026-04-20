@@ -102,11 +102,12 @@ final class DJBrain: DJBrainProtocol {
             }
         }
 
-        if let headline = context.newsHeadline, shouldIncludeNewsHook() {
-            // Rare + soft framing — the model tends to recite anything that looks
-            // like a headline verbatim, so we only supply news ~30% of the time
-            // and strip it down to a short topic phrase.
-            parts.append("Conversation topic you might loosely allude to: \(shortTopic(from: headline.title))")
+        if let headline = context.newsHeadline {
+            // Producer already gated on NewsFrequency probability before
+            // fetching — if a headline is here, the user asked for news on
+            // this segment. Pass the cleaned title; the system instructions
+            // demand a paraphrase, never verbatim.
+            parts.append("News headline to reference: \(cleanHeadline(headline.title))")
         }
 
         return parts.joined(separator: " ")
@@ -132,20 +133,6 @@ final class DJBrain: DJBrainProtocol {
             }
         }
         return cleaned.trimmingCharacters(in: .whitespaces)
-    }
-
-    /// Only include a news topic 30% of the time so the DJ isn't force-mentioning one every segment.
-    private func shouldIncludeNewsHook() -> Bool {
-        Int.random(in: 1...100) <= 30
-    }
-
-    /// Reduce a headline to a short topic phrase to discourage verbatim recitation.
-    /// "Change management problem rarely mentioned when pushing AI to engineering teams"
-    /// → "change management and AI adoption"
-    private func shortTopic(from headline: String) -> String {
-        let cleaned = cleanHeadline(headline)
-        let words = cleaned.split(separator: " ").prefix(5)
-        return words.joined(separator: " ").lowercased()
     }
 
     private func truncateAtSentenceBoundary(_ text: String, maxChars: Int) -> String {
