@@ -3,14 +3,14 @@ import Foundation
 /// Lightweight summary types for containers that aren't tracks.
 /// Mirror `PlaylistInfo`'s shape so new card UIs can render any kind.
 
-struct AlbumInfo: Identifiable, Sendable, Hashable {
+struct AlbumInfo: Identifiable, Codable, Sendable, Hashable {
     let id: String
     let title: String
     let artist: String
     let artworkURL: URL?
 }
 
-struct StationInfo: Identifiable, Sendable, Hashable {
+struct StationInfo: Identifiable, Codable, Sendable, Hashable {
     let id: String
     let name: String
     let artworkURL: URL?
@@ -23,7 +23,7 @@ struct StationInfo: Identifiable, Sendable, Hashable {
 /// Phase 1 (Recently Played) populates only `.track` and `.playlist` from
 /// Apple Music; the other cases exist so Phase 2 (Recommendations) can add
 /// them without touching the card view.
-enum LibraryItem: Identifiable, Sendable, Hashable {
+enum LibraryItem: Identifiable, Codable, Sendable, Hashable {
     case track(Track)
     case playlist(PlaylistInfo)
     case album(AlbumInfo)

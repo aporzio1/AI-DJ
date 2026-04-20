@@ -37,17 +37,50 @@ final class LibraryViewModel {
         isLoading = false
     }
 
-    func loadRecentlyPlayed() async {
-        // Non-fatal — surface nothing if the request fails; the rest of Library still works.
+    /// Stale-while-revalidate: render the cached Recently Played list
+    /// immediately, then refresh from MusicKit in the background if the
+    /// cache is missing or older than the TTL. Pass `forceRefresh: true`
+    /// to bypass the TTL (pull-to-refresh / manual refresh button).
+    func loadRecentlyPlayed(forceRefresh: Bool = false) async {
+        let cached = LibrarySectionCache.load(.recentlyPlayed)
+        if let cached {
+            recentlyPlayed = cached.items
+        }
+        let shouldRefresh = forceRefresh
+            || cached == nil
+            || !(cached?.isFresh(ttl: LibrarySectionCache.ttl) ?? false)
+        guard shouldRefresh else { return }
+
         if let items = try? await musicService.recentlyPlayed() {
             recentlyPlayed = items
+            LibrarySectionCache.save(items, for: .recentlyPlayed)
+        }
+        // Silent-stale on failure: leave cached items in place, log nothing
+        // user-visible. ContentUnavailableView path only triggers when BOTH
+        // cache is empty AND the fetch failed.
+    }
+
+    func loadRecommendations(forceRefresh: Bool = false) async {
+        let cached = LibrarySectionCache.load(.recommendations)
+        if let cached {
+            recommendations = cached.items
+        }
+        let shouldRefresh = forceRefresh
+            || cached == nil
+            || !(cached?.isFresh(ttl: LibrarySectionCache.ttl) ?? false)
+        guard shouldRefresh else { return }
+
+        if let items = try? await musicService.recommendations() {
+            recommendations = items
+            LibrarySectionCache.save(items, for: .recommendations)
         }
     }
 
-    func loadRecommendations() async {
-        if let items = try? await musicService.recommendations() {
-            recommendations = items
-        }
+    /// Pull-to-refresh / manual refresh hook — bypasses TTL on both sections.
+    func refreshLibrarySections() async {
+        async let rp: Void = loadRecentlyPlayed(forceRefresh: true)
+        async let rec: Void = loadRecommendations(forceRefresh: true)
+        _ = await (rp, rec)
     }
 
     /// Handles a tap on a Library card. Tracks play directly; containers

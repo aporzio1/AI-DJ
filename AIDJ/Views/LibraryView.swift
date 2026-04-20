@@ -32,6 +32,9 @@ struct LibraryView: View {
             await vm.loadRecentlyPlayed()
             await vm.loadRecommendations()
         }
+        .refreshable {
+            await vm.refreshLibrarySections()
+        }
     }
 
     // MARK: - Browse (no query)

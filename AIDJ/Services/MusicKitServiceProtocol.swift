@@ -7,7 +7,7 @@ enum MusicPlaybackStatus: Sendable, Equatable {
 }
 
 /// Lightweight struct representing a playlist entry for library browsing.
-struct PlaylistInfo: Identifiable, Sendable, Hashable {
+struct PlaylistInfo: Identifiable, Codable, Sendable, Hashable {
     let id: String
     let name: String
     let artworkURL: URL?
