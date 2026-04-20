@@ -182,9 +182,9 @@ struct RootView: View {
                                queue: QueueViewModel,
                                library: LibraryViewModel) -> some View {
         switch selectedTab {
-        case .library:  LibraryView(vm: library)
-        case .queue:    QueueView(vm: queue)
-        case .settings: SettingsView(vm: settings, djVoice: djVoice)
+        case .library:  NavigationStack { LibraryView(vm: library) }
+        case .queue:    NavigationStack { QueueView(vm: queue) }
+        case .settings: NavigationStack { SettingsView(vm: settings, djVoice: djVoice) }
         }
     }
 }

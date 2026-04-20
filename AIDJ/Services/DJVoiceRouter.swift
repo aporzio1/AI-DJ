@@ -8,7 +8,7 @@ enum TTSProvider: String, Codable, CaseIterable, Identifiable {
     var id: String { rawValue }
     var displayName: String {
         switch self {
-        case .system: "System"
+        case .system: "Device Voices"
         case .openAI: "OpenAI"
         case .kokoro: "Kokoro (on-device)"
         }

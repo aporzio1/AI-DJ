@@ -3,7 +3,19 @@ import Foundation
 enum OpenAITTSVoice: String, CaseIterable, Identifiable {
     case alloy, echo, fable, onyx, nova, shimmer
     var id: String { rawValue }
-    var displayName: String { rawValue.capitalized }
+    var displayName: String { "\(rawValue.capitalized) (\(descriptor))" }
+
+    /// One-word character descriptors drawn from OpenAI's TTS voice guide.
+    private var descriptor: String {
+        switch self {
+        case .alloy:   "Neutral"
+        case .echo:    "Resonant"
+        case .fable:   "Expressive"
+        case .onyx:    "Deep"
+        case .nova:    "Bright"
+        case .shimmer: "Soft"
+        }
+    }
 }
 
 enum OpenAITTSModel: String, CaseIterable, Identifiable {

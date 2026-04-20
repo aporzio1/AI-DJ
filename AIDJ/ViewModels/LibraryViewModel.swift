@@ -60,6 +60,16 @@ final class LibraryViewModel {
         try? await coordinator.play()
     }
 
+    func shufflePlaylist(_ playlist: PlaylistInfo) async {
+        await selectPlaylist(playlist)
+        let items = songs.shuffled().map { PlayableItem.track($0) }
+        await coordinator.replaceQueue(items)
+        if let producer {
+            await producer.primeOpeningIntro()
+        }
+        try? await coordinator.play()
+    }
+
     func playSong(_ track: AIDJ.Track) async {
         await coordinator.replaceQueue([.track(track)])
         if let producer {

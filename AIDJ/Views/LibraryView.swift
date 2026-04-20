@@ -90,19 +90,42 @@ struct LibraryView: View {
 
     private func playlistRow(_ playlist: PlaylistInfo) -> some View {
         HStack(spacing: 12) {
-            Image(systemName: "music.note.list")
-                .font(.title3)
-                .foregroundStyle(.secondary)
-                .frame(width: 32)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(playlist.name).font(.body)
+            NavigationLink {
+                PlaylistDetailView(playlist: playlist, vm: vm)
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "music.note.list")
+                        .font(.title3)
+                        .foregroundStyle(.secondary)
+                        .frame(width: 32)
+                    Text(playlist.name)
+                        .font(.body)
+                        .lineLimit(1)
+                    Spacer(minLength: 8)
+                }
+                .contentShape(Rectangle())
             }
-            Spacer()
-            Button("Play") {
+            .buttonStyle(.plain)
+
+            Button {
                 Task { await vm.playPlaylist(playlist) }
+            } label: {
+                Image(systemName: "play.fill")
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
             }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
+            .buttonStyle(.borderless)
+            .accessibilityLabel("Play \(playlist.name)")
+
+            Button {
+                Task { await vm.shufflePlaylist(playlist) }
+            } label: {
+                Image(systemName: "shuffle")
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.borderless)
+            .accessibilityLabel("Shuffle \(playlist.name)")
         }
         .padding(.vertical, 4)
     }
