@@ -384,20 +384,28 @@ struct SettingsView: View {
     }
 
     private var addFeedRow: some View {
-        HStack(spacing: 12) {
-            TextField("https://example.com/feed.xml", text: $newFeedURL)
-                .textFieldStyle(.plain)
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Add Feed")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            HStack(spacing: 8) {
+                Image(systemName: "link")
+                    .foregroundStyle(.secondary)
+                TextField("https://example.com/feed.xml", text: $newFeedURL)
+                    .textFieldStyle(.roundedBorder)
 #if os(iOS)
-                .keyboardType(.URL)
-                .autocorrectionDisabled()
-                .textInputAutocapitalization(.never)
-                .submitLabel(.done)
-                .onSubmit { commitFeed() }
+                    .keyboardType(.URL)
+                    .autocorrectionDisabled()
+                    .textInputAutocapitalization(.never)
+                    .submitLabel(.done)
+                    .onSubmit { commitFeed() }
 #endif
-            Button("Add") { commitFeed() }
-                .buttonStyle(.bordered)
-                .disabled(!isValidURL(newFeedURL))
+                Button("Add") { commitFeed() }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(!isValidURL(newFeedURL))
+            }
         }
+        .padding(.vertical, 4)
     }
 
     private func commitFeed() {
