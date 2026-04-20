@@ -443,10 +443,16 @@ struct SettingsView: View {
                 get: { vm.iCloudSyncEnabled },
                 set: { vm.setiCloudSyncEnabled($0) }
             ))
+
+            Button("Reset Onboarding") {
+                OnboardingViewModel.resetOnboardingFlag()
+            }
+            .buttonStyle(.bordered)
+            .accessibilityHint("Relaunch the app to see the first-launch wizard again.")
         } header: {
             Text("iCloud")
         } footer: {
-            Text("Syncs your preferences — DJ and news settings, feed URLs, personas, voice selection — across devices signed in to the same iCloud account. Your OpenAI API key stays on this device.")
+            Text("Syncs your preferences — DJ and news settings, feed URLs, personas, voice selection — across devices signed in to the same iCloud account. Your OpenAI API key stays on this device. \"Reset Onboarding\" takes effect next launch.")
         }
     }
 

@@ -83,7 +83,7 @@ struct RootView: View {
                     }
             } else {
                 if let vm = onboardingVM {
-                    OnboardingView(vm: vm, onReady: handleReady)
+                    OnboardingView(vm: vm, settings: settings, onReady: handleReady)
                 } else {
                     ProgressView()
                 }

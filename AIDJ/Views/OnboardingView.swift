@@ -2,10 +2,12 @@ import SwiftUI
 
 struct OnboardingView: View {
     @State private var vm: OnboardingViewModel
+    @Bindable var settings: SettingsViewModel
     let onReady: () -> Void
 
-    init(vm: OnboardingViewModel, onReady: @escaping () -> Void) {
+    init(vm: OnboardingViewModel, settings: SettingsViewModel, onReady: @escaping () -> Void) {
         self._vm = State(initialValue: vm)
+        self.settings = settings
         self.onReady = onReady
     }
 
@@ -16,6 +18,10 @@ struct OnboardingView: View {
                 ProgressView("Checking requirements…")
             case .ready:
                 ProgressView("Starting…")
+            case .preferences:
+                PreferencesWizardView(settings: settings) {
+                    vm.completePreferences()
+                }
             case .needsMusicKitAuth:
                 blockedView(
                     icon: "music.note",
