@@ -51,7 +51,16 @@ actor PlaybackCoordinator {
 
     // MARK: Queue management
 
-    func replaceQueue(_ items: [PlayableItem]) {
+    /// Replace the queue. Stops whatever's currently playing first —
+    /// MusicKit and AudioGraph both — and bumps `playbackGeneration` so
+    /// any in-flight `playSegment` / `monitorTrackUntilEnd` tasks notice
+    /// they've been superseded and exit cleanly. Without this, the
+    /// previous track/segment keeps playing for the ~3 seconds it takes
+    /// the new opening intro to generate, bleeding over the new audio.
+    func replaceQueue(_ items: [PlayableItem]) async {
+        playbackGeneration += 1
+        try? await musicService.stop()
+        audioGraph.stop()
         queue = items
         currentIndex = 0
         state = .idle
