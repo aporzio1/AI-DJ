@@ -6,6 +6,7 @@ final class SettingsViewModel {
 
     var customPersonas: [DJPersona] = []
     var activePersonaID: UUID = DJPersona.default.id
+    var iCloudSyncEnabled: Bool = false
     var djEnabled: Bool = true
     var djFrequency: DJFrequency = .default
     var newsEnabled: Bool = true
@@ -33,6 +34,27 @@ final class SettingsViewModel {
     private static let legacyPersonaKey = "djPersona"         // Phase 1 single-persona storage
     private static let customPersonasKey = "djCustomPersonas"
     private static let activePersonaIDKey = "djActivePersonaID"
+    private static let iCloudSyncEnabledKey = "iCloudSyncEnabled"   // device-local, NOT synced
+
+    /// Keys that participate in iCloud sync. Kept deliberately narrow:
+    /// feed URLs, preferences, and persona library — but NOT the
+    /// iCloudSyncEnabled flag itself (device-local decision), the OpenAI
+    /// API key (Keychain), or legacy/transient keys.
+    static let syncedKeys: Set<String> = [
+        feedsKey,
+        djEnabledKey,
+        djFrequencyKey,
+        newsEnabledKey,
+        newsFrequencyKey,
+        listenerNameKey,
+        voiceIdentifierKey,
+        ttsProviderKey,
+        openAIVoiceKey,
+        openAIModelKey,
+        kokoroVoiceKey,
+        customPersonasKey,
+        activePersonaIDKey
+    ]
 
     /// Soft cap on user-edited prompt instructions. Longer descriptors tend to
     /// pull the DJ off-topic; the editor enforces this in UI.
@@ -40,6 +62,24 @@ final class SettingsViewModel {
 
     init() {
         loadFromUserDefaults()
+        CloudSyncService.shared.register(keys: Self.syncedKeys)
+        if iCloudSyncEnabled {
+            CloudSyncService.shared.enable()
+            // Re-load AFTER enabling so a fresh device pulls cloud values
+            // down before we hand the VM to RootView.
+            loadFromUserDefaults()
+        }
+        // The SettingsViewModel is owned by AIDJApp for the whole process
+        // lifetime, so we deliberately don't track + remove the observer on
+        // deinit — Swift 6 nonisolated-deinit rules around @Observable make
+        // that awkward and there's no real churn to clean up.
+        NotificationCenter.default.addObserver(
+            forName: .cloudSyncDidImportChanges,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in self?.loadFromUserDefaults() }
+        }
     }
 
     // MARK: RSS Feed management
@@ -74,26 +114,57 @@ final class SettingsViewModel {
         saveToUserDefaults()
     }
 
-    private func saveToUserDefaults() {
-        UserDefaults.standard.set(feedURLStrings, forKey: Self.feedsKey)
-        UserDefaults.standard.set(djEnabled, forKey: Self.djEnabledKey)
-        UserDefaults.standard.set(djFrequency.rawValue, forKey: Self.djFrequencyKey)
-        UserDefaults.standard.set(newsEnabled, forKey: Self.newsEnabledKey)
-        UserDefaults.standard.set(newsFrequency.rawValue, forKey: Self.newsFrequencyKey)
-        UserDefaults.standard.set(listenerName, forKey: Self.listenerNameKey)
-        UserDefaults.standard.set(voiceIdentifier, forKey: Self.voiceIdentifierKey)
-        UserDefaults.standard.set(ttsProvider.rawValue, forKey: Self.ttsProviderKey)
-        UserDefaults.standard.set(openAIVoice, forKey: Self.openAIVoiceKey)
-        UserDefaults.standard.set(openAIModel, forKey: Self.openAIModelKey)
-        UserDefaults.standard.set(kokoroVoice, forKey: Self.kokoroVoiceKey)
-        if let data = try? JSONEncoder().encode(customPersonas) {
-            UserDefaults.standard.set(data, forKey: Self.customPersonasKey)
+    /// Enable or disable iCloud sync. Flipping ON pushes local values to
+    /// the cloud and pulls back anything newer; flipping OFF just stops
+    /// listening — the cloud copy stays where it is.
+    func setiCloudSyncEnabled(_ enabled: Bool) {
+        guard enabled != iCloudSyncEnabled else { return }
+        iCloudSyncEnabled = enabled
+        UserDefaults.standard.set(enabled, forKey: Self.iCloudSyncEnabledKey)
+        if enabled {
+            CloudSyncService.shared.enable()
+            // Re-read defaults in case the enable() pulled newer values down.
+            loadFromUserDefaults()
+        } else {
+            CloudSyncService.shared.disable()
         }
-        UserDefaults.standard.set(activePersonaID.uuidString, forKey: Self.activePersonaIDKey)
+    }
+
+    private func saveToUserDefaults() {
+        let defaults = UserDefaults.standard
+        let cloud = CloudSyncService.shared
+
+        func write(_ value: Any?, forKey key: String) {
+            if let value {
+                defaults.set(value, forKey: key)
+            } else {
+                defaults.removeObject(forKey: key)
+            }
+            cloud.mirrorIfEnabled(key: key, value: value)
+        }
+
+        write(feedURLStrings, forKey: Self.feedsKey)
+        write(djEnabled, forKey: Self.djEnabledKey)
+        write(djFrequency.rawValue, forKey: Self.djFrequencyKey)
+        write(newsEnabled, forKey: Self.newsEnabledKey)
+        write(newsFrequency.rawValue, forKey: Self.newsFrequencyKey)
+        write(listenerName, forKey: Self.listenerNameKey)
+        write(voiceIdentifier, forKey: Self.voiceIdentifierKey)
+        write(ttsProvider.rawValue, forKey: Self.ttsProviderKey)
+        write(openAIVoice, forKey: Self.openAIVoiceKey)
+        write(openAIModel, forKey: Self.openAIModelKey)
+        write(kokoroVoice, forKey: Self.kokoroVoiceKey)
+        if let data = try? JSONEncoder().encode(customPersonas) {
+            write(data, forKey: Self.customPersonasKey)
+        }
+        write(activePersonaID.uuidString, forKey: Self.activePersonaIDKey)
+        // iCloudSyncEnabled is a device-local decision; never mirror it.
+        defaults.set(iCloudSyncEnabled, forKey: Self.iCloudSyncEnabledKey)
         // API key is persisted to Keychain via saveAPIKey(); not echoed to UserDefaults.
     }
 
     private func loadFromUserDefaults() {
+        iCloudSyncEnabled = UserDefaults.standard.object(forKey: Self.iCloudSyncEnabledKey) as? Bool ?? false
         feedURLStrings = UserDefaults.standard.stringArray(forKey: Self.feedsKey) ?? []
         djEnabled = UserDefaults.standard.object(forKey: Self.djEnabledKey) as? Bool ?? true
         if let raw = UserDefaults.standard.string(forKey: Self.djFrequencyKey),

@@ -79,6 +79,7 @@ struct SettingsView: View {
                 opmlSection
 #endif
             }
+            iCloudSection
         }
         .formStyle(.grouped)
         .navigationTitle("Settings")
@@ -433,6 +434,21 @@ struct SettingsView: View {
         }
     }
 #endif
+
+    // MARK: - iCloud
+
+    private var iCloudSection: some View {
+        Section {
+            Toggle("Sync with iCloud", isOn: Binding(
+                get: { vm.iCloudSyncEnabled },
+                set: { vm.setiCloudSyncEnabled($0) }
+            ))
+        } header: {
+            Text("iCloud")
+        } footer: {
+            Text("Syncs your preferences — DJ and news settings, feed URLs, personas, voice selection — across devices signed in to the same iCloud account. Your OpenAI API key stays on this device.")
+        }
+    }
 
     // MARK: - News
 

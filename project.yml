@@ -45,11 +45,22 @@ targets:
       path: AIDJ/Resources/AIDJ.entitlements
       properties:
         com.apple.security.network.client: true
+        com.apple.developer.ubiquity-kvstore-identifier: $(TeamIdentifierPrefix)$(CFBundleIdentifier)
     info:
       path: AIDJ/Resources/Info.plist
       properties:
         CFBundleDisplayName: AI DJ
         NSAppleMusicUsageDescription: "AI DJ needs access to your Apple Music library to play music."
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        "UISupportedInterfaceOrientations~ipad":
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
 
   AIDJTests:
     type: bundle.unit-test
