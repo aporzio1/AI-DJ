@@ -3,11 +3,11 @@ import MusicKit
 
 struct MiniPlayerBar: View {
     let vm: NowPlayingViewModel
+    let download: KokoroDownloadState
     let onTap: () -> Void
 
     @State private var isScrubbing = false
     @State private var scrubValue: Double = 0
-    @State private var downloadState = KokoroDownloadState.shared
 
     var body: some View {
         VStack(spacing: 8) {
@@ -191,7 +191,7 @@ struct MiniPlayerBar: View {
     @ViewBuilder
     private var artworkThumb: some View {
         Group {
-            if downloadState.isDownloading, vm.currentItem == nil {
+            if download.isDownloading, vm.currentItem == nil {
                 RoundedRectangle(cornerRadius: 6)
                     .fill(.quaternary)
                     .overlay {
@@ -246,7 +246,7 @@ struct MiniPlayerBar: View {
     private var title: String {
         // Only hijack the title slot when nothing is playing — don't
         // overwrite the current track's title mid-song.
-        if downloadState.isDownloading, vm.currentItem == nil {
+        if download.isDownloading, vm.currentItem == nil {
             return "Downloading DJ voice…"
         }
         switch vm.currentItem {
@@ -257,7 +257,7 @@ struct MiniPlayerBar: View {
     }
 
     private var subtitle: String {
-        if downloadState.isDownloading, vm.currentItem == nil {
+        if download.isDownloading, vm.currentItem == nil {
             return "Kokoro model (~300 MB) • one time"
         }
         switch vm.currentItem {

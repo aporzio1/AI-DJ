@@ -13,6 +13,7 @@ struct RootView: View {
     @State private var djBrain = DJBrain()
     @State private var feedbackStore = TrackFeedbackStore()
     @State private var rssFetcher = RSSFetcher(feedURLs: [])
+    @State private var kokoroDownload = KokoroDownloadState.shared
 
     // Post-onboarding actors
     @State private var coordinator: PlaybackCoordinator?
@@ -176,21 +177,21 @@ struct RootView: View {
             VStack(spacing: 0) {
                 detailContent(nowPlaying: nowPlaying, queue: queue, library: library)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                MiniPlayerBar(vm: nowPlaying) { showingNowPlaying = true }
+                MiniPlayerBar(vm: nowPlaying, download: kokoroDownload) { showingNowPlaying = true }
             }
         }
 #else
         TabView(selection: $selectedTab) {
             NavigationStack { LibraryView(vm: library) }
-                .miniPlayerBarOverlay(vm: nowPlaying, onTap: { showingNowPlaying = true })
+                .miniPlayerBarOverlay(vm: nowPlaying, download: kokoroDownload, onTap: { showingNowPlaying = true })
                 .tabItem { Label("Library", systemImage: "music.note.list") }
                 .tag(AppTab.library)
             NavigationStack { QueueView(vm: queue) }
-                .miniPlayerBarOverlay(vm: nowPlaying, onTap: { showingNowPlaying = true })
+                .miniPlayerBarOverlay(vm: nowPlaying, download: kokoroDownload, onTap: { showingNowPlaying = true })
                 .tabItem { Label("Queue", systemImage: "list.bullet") }
                 .tag(AppTab.queue)
             NavigationStack { SettingsView(vm: settings, djVoice: djVoice) }
-                .miniPlayerBarOverlay(vm: nowPlaying, onTap: { showingNowPlaying = true })
+                .miniPlayerBarOverlay(vm: nowPlaying, download: kokoroDownload, onTap: { showingNowPlaying = true })
                 .tabItem { Label("Settings", systemImage: "gear") }
                 .tag(AppTab.settings)
         }
@@ -219,11 +220,20 @@ private extension View {
     /// (so the user sees the "Downloading DJ voice…" indicator even on a
     /// fresh app where no track has played yet). Applied per-tab so the
     /// system tab bar chrome is never obscured at app launch.
+    ///
+    /// Takes the KokoroDownloadState as an explicit parameter (rather than
+    /// reading the singleton here) so SwiftUI's @Observable tracking is
+    /// rooted at the caller's body — without this, re-renders on
+    /// isDownloading changes didn't fire and the indicator stayed hidden.
     @MainActor
-    func miniPlayerBarOverlay(vm: NowPlayingViewModel, onTap: @escaping () -> Void) -> some View {
+    func miniPlayerBarOverlay(
+        vm: NowPlayingViewModel,
+        download: KokoroDownloadState,
+        onTap: @escaping () -> Void
+    ) -> some View {
         self.safeAreaInset(edge: .bottom, spacing: 0) {
-            if vm.currentItem != nil || KokoroDownloadState.shared.isDownloading {
-                MiniPlayerBar(vm: vm, onTap: onTap)
+            if vm.currentItem != nil || download.isDownloading {
+                MiniPlayerBar(vm: vm, download: download, onTap: onTap)
             }
         }
     }
