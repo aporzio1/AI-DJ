@@ -153,7 +153,6 @@ struct SettingsView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Choose persona")
         } header: {
             Text("DJ")
         } footer: {
