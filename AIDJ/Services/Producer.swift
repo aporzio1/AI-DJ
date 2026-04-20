@@ -15,6 +15,7 @@ actor Producer {
     private let brain: any DJBrainProtocol
     private let voice: any DJVoiceProtocol
     private let rssFetcher: any RSSFetcherProtocol
+    private let feedbackStore: TrackFeedbackStore?
     private var persona: DJPersona
     private var listenerName: String?
     private var config: Config = .default
@@ -30,6 +31,7 @@ actor Producer {
         brain: any DJBrainProtocol,
         voice: any DJVoiceProtocol,
         rssFetcher: any RSSFetcherProtocol,
+        feedbackStore: TrackFeedbackStore? = nil,
         persona: DJPersona = .default,
         listenerName: String? = nil,
         config: Config = .default
@@ -38,6 +40,7 @@ actor Producer {
         self.brain = brain
         self.voice = voice
         self.rssFetcher = rssFetcher
+        self.feedbackStore = feedbackStore
         self.persona = persona
         self.listenerName = listenerName
         self.config = config
@@ -214,13 +217,22 @@ actor Producer {
             ? try? await rssFetcher.fetchHeadlines().first
             : nil
 
+        let feedbackSummary: FeedbackSummary?
+        if let store = feedbackStore {
+            let s = await store.summary()
+            feedbackSummary = s.isEmpty ? nil : s
+        } else {
+            feedbackSummary = nil
+        }
+
         let context = DJContext(
             persona: persona,
             upcomingTrack: upcomingTrack,
             recentTracks: recentTracks,
             timeOfDay: .current(),
             newsHeadline: headline,
-            listenerName: listenerName
+            listenerName: listenerName,
+            feedback: feedbackSummary
         )
 
         let script: String

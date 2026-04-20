@@ -8,6 +8,7 @@ struct DJContext: Sendable {
     let timeOfDay: TimeOfDay
     let newsHeadline: NewsHeadline?
     let listenerName: String?
+    let feedback: FeedbackSummary?
 
     enum TimeOfDay: String, Sendable {
         case morning, afternoon, evening, lateNight

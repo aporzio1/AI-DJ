@@ -12,6 +12,7 @@ final class NowPlayingViewModel {
     private(set) var duration: TimeInterval = 0
     private(set) var currentArtwork: Artwork?
     private(set) var repeatMode: RepeatMode = .off
+    private(set) var currentFeedback: TrackFeedback.Rating? = nil
 
     private(set) var isRegenerating = false
 
@@ -20,14 +21,17 @@ final class NowPlayingViewModel {
     private let coordinator: PlaybackCoordinator
     private let musicService: any MusicKitServiceProtocol
     private let producer: Producer?
+    private let feedbackStore: TrackFeedbackStore?
     private var monitorTask: Task<Void, Never>?
 
     init(coordinator: PlaybackCoordinator,
          musicService: any MusicKitServiceProtocol,
-         producer: Producer? = nil) {
+         producer: Producer? = nil,
+         feedbackStore: TrackFeedbackStore? = nil) {
         self.coordinator = coordinator
         self.musicService = musicService
         self.producer = producer
+        self.feedbackStore = feedbackStore
 
         // Hydrate repeat mode from UserDefaults and push it down to the
         // coordinator so its advance loop honors it from the first track.
@@ -50,6 +54,15 @@ final class NowPlayingViewModel {
                 let time = await coordinator.musicPlaybackTime()
                 let dur = await coordinator.musicTrackDuration() ?? 0
 
+                // Pre-fetch current-track feedback outside the MainActor hop so
+                // the actor call doesn't block the UI-state apply.
+                let currentRating: TrackFeedback.Rating? = await {
+                    if case .track(let t) = item {
+                        return await self.feedbackStore?.rating(for: t.id)
+                    }
+                    return nil
+                }()
+
                 await MainActor.run {
                     self.playbackState = state
                     self.currentItem = item
@@ -63,6 +76,7 @@ final class NowPlayingViewModel {
                         if case .track(let t) = item { return self.musicService.artwork(for: t.id) }
                         return nil
                     }()
+                    self.currentFeedback = currentRating
                 }
                 try? await Task.sleep(for: .milliseconds(250))
             }
@@ -103,6 +117,25 @@ final class NowPlayingViewModel {
         repeatMode = next
         UserDefaults.standard.set(next.rawValue, forKey: Self.repeatModeKey)
         Task { await coordinator.setRepeatMode(next) }
+    }
+
+    // MARK: - Feedback
+
+    /// Thumbs-up / thumbs-down the current track. Re-tapping the active
+    /// rating clears it (neutral). Thumbs-down also auto-skips the current
+    /// track per the PM's Phase 3 spec.
+    func rateCurrentTrack(_ rating: TrackFeedback.Rating) {
+        guard case .track(let track) = currentItem, let store = feedbackStore else { return }
+        if currentFeedback == rating {
+            currentFeedback = nil
+            Task { await store.clear(trackID: track.id) }
+            return
+        }
+        currentFeedback = rating
+        Task { await store.record(rating, trackID: track.id, title: track.title, artist: track.artist) }
+        if rating == .down {
+            skip()
+        }
     }
 
     func regenerateDJ() {

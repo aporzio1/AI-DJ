@@ -11,6 +11,7 @@ struct RootView: View {
     @State private var musicService = MusicKitService()
     @State private var audioGraph = AudioGraph()
     @State private var djBrain = DJBrain()
+    @State private var feedbackStore = TrackFeedbackStore()
 
     // Post-onboarding actors
     @State private var coordinator: PlaybackCoordinator?
@@ -100,13 +101,14 @@ struct RootView: View {
             brain: djBrain,
             voice: djVoice,
             rssFetcher: rss,
+            feedbackStore: feedbackStore,
             persona: settings.persona,
             listenerName: settings.listenerName.isEmpty ? nil : settings.listenerName,
             config: producerConfig()
         )
         coordinator = c
         producer = p
-        let npVM = NowPlayingViewModel(coordinator: c, musicService: musicService, producer: p)
+        let npVM = NowPlayingViewModel(coordinator: c, musicService: musicService, producer: p, feedbackStore: feedbackStore)
         npVM.startObserving()   // keep the mini-player state fresh for the whole session
         nowPlayingVM = npVM
         queueVM = QueueViewModel(coordinator: c)

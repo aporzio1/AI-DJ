@@ -18,8 +18,44 @@ struct NowPlayingView: View {
             }
             progressSlider
             transportControls
+            feedbackControls
         }
         .padding()
+    }
+
+    private var feedbackControls: some View {
+        HStack(spacing: 48) {
+            Button {
+                vm.rateCurrentTrack(.down)
+            } label: {
+                Image(systemName: vm.currentFeedback == .down ? "hand.thumbsdown.fill" : "hand.thumbsdown")
+                    .font(.title2)
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(vm.currentFeedback == .down ? Color.red : .secondary)
+            .disabled(!canRate)
+            .accessibilityLabel("Thumbs down")
+
+            Button {
+                vm.rateCurrentTrack(.up)
+            } label: {
+                Image(systemName: vm.currentFeedback == .up ? "hand.thumbsup.fill" : "hand.thumbsup")
+                    .font(.title2)
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(vm.currentFeedback == .up ? Color.green : .secondary)
+            .disabled(!canRate)
+            .accessibilityLabel("Thumbs up")
+        }
+    }
+
+    private var canRate: Bool {
+        if case .track = vm.currentItem { return true }
+        return false
     }
 
     private var progressSlider: some View {

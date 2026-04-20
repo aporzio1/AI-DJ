@@ -87,6 +87,15 @@ final class DJBrain: DJBrainProtocol {
             parts.append("Just played: \(recent).")
         }
 
+        if let feedback = context.feedback, !feedback.isEmpty {
+            if !feedback.likes.isEmpty {
+                parts.append("Recently liked: \(feedback.likes.joined(separator: "; ")). Reference naturally if a connection fits; never list them.")
+            }
+            if !feedback.dislikes.isEmpty {
+                parts.append("Recently skipped/disliked: \(feedback.dislikes.joined(separator: "; ")). Avoid anything that sounds like those.")
+            }
+        }
+
         if let headline = context.newsHeadline, shouldIncludeNewsHook() {
             // Rare + soft framing — the model tends to recite anything that looks
             // like a headline verbatim, so we only supply news ~30% of the time
