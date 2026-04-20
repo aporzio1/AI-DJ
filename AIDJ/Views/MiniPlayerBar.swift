@@ -244,17 +244,16 @@ struct MiniPlayerBar: View {
     // MARK: - Text
 
     /// Whether to preempt the normal title/subtitle/artwork with a
-    /// download indicator. True when a Kokoro download is in flight AND
-    /// nothing is actively playing — covers the common "first-launch, queue
-    /// primed, waiting on the opening intro" case as well as Settings-
-    /// triggered downloads with an idle or paused player. Never hijacks an
-    /// active track.
+    /// Kokoro indicator (downloading or loading). True when Kokoro is
+    /// busy AND nothing is actively playing — covers first-launch,
+    /// Settings-triggered downloads, and launch-time warm-up. Never
+    /// hijacks an active track.
     private var showingDownloadIndicator: Bool {
-        download.isDownloading && vm.playbackState != .playing
+        download.isActive && vm.playbackState != .playing
     }
 
     private var title: String {
-        if showingDownloadIndicator { return "Downloading DJ voice…" }
+        if showingDownloadIndicator { return download.mode.title }
         switch vm.currentItem {
         case .track(let t):     return t.title
         case .djSegment:        return "DJ"
@@ -263,7 +262,7 @@ struct MiniPlayerBar: View {
     }
 
     private var subtitle: String {
-        if showingDownloadIndicator { return "Kokoro model (~300 MB) • one time" }
+        if showingDownloadIndicator { return download.mode.subtitle }
         switch vm.currentItem {
         case .track(let t):     return t.artist
         case .djSegment(let s): return s.kind.rawValue.capitalized

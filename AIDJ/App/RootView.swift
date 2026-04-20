@@ -127,6 +127,17 @@ struct RootView: View {
         }
         applyVoiceSelection()
         Task.detached(priority: .utility) { [djBrain] in await djBrain.warmUp() }
+        // If Kokoro is the active provider, warm it up now (in the
+        // background, fire-and-forget) so the first DJ segment doesn't
+        // eat a 2-3 second CoreML compile + warm-up stall. The shared
+        // KokoroDownloadState surface will show "Loading DJ voice…" in
+        // the MiniPlayerBar if the user notices the indicator during
+        // this window.
+        if settings.ttsProvider == .kokoro {
+            Task.detached(priority: .utility) { [djVoice] in
+                try? await djVoice.prepareKokoroModel()
+            }
+        }
         isReady = true
         Log.app.info("isReady = true")
     }
@@ -233,9 +244,9 @@ private extension View {
     ) -> some View {
         self.safeAreaInset(edge: .bottom, spacing: 0) {
             // Show the bar when there's a queue item (normal playback) OR
-            // a Kokoro download is in flight (so the "Downloading DJ voice…"
-            // indicator is visible even on a fresh app with no queue yet).
-            if vm.currentItem != nil || download.isDownloading {
+            // Kokoro is doing anything (download, load, warm-up) so the
+            // indicator is visible even on a fresh app with no queue yet.
+            if vm.currentItem != nil || download.isActive {
                 MiniPlayerBar(vm: vm, download: download, onTap: onTap)
             }
         }

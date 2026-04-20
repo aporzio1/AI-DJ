@@ -59,11 +59,15 @@ private actor KokoroSynthesizer {
 
     func ensureInitialized() async throws {
         if box != nil { return }
-        // Flip the shared observable state so the MiniPlayerBar (and any
-        // Settings UI) can show a spinner while the ~300 MB model
-        // downloads + compiles. Defer end() so errors and cancellations
+        // Distinguish "downloading from HuggingFace" (~30 s) from "cached
+        // but needs CoreML compile + warm-up" (~2-3 s) by checking whether
+        // the model directory is already populated. Different user
+        // messaging for each. Defer end() so errors and cancellations
         // still reset the flag.
-        await KokoroDownloadState.shared.begin()
+        let mode: KokoroDownloadState.Mode = KokoroDJVoice.isModelInstalled
+            ? .loading
+            : .downloading
+        await KokoroDownloadState.shared.begin(mode)
         defer { Task { @MainActor in KokoroDownloadState.shared.end() } }
         do {
             let m = KokoroTtsManager()
