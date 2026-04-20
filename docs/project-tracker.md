@@ -2,7 +2,7 @@
 
 **Owner:** Andrew P
 **PM Agent:** `aidj-pm` (see `.claude/agents/aidj-pm.md`)
-**Last updated:** 2026-04-20
+**Last updated:** 2026-04-20 (Phase 1 shipped; Phase 2 scope decided as playlists-only)
 
 ---
 
@@ -23,6 +23,9 @@
 Reverse-chronological. Commit hashes are 7-char.
 
 ### 2026-04-20
+- `290263b` — Phase 1: Library landing page with Recently Played section. Horizontal-scrolling card row above the Playlists list, powered by `MusicRecentlyPlayedRequest<Song>`; new `LibraryItem` enum (track/playlist/album/station) + `LibraryCardView` + `ProviderArtwork` abstraction ready for Phase 2.
+- `00041d3` — Grounded PM agent in PMI Talent Triangle + HBR project-management principles.
+- `600ffae` — Added AI DJ project-manager agent and tracker.
 - `c42dc1d` — Playlist detail view + shuffle button + OpenAI voice descriptors. Tapping a Library playlist row pushes a detail screen; rows gain a Shuffle button; TTS provider "System" renamed to "Device Voices".
 - `946181a` — Spotify support implementation plan committed (docs only).
 - `9fd34cf` — Kokoro voice preview button in Settings; explicit trash-can delete on RSS rows; fixed URL-auto-linkification bug in Add Feed placeholder.
@@ -55,7 +58,7 @@ Reverse-chronological. Commit hashes are 7-char.
 
 | Item | Summary | Status |
 |------|---------|--------|
-| Library landing page | Apple-Music-style "home" with Recently Played + Recommendations sections above the Playlists list. Needs new MusicKit API integration (`MusicPersonalRecommendationsRequest`, `MusicRecentlyPlayedRequest<Track>`). | Awaiting PM consultation before starting; design not yet decided |
+| Library landing page — Phase 2: Recommendations | Add a Recommendations card row below Recently Played, powered by `MusicPersonalRecommendationsRequest`. **Scope: playlists only** — filter recommendation items to `.playlist` cases, reuse existing `PlaylistDetailView` on tap, no new playback wiring. Album/station recommendations deferred to a later phase (post-Spotify-abstraction). | Scope decided 2026-04-20; implementation not yet started |
 
 ---
 
@@ -63,6 +66,7 @@ Reverse-chronological. Commit hashes are 7-char.
 
 | Item | Summary | Plan |
 |------|---------|------|
+| Album & station recommendations | Extend the Recommendations row beyond playlists — add `album(id:)` / `station(id:)` on the provider protocol + album-detail view (or play-as-queue) + station playback via `ApplicationMusicPlayer.Queue`. Intentionally deferred so these methods land on the provider-neutral protocol, not `MusicKitService` directly. | Do after Spotify abstraction (Phase 2a of Spotify plan) |
 | Spotify music provider | Add Spotify alongside Apple Music. Phased rollout: abstraction refactor → read-only API → iOS SDK playback → macOS decision. | `docs/superpowers/plans/2026-04-20-spotify-support.md` |
 | Merged vs segmented library | UX decision for how playlists from multiple providers are shown. | Bundled into Spotify plan §6c |
 | macOS Spotify playback | WKWebView + Web Playback SDK — separate Phase 4 decision, requires DRM spike. | Bundled into Spotify plan §9 |

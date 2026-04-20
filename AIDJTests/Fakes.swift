@@ -31,7 +31,9 @@ final class FakeMusicService: MusicKitServiceProtocol {
     func artwork(for trackId: String) -> Artwork? { nil }
 
     var fakeRecentlyPlayed: [LibraryItem] = []
+    var fakeRecommendations: [LibraryItem] = []
     func recentlyPlayed() async throws -> [LibraryItem] { fakeRecentlyPlayed }
+    func recommendations() async throws -> [LibraryItem] { fakeRecommendations }
     func providerArtwork(for itemId: String) -> ProviderArtwork? { nil }
 }
 

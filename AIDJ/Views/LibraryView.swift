@@ -30,6 +30,7 @@ struct LibraryView: View {
         .task {
             await vm.loadPlaylists()
             await vm.loadRecentlyPlayed()
+            await vm.loadRecommendations()
         }
     }
 
@@ -44,7 +45,11 @@ struct LibraryView: View {
             ContentUnavailableView(error, systemImage: "exclamationmark.triangle")
         } else {
             if !vm.recentlyPlayed.isEmpty {
-                recentlyPlayedSection
+                horizontalSection("Recently Played", items: vm.recentlyPlayed)
+            }
+
+            if !vm.recommendations.isEmpty {
+                horizontalSection("Made for You", items: vm.recommendations)
             }
 
             if vm.playlists.isEmpty {
@@ -67,15 +72,12 @@ struct LibraryView: View {
         }
     }
 
-    private var recentlyPlayedSection: some View {
-        Section("Recently Played") {
+    private func horizontalSection(_ title: String, items: [LibraryItem]) -> some View {
+        Section(title) {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: 12) {
-                    ForEach(vm.recentlyPlayed) { item in
-                        LibraryCardView(item: item)
-                            .onTapGesture {
-                                Task { await vm.playLibraryItem(item) }
-                            }
+                    ForEach(items) { item in
+                        cardWrapper(for: item)
                     }
                 }
                 .padding(.horizontal, 4)
@@ -83,6 +85,29 @@ struct LibraryView: View {
             }
             .listRowInsets(EdgeInsets(top: 0, leading: 12, bottom: 0, trailing: 12))
             .listRowBackground(Color.clear)
+        }
+    }
+
+    /// Playlists navigate to their detail view; tracks play directly; other
+    /// container types render a disabled card (no tap handler wired yet).
+    @ViewBuilder
+    private func cardWrapper(for item: LibraryItem) -> some View {
+        switch item {
+        case .playlist(let playlist):
+            NavigationLink {
+                PlaylistDetailView(playlist: playlist, vm: vm)
+            } label: {
+                LibraryCardView(item: item)
+            }
+            .buttonStyle(.plain)
+        case .track:
+            LibraryCardView(item: item)
+                .onTapGesture {
+                    Task { await vm.playLibraryItem(item) }
+                }
+        case .album, .station:
+            LibraryCardView(item: item)
+                .opacity(0.6)
         }
     }
 

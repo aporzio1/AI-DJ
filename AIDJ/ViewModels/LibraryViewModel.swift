@@ -8,6 +8,7 @@ final class LibraryViewModel {
     private(set) var songs: [AIDJ.Track] = []
     private(set) var selectedPlaylist: PlaylistInfo?
     private(set) var recentlyPlayed: [LibraryItem] = []
+    private(set) var recommendations: [LibraryItem] = []
     private(set) var isLoading = false
     private(set) var errorMessage: String?
 
@@ -40,6 +41,12 @@ final class LibraryViewModel {
         // Non-fatal — surface nothing if the request fails; the rest of Library still works.
         if let items = try? await musicService.recentlyPlayed() {
             recentlyPlayed = items
+        }
+    }
+
+    func loadRecommendations() async {
+        if let items = try? await musicService.recommendations() {
+            recommendations = items
         }
     }
 

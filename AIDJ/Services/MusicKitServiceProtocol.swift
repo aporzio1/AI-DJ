@@ -39,6 +39,11 @@ protocol MusicKitServiceProtocol: AnyObject, Sendable {
     /// provider-neutral so Spotify can provide the same shape later.
     func recentlyPlayed() async throws -> [LibraryItem]
 
+    /// Personal recommendations flattened into a simple list. Phase 2
+    /// implementation filters to `.playlist` cases only so every card has
+    /// a consistent tap-to-detail behavior.
+    func recommendations() async throws -> [LibraryItem]
+
     /// Provider-neutral artwork for a previously-fetched item, or nil if not cached.
     /// Phase 1 only wires this up for cached tracks; containers fall back to
     /// `LibraryItem.fallbackArtworkURL` via the `.url` case.

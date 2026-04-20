@@ -165,6 +165,29 @@ final class MusicKitService: MusicKitServiceProtocol {
         return songs.map { LibraryItem.track(Track(song: $0)) }
     }
 
+    /// Flattens Apple's personal recommendations into a provider-neutral list,
+    /// filtered to playlists only (Phase 2 scope). Deduplicates by playlist ID
+    /// since a single playlist can surface in multiple recommendation buckets.
+    func recommendations() async throws -> [LibraryItem] {
+        let request = MusicPersonalRecommendationsRequest()
+        let response = try await request.response()
+        var seen = Set<String>()
+        var items: [LibraryItem] = []
+        for rec in response.recommendations {
+            for playlist in rec.playlists {
+                let id = playlist.id.rawValue
+                guard seen.insert(id).inserted else { continue }
+                items.append(LibraryItem.playlist(PlaylistInfo(
+                    id: id,
+                    name: playlist.name,
+                    artworkURL: playlist.artwork?.url(width: 200, height: 200)
+                )))
+                if items.count >= 20 { return items }
+            }
+        }
+        return items
+    }
+
     func providerArtwork(for itemId: String) -> ProviderArtwork? {
         if let art = artworkCache[itemId] { return .musicKit(art) }
         return nil
