@@ -13,7 +13,7 @@ struct PreferencesWizardView: View {
     let onComplete: () -> Void
 
     @State private var step = 0
-    private let totalSteps = 5
+    private let totalSteps = 4
 
     var body: some View {
         VStack(spacing: 24) {
@@ -27,9 +27,8 @@ struct PreferencesWizardView: View {
                         switch step {
                         case 0: nameStep
                         case 1: djStep
-                        case 2: voiceStep
-                        case 3: newsStep
-                        case 4: iCloudStep
+                        case 2: newsStep
+                        case 3: iCloudStep
                         default: EmptyView()
                         }
                     }
@@ -68,19 +67,23 @@ struct PreferencesWizardView: View {
         }
     }
 
-    // MARK: - Step 2: DJ
+    // MARK: - Step 2: DJ (frequency + voice)
 
     private var djStep: some View {
-        VStack(spacing: 16) {
+        VStack(alignment: .leading, spacing: 16) {
             stepHeader(
                 icon: "waveform.circle",
-                title: "How often should the DJ talk?",
-                subtitle: "The DJ drops in between songs to introduce tracks and riff on what's playing. Balanced is a good starting point."
+                title: "Set up your DJ",
+                subtitle: "Decide how often the DJ talks and which voice it uses between tracks."
             )
+
             Toggle("Enable DJ", isOn: $settings.djEnabled)
                 .font(.title3)
                 .padding(.vertical, 4)
 
+            Text("Talk Frequency")
+                .font(.subheadline.weight(.semibold))
+                .padding(.top, 4)
             Picker("Frequency", selection: $settings.djFrequency) {
                 ForEach(DJFrequency.allCases) { freq in
                     Text(freq.displayName).tag(freq)
@@ -88,26 +91,11 @@ struct PreferencesWizardView: View {
             }
             .pickerStyle(.segmented)
             .disabled(!settings.djEnabled)
+            .labelsHidden()
 
-            Text("You can change this any time in Settings.")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.top, 8)
-        }
-    }
+            Divider().padding(.vertical, 8)
 
-    // MARK: - Step 3: Voice provider + voice
-
-    private var voiceStep: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            stepHeader(
-                icon: "speaker.wave.2",
-                title: "Pick a voice for the DJ",
-                subtitle: "Where the DJ's voice gets synthesized. Device Voices run on-device for free. OpenAI sounds more natural but costs a fraction of a cent per segment and needs an API key. Kokoro runs on-device with a one-time ~300 MB download."
-            )
-
-            Text("Provider")
+            Text("Voice Provider")
                 .font(.subheadline.weight(.semibold))
             Picker("Provider", selection: $settings.ttsProvider) {
                 ForEach(TTSProvider.allCases) { provider in
@@ -115,12 +103,14 @@ struct PreferencesWizardView: View {
                 }
             }
             .pickerStyle(.segmented)
+            .disabled(!settings.djEnabled)
             .labelsHidden()
 
             Text("Voice")
                 .font(.subheadline.weight(.semibold))
-                .padding(.top, 8)
+                .padding(.top, 4)
             voicePicker
+                .disabled(!settings.djEnabled)
 
             if settings.ttsProvider == .openAI {
                 Text("You'll need to paste an OpenAI API key in Settings for this to work. We'll fall back to Device Voices until you do.")
@@ -134,7 +124,7 @@ struct PreferencesWizardView: View {
                     .padding(.top, 4)
             }
 
-            Text("You can switch providers and voices any time in Settings.")
+            Text("All of this is editable in Settings later.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .center)
@@ -191,7 +181,7 @@ struct PreferencesWizardView: View {
         }
     }
 
-    // MARK: - Step 4: News
+    // MARK: - Step 3: News
 
     private var newsStep: some View {
         VStack(spacing: 16) {
@@ -267,7 +257,7 @@ struct PreferencesWizardView: View {
         .padding(.vertical, 4)
     }
 
-    // MARK: - Step 5: iCloud
+    // MARK: - Step 4: iCloud
 
     private var iCloudStep: some View {
         VStack(spacing: 16) {
