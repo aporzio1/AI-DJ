@@ -6,6 +6,7 @@ actor AudioGraph: AudioGraphProtocol {
     nonisolated(unsafe) private let engine = AVAudioEngine()
     nonisolated(unsafe) private let playerNode = AVAudioPlayerNode()
     private var pendingContinuation: CheckedContinuation<Void, Never>?
+    private var lastBufferFormat: AVAudioFormat?
 
     init() {
         engine.attach(playerNode)
@@ -36,9 +37,20 @@ actor AudioGraph: AudioGraphProtocol {
         }
         try file.read(into: buffer)
 
-        playerNode.stop()
-        engine.disconnectNodeOutput(playerNode)
-        engine.connect(playerNode, to: engine.mainMixerNode, format: buffer.format)
+        // Only stop + reconnect on format change. playerNode.stop() blocks on
+        // a CoreAudio default-QoS thread; calling it from a user-initiated
+        // caller trips the priority-inversion diagnostic. Skipping it in the
+        // common same-format case, and using scheduleBuffer(options:.interrupts)
+        // to supersede any in-flight buffer, avoids the inversion on >90% of
+        // back-to-back DJ segments (same provider = same format).
+        let formatChanged = (lastBufferFormat != buffer.format)
+        if formatChanged {
+            Log.audio.debug("format change → reconnect: \(String(describing: buffer.format), privacy: .public)")
+            playerNode.stop()
+            engine.disconnectNodeOutput(playerNode)
+            engine.connect(playerNode, to: engine.mainMixerNode, format: buffer.format)
+            lastBufferFormat = buffer.format
+        }
 
         if !engine.isRunning {
             Log.audio.debug("starting engine")
@@ -48,10 +60,13 @@ actor AudioGraph: AudioGraphProtocol {
         await withTaskCancellationHandler {
             await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
                 self.pendingContinuation = continuation
-                playerNode.scheduleBuffer(buffer, at: nil, completionCallbackType: .dataPlayedBack) { [weak self] _ in
+                let options: AVAudioPlayerNodeBufferOptions = formatChanged ? [] : .interrupts
+                playerNode.scheduleBuffer(buffer, at: nil, options: options, completionCallbackType: .dataPlayedBack) { [weak self] _ in
                     Task(priority: .utility) { await self?.resumePending() }
                 }
-                playerNode.play()
+                if !playerNode.isPlaying {
+                    playerNode.play()
+                }
                 Log.audio.debug("play() called, isPlaying=\(self.playerNode.isPlaying) format=\(String(describing: buffer.format), privacy: .public)")
             }
             Log.audio.debug("play() complete")
