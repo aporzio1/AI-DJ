@@ -147,7 +147,7 @@ struct NowPlayingView: View {
             Label("DJ is speaking…", systemImage: "waveform")
                 .font(.caption.weight(.medium))
                 .padding(.horizontal, 12)
-                .padding(.vertical, 6)
+                .padding(.vertical, 8)
                 .background(.thinMaterial, in: Capsule())
 
             Button {

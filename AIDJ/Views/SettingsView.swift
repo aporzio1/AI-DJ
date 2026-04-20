@@ -243,7 +243,7 @@ struct SettingsView: View {
         .disabled(!kokoroModelInstalled || kokoroDownloading || kokoroRemoving || kokoroPreviewState == .rendering)
 
         LabeledContent("Model") {
-            HStack(spacing: 6) {
+            HStack(spacing: 8) {
                 Image(systemName: kokoroModelInstalled ? "checkmark.circle.fill" : "arrow.down.circle")
                     .foregroundStyle(kokoroModelInstalled ? Color.green : Color.secondary)
                 Text(kokoroModelInstalled ? "Installed" : "Not Installed")

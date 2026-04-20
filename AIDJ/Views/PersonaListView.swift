@@ -89,15 +89,15 @@ struct PersonaListView: View {
             } label: {
                 HStack(spacing: 12) {
                     VStack(alignment: .leading, spacing: 2) {
-                        HStack(spacing: 6) {
+                        HStack(spacing: 8) {
                             Text(persona.name)
                                 .font(.body)
                                 .foregroundStyle(.primary)
                             if persona.isBuiltIn {
                                 Text("Built-in")
                                     .font(.caption2)
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 2)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
                                     .background(Color.secondary.opacity(0.15))
                                     .clipShape(Capsule())
                                     .foregroundStyle(.secondary)
