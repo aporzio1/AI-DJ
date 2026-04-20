@@ -1,10 +1,14 @@
 import SwiftUI
 
-/// Sheet for editing the DJ persona's name and LLM instructions.
-/// Phase 1 — edits the single active persona in place. Phase 2 will add
-/// a persona list, built-in presets, and add/delete.
+/// Sheet for creating a new custom persona or editing an existing one.
+/// Built-ins never reach this view — callers duplicate first via
+/// `SettingsViewModel.duplicatePersona(_:)` and edit the copy.
 struct PersonaEditorView: View {
     @Bindable var vm: SettingsViewModel
+
+    /// The persona being edited. `nil` means "create new."
+    let editing: DJPersona?
+
     @Environment(\.dismiss) private var dismiss
 
     @State private var name: String = ""
@@ -14,6 +18,10 @@ struct PersonaEditorView: View {
     private var isOverLimit: Bool { characterCount > SettingsViewModel.maxStyleDescriptorLength }
     private var isValid: Bool {
         !name.trimmingCharacters(in: .whitespaces).isEmpty && !isOverLimit
+    }
+
+    private var navTitle: String {
+        editing == nil ? "New Persona" : "Edit Persona"
     }
 
     var body: some View {
@@ -45,7 +53,7 @@ struct PersonaEditorView: View {
                 }
             }
             .formStyle(.grouped)
-            .navigationTitle("Edit Persona")
+            .navigationTitle(navTitle)
 #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
 #endif
@@ -59,8 +67,10 @@ struct PersonaEditorView: View {
                 }
             }
             .onAppear {
-                name = vm.persona.name
-                styleDescriptor = vm.persona.styleDescriptor
+                if let editing {
+                    name = editing.name
+                    styleDescriptor = editing.styleDescriptor
+                }
             }
 #if os(macOS)
             .frame(minWidth: 520, minHeight: 480)
@@ -71,7 +81,11 @@ struct PersonaEditorView: View {
     private func save() {
         let trimmedName = name.trimmingCharacters(in: .whitespaces)
         guard !trimmedName.isEmpty, !isOverLimit else { return }
-        vm.updatePersona(name: trimmedName, styleDescriptor: styleDescriptor)
+        if let editing {
+            vm.updateCustomPersona(id: editing.id, name: trimmedName, styleDescriptor: styleDescriptor)
+        } else {
+            vm.addCustomPersona(name: trimmedName, styleDescriptor: styleDescriptor)
+        }
         dismiss()
     }
 }

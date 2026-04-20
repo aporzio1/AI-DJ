@@ -56,7 +56,7 @@ struct SettingsView: View {
     @State private var kokoroPreviewState: KokoroPreviewState = .idle
     @State private var kokoroPreviewPlayer: AVAudioPlayer?
 
-    @State private var showingPersonaEditor = false
+    @State private var showingPersonaList = false
 
     private enum KokoroPreviewState: Equatable {
         case idle, rendering, playing
@@ -128,7 +128,7 @@ struct SettingsView: View {
             }
 
             Button {
-                showingPersonaEditor = true
+                showingPersonaList = true
             } label: {
                 HStack {
                     Text("Persona")
@@ -143,14 +143,14 @@ struct SettingsView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Edit persona")
+            .accessibilityLabel("Choose persona")
         } header: {
             Text("DJ")
         } footer: {
             Text("The DJ introduces tracks and adds commentary between songs. Your name may be used occasionally to personalize greetings.")
         }
-        .sheet(isPresented: $showingPersonaEditor) {
-            PersonaEditorView(vm: vm)
+        .sheet(isPresented: $showingPersonaList) {
+            PersonaListView(vm: vm)
         }
     }
 
