@@ -3,12 +3,14 @@ import SwiftUI
 @MainActor
 struct RootView: View {
 
+    // Owned by AIDJApp so the macOS Settings scene shares the same instances.
+    let settings: SettingsViewModel
+    let djVoice: DJVoiceRouter
+
     // Services — @State so they're created once and survive re-renders
     @State private var musicService = MusicKitService()
     @State private var audioGraph = AudioGraph()
     @State private var djBrain = DJBrain()
-    @State private var djVoice = DJVoiceRouter()
-    @State private var settings = SettingsViewModel()
 
     // Post-onboarding actors
     @State private var coordinator: PlaybackCoordinator?
