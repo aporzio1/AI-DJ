@@ -3,23 +3,25 @@ import Foundation
 enum TTSProvider: String, Codable, CaseIterable, Identifiable {
     case system = "system"
     case openAI = "openai"
-    // case kokoro = "kokoro"  // Phase 2
+    case kokoro = "kokoro"
 
     var id: String { rawValue }
     var displayName: String {
         switch self {
         case .system: "System"
         case .openAI: "OpenAI"
+        case .kokoro: "Kokoro (on-device)"
         }
     }
 }
 
 /// Routes DJ-voice rendering requests to the active provider, with a fallback
-/// to SystemDJVoice so a misconfigured cloud provider never stalls playback.
+/// to SystemDJVoice so a misconfigured cloud/on-device provider never stalls playback.
 final class DJVoiceRouter: DJVoiceProtocol, @unchecked Sendable {
 
     private let system: SystemDJVoice
     private let openAI: OpenAIDJVoice
+    private let kokoro: KokoroDJVoice
 
     private let lock = NSLock()
     private var _provider: TTSProvider = .system
@@ -30,9 +32,11 @@ final class DJVoiceRouter: DJVoiceProtocol, @unchecked Sendable {
     }
 
     init(system: SystemDJVoice = SystemDJVoice(),
-         openAI: OpenAIDJVoice = OpenAIDJVoice()) {
+         openAI: OpenAIDJVoice = OpenAIDJVoice(),
+         kokoro: KokoroDJVoice = KokoroDJVoice()) {
         self.system = system
         self.openAI = openAI
+        self.kokoro = kokoro
     }
 
     func setOpenAIModel(_ model: OpenAITTSModel) {
@@ -51,10 +55,17 @@ final class DJVoiceRouter: DJVoiceProtocol, @unchecked Sendable {
                 Log.voice.error("OpenAI provider failed (\(error.localizedDescription, privacy: .public)) — falling back to System voice")
                 return try await system.renderToFile(script: script, voiceIdentifier: fallbackSystemVoice())
             }
+        case .kokoro:
+            do {
+                return try await kokoro.renderToFile(script: script, voiceIdentifier: voiceIdentifier)
+            } catch {
+                Log.voice.error("Kokoro provider failed (\(error.localizedDescription, privacy: .public)) — falling back to System voice")
+                return try await system.renderToFile(script: script, voiceIdentifier: fallbackSystemVoice())
+            }
         }
     }
 
-    /// If the user had an OpenAI voice identifier selected, it's not a valid AVSpeech ID.
+    /// If the user had a non-system voice identifier selected, it's not a valid AVSpeech ID.
     /// Pass empty string so SystemDJVoice uses the OS default voice.
     private func fallbackSystemVoice() -> String { "" }
 }

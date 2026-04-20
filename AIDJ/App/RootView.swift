@@ -44,9 +44,10 @@ struct RootView: View {
                     }
                     .onChange(of: settings.ttsProvider) { _, newProvider in
                         djVoice.provider = newProvider
-                        applyOpenAIVoiceSelection()
+                        applyVoiceSelection()
                     }
-                    .onChange(of: settings.openAIVoice) { _, _ in applyOpenAIVoiceSelection() }
+                    .onChange(of: settings.openAIVoice) { _, _ in applyVoiceSelection() }
+                    .onChange(of: settings.kokoroVoice) { _, _ in applyVoiceSelection() }
                     .onChange(of: settings.openAIModel) { _, newRaw in
                         if let model = OpenAITTSModel(rawValue: newRaw) {
                             djVoice.setOpenAIModel(model)
@@ -108,22 +109,20 @@ struct RootView: View {
         if let model = OpenAITTSModel(rawValue: settings.openAIModel) {
             djVoice.setOpenAIModel(model)
         }
-        applyOpenAIVoiceSelection()
-        if !settings.voiceIdentifier.isEmpty, settings.ttsProvider == .system {
-            Task { await p.updateVoice(settings.voiceIdentifier) }
-        }
+        applyVoiceSelection()
         Task.detached(priority: .utility) { [djBrain] in await djBrain.warmUp() }
         isReady = true
         Log.app.info("isReady = true")
     }
 
     /// Pick the right voice identifier for the current provider and push it to Producer.
-    private func applyOpenAIVoiceSelection() {
+    private func applyVoiceSelection() {
         guard let p = producer else { return }
         let id: String
         switch settings.ttsProvider {
         case .system:  id = settings.voiceIdentifier
         case .openAI:  id = settings.openAIVoice
+        case .kokoro:  id = settings.kokoroVoice
         }
         Task { await p.updateVoice(id.isEmpty ? nil : id) }
     }

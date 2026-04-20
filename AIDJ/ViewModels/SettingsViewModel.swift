@@ -14,6 +14,7 @@ final class SettingsViewModel {
     var openAIVoice: String = OpenAITTSVoice.alloy.rawValue
     var openAIModel: String = OpenAITTSModel.tts_1.rawValue
     var openAIAPIKey: String = ""   // mirrored in Keychain; this is the in-memory copy for the SecureField
+    var kokoroVoice: String = KokoroVoice.defaultVoice.rawValue
 
     private static let feedsKey = "rssFeedURLs"
     private static let djEnabledKey = "djEnabled"
@@ -23,6 +24,7 @@ final class SettingsViewModel {
     private static let ttsProviderKey = "ttsProvider"
     private static let openAIVoiceKey = "openAIVoice"
     private static let openAIModelKey = "openAIModel"
+    private static let kokoroVoiceKey = "kokoroVoice"
 
     init() {
         loadFromUserDefaults()
@@ -69,6 +71,7 @@ final class SettingsViewModel {
         UserDefaults.standard.set(ttsProvider.rawValue, forKey: Self.ttsProviderKey)
         UserDefaults.standard.set(openAIVoice, forKey: Self.openAIVoiceKey)
         UserDefaults.standard.set(openAIModel, forKey: Self.openAIModelKey)
+        UserDefaults.standard.set(kokoroVoice, forKey: Self.kokoroVoiceKey)
         // API key is persisted to Keychain via saveAPIKey(); not echoed to UserDefaults.
     }
 
@@ -89,6 +92,7 @@ final class SettingsViewModel {
         openAIVoice = UserDefaults.standard.string(forKey: Self.openAIVoiceKey) ?? OpenAITTSVoice.alloy.rawValue
         openAIModel = UserDefaults.standard.string(forKey: Self.openAIModelKey) ?? OpenAITTSModel.tts_1.rawValue
         openAIAPIKey = Keychain.get(KeychainKey.openAIAPIKey) ?? ""
+        kokoroVoice = UserDefaults.standard.string(forKey: Self.kokoroVoiceKey) ?? KokoroVoice.defaultVoice.rawValue
     }
 
     /// Persist the OpenAI API key to Keychain. Called from the Settings view.

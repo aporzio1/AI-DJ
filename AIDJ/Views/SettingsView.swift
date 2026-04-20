@@ -122,6 +122,8 @@ struct SettingsView: View {
                 systemVoiceRows
             } else if vm.ttsProvider == .openAI {
                 openAIRows
+            } else if vm.ttsProvider == .kokoro {
+                kokoroRows
             }
         } header: {
             Text("Voice")
@@ -148,6 +150,16 @@ struct SettingsView: View {
         }
         .buttonStyle(.bordered)
 #endif
+    }
+
+    @ViewBuilder
+    private var kokoroRows: some View {
+        Picker("Voice", selection: $vm.kokoroVoice) {
+            ForEach(KokoroVoice.allCases) { voice in
+                Text(voice.displayName).tag(voice.rawValue)
+            }
+        }
+        .onChange(of: vm.kokoroVoice) { _, _ in vm.save() }
     }
 
     @ViewBuilder
@@ -187,6 +199,8 @@ struct SettingsView: View {
             systemVoiceFooter
         case .openAI:
             Text("Runs in the cloud. Requires an OpenAI API key. Costs roughly ¢0.6 per DJ segment on the Standard model; HD is double. Paste your key above — it's stored in the macOS Keychain, not in UserDefaults or logs.")
+        case .kokoro:
+            Text("Runs fully on-device on the Apple Neural Engine — no API key, no network at render time. The first DJ segment downloads a ~300 MB model; after that everything stays local. American English only.")
         }
     }
 

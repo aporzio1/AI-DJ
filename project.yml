@@ -3,6 +3,11 @@ options:
   bundleIdPrefix: com.andrewporzio
   createIntermediateGroups: true
 
+packages:
+  FluidAudio:
+    url: https://github.com/FluidInference/FluidAudio.git
+    exactVersion: 0.13.5
+
 settings:
   base:
     DEAD_CODE_STRIPPING: YES
@@ -19,6 +24,9 @@ targets:
       macOS: "26.0"
     sources:
       - path: AIDJ
+    dependencies:
+      - package: FluidAudio
+        product: FluidAudio
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.andrewporzio.aidj
