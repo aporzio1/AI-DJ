@@ -53,6 +53,12 @@ struct SettingsView: View {
     @State private var kokoroRemoving: Bool = false
     @State private var kokoroError: String?
     @State private var showingKokoroRemoveConfirm = false
+    @State private var kokoroPreviewState: KokoroPreviewState = .idle
+    @State private var kokoroPreviewPlayer: AVAudioPlayer?
+
+    private enum KokoroPreviewState: Equatable {
+        case idle, rendering, playing
+    }
 
     init(vm: SettingsViewModel, djVoice: DJVoiceRouter) {
         self._vm = State(initialValue: vm)
@@ -181,7 +187,31 @@ struct SettingsView: View {
                 Text(voice.displayName).tag(voice.rawValue)
             }
         }
-        .onChange(of: vm.kokoroVoice) { _, _ in vm.save() }
+        .onChange(of: vm.kokoroVoice) { _, _ in
+            vm.save()
+            stopKokoroPreview()
+        }
+
+        Button {
+            Task { await toggleKokoroPreview() }
+        } label: {
+            switch kokoroPreviewState {
+            case .idle:
+                Label("Preview Voice", systemImage: "play.circle")
+            case .rendering:
+                HStack(spacing: 8) {
+                    ProgressView()
+#if os(macOS)
+                        .controlSize(.small)
+#endif
+                    Text("Rendering…")
+                }
+            case .playing:
+                Label("Stop Preview", systemImage: "stop.circle")
+            }
+        }
+        .buttonStyle(.bordered)
+        .disabled(!kokoroModelInstalled || kokoroDownloading || kokoroRemoving || kokoroPreviewState == .rendering)
 
         LabeledContent("Model") {
             HStack(spacing: 6) {
@@ -244,6 +274,7 @@ struct SettingsView: View {
     private func removeKokoroModel() async {
         kokoroRemoving = true
         kokoroError = nil
+        stopKokoroPreview()
         do {
             try await djVoice.removeKokoroModel()
             kokoroModelInstalled = djVoice.isKokoroModelInstalled
@@ -251,6 +282,50 @@ struct SettingsView: View {
             kokoroError = error.localizedDescription
         }
         kokoroRemoving = false
+    }
+
+    private func toggleKokoroPreview() async {
+        switch kokoroPreviewState {
+        case .idle:      await startKokoroPreview()
+        case .rendering: return
+        case .playing:   stopKokoroPreview()
+        }
+    }
+
+    private func startKokoroPreview() async {
+        kokoroPreviewState = .rendering
+        kokoroError = nil
+        let sample = "Hey, this is your DJ checking in. Coming up next, another great track."
+        do {
+            let url = try await djVoice.renderKokoroSample(
+                script: sample,
+                voiceIdentifier: vm.kokoroVoice
+            )
+            let player = try AVAudioPlayer(contentsOf: url)
+            player.prepareToPlay()
+            kokoroPreviewPlayer = player
+            kokoroPreviewState = .playing
+            player.play()
+            let duration = player.duration
+            try? await Task.sleep(for: .seconds(duration + 0.15))
+            // Only reset state if this preview is still the active one.
+            if kokoroPreviewPlayer === player {
+                kokoroPreviewPlayer = nil
+                kokoroPreviewState = .idle
+            }
+        } catch {
+            kokoroError = error.localizedDescription
+            kokoroPreviewPlayer = nil
+            kokoroPreviewState = .idle
+        }
+    }
+
+    private func stopKokoroPreview() {
+        kokoroPreviewPlayer?.stop()
+        kokoroPreviewPlayer = nil
+        if kokoroPreviewState == .playing {
+            kokoroPreviewState = .idle
+        }
     }
 
     @ViewBuilder
@@ -371,16 +446,36 @@ struct SettingsView: View {
     }
 
     private func feedRow(_ urlString: String) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(hostName(for: urlString))
-                .font(.body)
-            Text(urlString)
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .truncationMode(.middle)
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(hostName(for: urlString))
+                    .font(.body)
+                Text(urlString)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+            Spacer(minLength: 8)
+            Button(role: .destructive) {
+                deleteFeed(urlString: urlString)
+            } label: {
+                Image(systemName: "minus.circle.fill")
+                    .foregroundStyle(.red)
+                    .font(.title3)
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Remove feed")
         }
         .padding(.vertical, 4)
+    }
+
+    private func deleteFeed(urlString: String) {
+        if let idx = vm.feedURLStrings.firstIndex(of: urlString) {
+            vm.removeFeed(at: IndexSet(integer: idx))
+        }
     }
 
     private var addFeedRow: some View {
@@ -391,7 +486,11 @@ struct SettingsView: View {
             HStack(spacing: 8) {
                 Image(systemName: "link")
                     .foregroundStyle(.secondary)
-                TextField("https://example.com/feed.xml", text: $newFeedURL)
+                TextField(
+                    "",
+                    text: $newFeedURL,
+                    prompt: Text(verbatim: "https://example.com/feed.xml")
+                )
                     .textFieldStyle(.roundedBorder)
 #if os(iOS)
                     .keyboardType(.URL)

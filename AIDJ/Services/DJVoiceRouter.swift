@@ -49,6 +49,12 @@ final class DJVoiceRouter: DJVoiceProtocol, @unchecked Sendable {
     func prepareKokoroModel() async throws { try await kokoro.prepareModel() }
     func removeKokoroModel() async throws { try await kokoro.removeModel() }
 
+    /// Directly render a short sample with the Kokoro provider, ignoring the
+    /// currently-active router provider. Used by the Settings voice preview.
+    func renderKokoroSample(script: String, voiceIdentifier: String) async throws -> URL {
+        try await kokoro.renderToFile(script: script, voiceIdentifier: voiceIdentifier)
+    }
+
     func renderToFile(script: String, voiceIdentifier: String) async throws -> URL {
         let active = provider
         switch active {
