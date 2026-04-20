@@ -22,6 +22,7 @@ final class OnboardingViewModel {
     }
 
     static let onboardingCompletedKey = "onboardingCompleted"
+    static let autoCompleteMigrationRanKey = "onboardingAutoCompleteMigrationRan"
 
     private let musicService: any MusicKitServiceProtocol
 
@@ -58,18 +59,24 @@ final class OnboardingViewModel {
         }
     }
 
-    /// If the user already has preferences saved from before the wizard
-    /// existed (any of listener name, feed list, or DJ frequency), mark
-    /// onboarding complete so they're not bounced into a setup flow they
-    /// don't need.
+    /// One-shot migration: the VERY FIRST launch after the wizard ships,
+    /// if the user already has preferences saved (any of listener name,
+    /// feed list, or DJ frequency), mark onboarding complete so they're
+    /// not bounced into a setup flow they don't need. Guarded by a
+    /// separate sentinel (`autoCompleteMigrationRan`) so subsequent
+    /// manual "Reset Onboarding" actions actually work — without this
+    /// guard, the migration would re-flip the flag on every launch and
+    /// silently defeat the reset.
     private func autoCompleteForExistingUsers() {
         let defaults = UserDefaults.standard
+        if defaults.bool(forKey: Self.autoCompleteMigrationRanKey) { return }
+        defaults.set(true, forKey: Self.autoCompleteMigrationRanKey)
         if defaults.bool(forKey: Self.onboardingCompletedKey) { return }
         let hasName = (defaults.string(forKey: "listenerName") ?? "").isEmpty == false
         let hasFeeds = (defaults.stringArray(forKey: "rssFeedURLs") ?? []).isEmpty == false
         let hasFrequency = defaults.string(forKey: "djFrequency") != nil
         if hasName || hasFeeds || hasFrequency {
-            Log.onboarding.info("Existing settings detected — auto-completing onboarding")
+            Log.onboarding.info("Existing settings detected — auto-completing onboarding (one-shot migration)")
             defaults.set(true, forKey: Self.onboardingCompletedKey)
         }
     }
@@ -81,9 +88,15 @@ final class OnboardingViewModel {
         status = .ready
     }
 
-    /// Debug / settings "Reset Onboarding" hook.
+    /// Debug / settings "Reset Onboarding" hook. Clears the completed
+    /// flag AND SETS the migration sentinel, because otherwise the
+    /// auto-complete migration would see the user's existing settings
+    /// on next launch and silently re-set `onboardingCompleted = true`,
+    /// skipping the wizard the user just asked to see again.
     static func resetOnboardingFlag() {
-        UserDefaults.standard.removeObject(forKey: onboardingCompletedKey)
+        let defaults = UserDefaults.standard
+        defaults.removeObject(forKey: onboardingCompletedKey)
+        defaults.set(true, forKey: autoCompleteMigrationRanKey)
     }
 
     func requestMusicAccess() async {
