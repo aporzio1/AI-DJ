@@ -1,4 +1,5 @@
 import SwiftUI
+import AVFoundation
 
 /// Four-step first-launch preferences wizard. Runs after the Apple
 /// Intelligence + MusicKit gates but before the main app loads, so the
@@ -12,7 +13,7 @@ struct PreferencesWizardView: View {
     let onComplete: () -> Void
 
     @State private var step = 0
-    private let totalSteps = 4
+    private let totalSteps = 5
 
     var body: some View {
         VStack(spacing: 24) {
@@ -26,8 +27,9 @@ struct PreferencesWizardView: View {
                         switch step {
                         case 0: nameStep
                         case 1: djStep
-                        case 2: newsStep
-                        case 3: iCloudStep
+                        case 2: voiceStep
+                        case 3: newsStep
+                        case 4: iCloudStep
                         default: EmptyView()
                         }
                     }
@@ -43,7 +45,7 @@ struct PreferencesWizardView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
 #if os(macOS)
-        .frame(minWidth: 520, minHeight: 520)
+        .frame(minWidth: 520, minHeight: 560)
 #endif
     }
 
@@ -95,7 +97,101 @@ struct PreferencesWizardView: View {
         }
     }
 
-    // MARK: - Step 3: News
+    // MARK: - Step 3: Voice provider + voice
+
+    private var voiceStep: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            stepHeader(
+                icon: "speaker.wave.2",
+                title: "Pick a voice for the DJ",
+                subtitle: "Where the DJ's voice gets synthesized. Device Voices run on-device for free. OpenAI sounds more natural but costs a fraction of a cent per segment and needs an API key. Kokoro runs on-device with a one-time ~300 MB download."
+            )
+
+            Text("Provider")
+                .font(.subheadline.weight(.semibold))
+            Picker("Provider", selection: $settings.ttsProvider) {
+                ForEach(TTSProvider.allCases) { provider in
+                    Text(provider.displayName).tag(provider)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+
+            Text("Voice")
+                .font(.subheadline.weight(.semibold))
+                .padding(.top, 8)
+            voicePicker
+
+            if settings.ttsProvider == .openAI {
+                Text("You'll need to paste an OpenAI API key in Settings for this to work. We'll fall back to Device Voices until you do.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .padding(.top, 4)
+            } else if settings.ttsProvider == .kokoro {
+                Text("Kokoro downloads its model on the first DJ segment (~300 MB). Subsequent segments are instant.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .padding(.top, 4)
+            }
+
+            Text("You can switch providers and voices any time in Settings.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.top, 12)
+        }
+    }
+
+    @ViewBuilder
+    private var voicePicker: some View {
+        switch settings.ttsProvider {
+        case .system:
+            Picker("Voice", selection: $settings.voiceIdentifier) {
+                Text("System Default").tag("")
+                ForEach(installedEnglishVoices, id: \.identifier) { voice in
+                    Text("\(voice.name) — \(qualityLabel(for: voice))").tag(voice.identifier)
+                }
+            }
+            .labelsHidden()
+        case .openAI:
+            Picker("Voice", selection: $settings.openAIVoice) {
+                ForEach(OpenAITTSVoice.allCases) { voice in
+                    Text(voice.displayName).tag(voice.rawValue)
+                }
+            }
+            .labelsHidden()
+        case .kokoro:
+            Picker("Voice", selection: $settings.kokoroVoice) {
+                ForEach(KokoroVoice.allCases) { voice in
+                    Text(voice.displayName).tag(voice.rawValue)
+                }
+            }
+            .labelsHidden()
+        }
+    }
+
+    /// Load installed English AVSpeechSynthesis voices once per wizard render
+    /// — the list doesn't change between taps.
+    private var installedEnglishVoices: [AVSpeechSynthesisVoice] {
+        AVSpeechSynthesisVoice.speechVoices()
+            .filter { $0.language.hasPrefix("en") }
+            .sorted { lhs, rhs in
+                if lhs.quality.rawValue != rhs.quality.rawValue {
+                    return lhs.quality.rawValue > rhs.quality.rawValue
+                }
+                return lhs.name < rhs.name
+            }
+    }
+
+    private func qualityLabel(for voice: AVSpeechSynthesisVoice) -> String {
+        switch voice.quality {
+        case .premium:  return "Premium"
+        case .enhanced: return "Enhanced"
+        default:        return "Compact"
+        }
+    }
+
+    // MARK: - Step 4: News
 
     private var newsStep: some View {
         VStack(spacing: 16) {
@@ -171,7 +267,7 @@ struct PreferencesWizardView: View {
         .padding(.vertical, 4)
     }
 
-    // MARK: - Step 4: iCloud
+    // MARK: - Step 5: iCloud
 
     private var iCloudStep: some View {
         VStack(spacing: 16) {
