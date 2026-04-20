@@ -165,14 +165,20 @@ final class MusicKitService: MusicKitServiceProtocol {
         return songs.map { LibraryItem.track(Track(song: $0)) }
     }
 
-    /// Flattens Apple's personal recommendations into a provider-neutral list,
-    /// filtered to playlists only (Phase 2 scope). Deduplicates by playlist ID
-    /// since a single playlist can surface in multiple recommendation buckets.
+    /// Flattens Apple's personal recommendations into a provider-neutral list.
+    /// Includes playlists, albums, AND stations — previously playlists-only,
+    /// but user-facing accounts can have a playlist-sparse recommendation set
+    /// and the row rendered empty. Albums and stations surface as cards; tap
+    /// wiring is handled per-type in `LibraryView.cardWrapper`.
     func recommendations() async throws -> [LibraryItem] {
         let request = MusicPersonalRecommendationsRequest()
         let response = try await request.response()
         var seen = Set<String>()
         var items: [LibraryItem] = []
+        var playlistCount = 0
+        var albumCount = 0
+        var stationCount = 0
+
         for rec in response.recommendations {
             for playlist in rec.playlists {
                 let id = playlist.id.rawValue
@@ -182,10 +188,67 @@ final class MusicKitService: MusicKitServiceProtocol {
                     name: playlist.name,
                     artworkURL: playlist.artwork?.url(width: 200, height: 200)
                 )))
-                if items.count >= 20 { return items }
+                playlistCount += 1
+                if items.count >= 24 { break }
             }
+            for album in rec.albums {
+                let id = album.id.rawValue
+                guard seen.insert(id).inserted else { continue }
+                items.append(LibraryItem.album(AlbumInfo(
+                    id: id,
+                    title: album.title,
+                    artist: album.artistName,
+                    artworkURL: album.artwork?.url(width: 200, height: 200)
+                )))
+                albumCount += 1
+                if items.count >= 24 { break }
+            }
+            for station in rec.stations {
+                let id = station.id.rawValue
+                guard seen.insert(id).inserted else { continue }
+                items.append(LibraryItem.station(StationInfo(
+                    id: id,
+                    name: station.name,
+                    artworkURL: station.artwork?.url(width: 200, height: 200)
+                )))
+                stationCount += 1
+                if items.count >= 24 { break }
+            }
+            if items.count >= 24 { break }
         }
+        Log.musicKit.info("recommendations: \(response.recommendations.count) buckets → \(playlistCount) playlists, \(albumCount) albums, \(stationCount) stations (\(items.count) total after dedupe)")
         return items
+    }
+
+    /// Resolves a catalog or library album to its songs for queue-based
+    /// playback. Used by the Library card tap when a recommendation is an
+    /// album rather than a playlist.
+    func songs(inAlbumWith id: String) async throws -> [Track] {
+        // Try the user's library first, fall back to the catalog — same
+        // pattern as resolveSong / songs(inPlaylistWith:).
+        var libRequest = MusicLibraryRequest<Album>()
+        libRequest.filter(matching: \.id, equalTo: MusicItemID(rawValue: id))
+        if let libraryAlbum = (try? await libRequest.response())?.items.first {
+            let detailed = try await libraryAlbum.with([.tracks])
+            let songs = (detailed.tracks ?? []).compactMap { track -> Song? in
+                if case .song(let s) = track { return s }
+                return nil
+            }
+            for song in songs { cacheArtwork(for: song) }
+            return songs.map(Track.init(song:))
+        }
+        let catalogRequest = MusicCatalogResourceRequest<Album>(
+            matching: \.id, equalTo: MusicItemID(rawValue: id)
+        )
+        let catalogResponse = try await catalogRequest.response()
+        guard let catalogAlbum = catalogResponse.items.first else { return [] }
+        let detailed = try await catalogAlbum.with([.tracks])
+        let songs = (detailed.tracks ?? []).compactMap { track -> Song? in
+            if case .song(let s) = track { return s }
+            return nil
+        }
+        for song in songs { cacheArtwork(for: song) }
+        return songs.map(Track.init(song:))
     }
 
     func providerArtwork(for itemId: String) -> ProviderArtwork? {

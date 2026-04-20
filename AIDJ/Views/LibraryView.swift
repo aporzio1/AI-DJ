@@ -91,8 +91,9 @@ struct LibraryView: View {
         }
     }
 
-    /// Playlists navigate to their detail view; tracks play directly; other
-    /// container types render a disabled card (no tap handler wired yet).
+    /// Playlists navigate to their detail view; tracks and albums play on
+    /// tap; stations still render dim (station playback needs separate
+    /// queue plumbing on ApplicationMusicPlayer).
     @ViewBuilder
     private func cardWrapper(for item: LibraryItem) -> some View {
         switch item {
@@ -103,12 +104,12 @@ struct LibraryView: View {
                 LibraryCardView(item: item)
             }
             .buttonStyle(.plain)
-        case .track:
+        case .track, .album:
             LibraryCardView(item: item)
                 .onTapGesture {
                     Task { await vm.playLibraryItem(item) }
                 }
-        case .album, .station:
+        case .station:
             LibraryCardView(item: item)
                 .opacity(0.6)
         }

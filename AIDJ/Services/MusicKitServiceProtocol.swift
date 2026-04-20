@@ -33,6 +33,7 @@ protocol MusicKitServiceProtocol: AnyObject, Sendable {
 
     func playlists() async throws -> [PlaylistInfo]
     func songs(inPlaylistWith id: String) async throws -> [Track]
+    func songs(inAlbumWith id: String) async throws -> [Track]
     func searchCatalogSongs(query: String, limit: Int) async throws -> [Track]
 
     /// Recently-played items (tracks, playlists, albums, stations). Kept

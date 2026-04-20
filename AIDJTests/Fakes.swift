@@ -26,6 +26,7 @@ final class FakeMusicService: MusicKitServiceProtocol {
     func seek(to time: TimeInterval) async throws { currentPlaybackTime = time }
     func playlists() async throws -> [PlaylistInfo] { [] }
     func songs(inPlaylistWith id: String) async throws -> [AIDJ.Track] { [] }
+    func songs(inAlbumWith id: String) async throws -> [AIDJ.Track] { [] }
     func searchCatalogSongs(query: String, limit: Int) async throws -> [AIDJ.Track] { [] }
     func isPlayable(trackId: String) async -> Bool { true }
     func artwork(for trackId: String) -> Artwork? { nil }

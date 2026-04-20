@@ -83,18 +83,38 @@ final class LibraryViewModel {
         _ = await (rp, rec)
     }
 
-    /// Handles a tap on a Library card. Tracks play directly; containers
-    /// are either navigated to (playlist has a detail view) or played as a
-    /// whole — but container playback for albums/stations isn't wired yet
-    /// and these cases are not populated in Phase 1.
+    /// Handles a tap on a Library card. Tracks play directly; playlists get
+    /// played end-to-end; albums get resolved to their track list and played;
+    /// stations aren't wired yet (would need ApplicationMusicPlayer.Queue
+    /// station support).
     func playLibraryItem(_ item: LibraryItem) async {
         switch item {
         case .track(let t):
             await playSong(t)
         case .playlist(let p):
             await playPlaylist(p)
-        case .album, .station:
-            break  // Phase 2 territory; cards render but don't act yet.
+        case .album(let a):
+            await playAlbum(a)
+        case .station:
+            break  // Station playback requires different queue plumbing; deferred.
+        }
+    }
+
+    func playAlbum(_ album: AlbumInfo) async {
+        isLoading = true
+        errorMessage = nil
+        defer { isLoading = false }
+        do {
+            let tracks = try await musicService.songs(inAlbumWith: album.id)
+            guard !tracks.isEmpty else { return }
+            let items = tracks.map { PlayableItem.track($0) }
+            await coordinator.replaceQueue(items)
+            if let producer {
+                await producer.primeOpeningIntro()
+            }
+            try? await coordinator.play()
+        } catch {
+            errorMessage = error.localizedDescription
         }
     }
 
