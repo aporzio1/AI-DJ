@@ -7,6 +7,7 @@ final class SettingsViewModel {
     var customPersonas: [DJPersona] = []
     var activePersonaID: UUID = DJPersona.default.id
     var djEnabled: Bool = true
+    var djFrequency: DJFrequency = .default
     var newsEnabled: Bool = true
     var feedURLStrings: [String] = []
     var listenerName: String = ""
@@ -19,6 +20,7 @@ final class SettingsViewModel {
 
     private static let feedsKey = "rssFeedURLs"
     private static let djEnabledKey = "djEnabled"
+    private static let djFrequencyKey = "djFrequency"
     private static let newsEnabledKey = "newsEnabled"
     private static let listenerNameKey = "listenerName"
     private static let voiceIdentifierKey = "voiceIdentifier"
@@ -73,6 +75,7 @@ final class SettingsViewModel {
     private func saveToUserDefaults() {
         UserDefaults.standard.set(feedURLStrings, forKey: Self.feedsKey)
         UserDefaults.standard.set(djEnabled, forKey: Self.djEnabledKey)
+        UserDefaults.standard.set(djFrequency.rawValue, forKey: Self.djFrequencyKey)
         UserDefaults.standard.set(newsEnabled, forKey: Self.newsEnabledKey)
         UserDefaults.standard.set(listenerName, forKey: Self.listenerNameKey)
         UserDefaults.standard.set(voiceIdentifier, forKey: Self.voiceIdentifierKey)
@@ -90,6 +93,10 @@ final class SettingsViewModel {
     private func loadFromUserDefaults() {
         feedURLStrings = UserDefaults.standard.stringArray(forKey: Self.feedsKey) ?? []
         djEnabled = UserDefaults.standard.object(forKey: Self.djEnabledKey) as? Bool ?? true
+        if let raw = UserDefaults.standard.string(forKey: Self.djFrequencyKey),
+           let freq = DJFrequency(rawValue: raw) {
+            djFrequency = freq
+        }
         newsEnabled = UserDefaults.standard.object(forKey: Self.newsEnabledKey) as? Bool ?? true
         if let stored = UserDefaults.standard.string(forKey: Self.listenerNameKey), !stored.isEmpty {
             listenerName = stored

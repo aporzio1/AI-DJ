@@ -7,7 +7,8 @@ actor Producer {
     struct Config: Sendable {
         var djEnabled: Bool
         var newsEnabled: Bool
-        static let `default` = Config(djEnabled: true, newsEnabled: true)
+        var djFrequency: DJFrequency = .default
+        static let `default` = Config(djEnabled: true, newsEnabled: true, djFrequency: .default)
     }
 
     private let coordinator: PlaybackCoordinator
@@ -187,11 +188,12 @@ actor Producer {
             tracksSinceLastSegment = 0
             return true
         }
-        if tracksSinceLastSegment >= 3 {
+        let frequency = config.djFrequency
+        if tracksSinceLastSegment >= frequency.maxGap {
             tracksSinceLastSegment = 0
             return true
         }
-        if Bool.random() {
+        if frequency.randomChance > 0, Double.random(in: 0..<1) < frequency.randomChance {
             tracksSinceLastSegment = 0
             return true
         }

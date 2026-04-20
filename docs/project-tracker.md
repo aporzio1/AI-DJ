@@ -2,7 +2,7 @@
 
 **Owner:** Andrew P
 **PM Agent:** `aidj-pm` (see `.claude/agents/aidj-pm.md`)
-**Last updated:** 2026-04-20 (editable-personas consultation: split into Phase 1 / Phase 2)
+**Last updated:** 2026-04-20 (DJ frequency setting: Go on Option A, single-commit scope)
 
 ---
 
@@ -61,6 +61,7 @@ Reverse-chronological. Commit hashes are 7-char.
 | Library landing page — Phase 2: Recommendations | Add a Recommendations card row below Recently Played, powered by `MusicPersonalRecommendationsRequest`. **Scope: playlists only** — filter recommendation items to `.playlist` cases, reuse existing `PlaylistDetailView` on tap, no new playback wiring. Album/station recommendations deferred to a later phase (post-Spotify-abstraction). | Scope decided 2026-04-20; implementation not yet started |
 | Editable personas — Phase 1: make Alex editable | Let the user rename the single existing persona and rewrite its `styleDescriptor` ("instructions"). Persist `DJPersona` as Codable JSON in UserDefaults. Add an editor sheet from the Settings Persona row (replaces the current disabled `LabeledContent`). Add `Producer.updatePersona(_:)` so changes take effect on the next `willAdvance` without relaunch. Cap styleDescriptor at ~500 chars with counter. Do NOT expose `voicePreset` in the editor — it's already overridden by the main voice picker via `effectiveVoiceIdentifier`. | Scope decided 2026-04-20; ready to plan |
 | Editable personas — Phase 2: multi-persona | Introduce a persona list with an active-picker, built-in read-only presets (Chill / Hype / News Anchor / Alex-default), and user-created custom personas (duplicate / add / delete). Store `[DJPersona] + activePersonaID` in UserDefaults. Built-ins are rehydrated from code on every launch (cannot drift). Deleting the active persona falls back to `DJPersona.default`. Delete requires `confirmationDialog`. | Scope decided 2026-04-20; blocked on Phase 1 |
+| DJ frequency setting | New Settings row: 4-preset segmented picker (Rarely / Balanced / Often / Every Song) controlling how often DJ comes in between songs. Maps to `(maxGap, randomChance)` pairs consumed by `Producer.shouldGenerate`. New `DJFrequency` enum + `djFrequency` field on `Producer.Config`; `SettingsViewModel` persists via `@AppStorage` and hot-reloads via existing `producer.updateConfig(_:)`. Default `.balanced` = current behavior (maxGap 3, 50% coin flip). Single commit, ~30 min. | Scope decided 2026-04-20; ready to implement |
 
 ---
 

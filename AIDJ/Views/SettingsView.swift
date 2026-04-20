@@ -117,6 +117,15 @@ struct SettingsView: View {
         Section {
             Toggle("Enable DJ", isOn: $vm.djEnabled)
 
+            Picker("Frequency", selection: $vm.djFrequency) {
+                ForEach(DJFrequency.allCases) { freq in
+                    Text(freq.displayName).tag(freq)
+                }
+            }
+            .pickerStyle(.segmented)
+            .disabled(!vm.djEnabled)
+            .onChange(of: vm.djFrequency) { _, _ in vm.save() }
+
             HStack {
                 Text("Your Name")
                 Spacer(minLength: 16)

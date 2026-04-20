@@ -38,6 +38,7 @@ struct RootView: View {
                         }
                     }
                     .onChange(of: settings.djEnabled) { _, _ in updateProducerConfig() }
+                    .onChange(of: settings.djFrequency) { _, _ in updateProducerConfig() }
                     .onChange(of: settings.newsEnabled) { _, _ in updateProducerConfig() }
                     .onChange(of: settings.voiceIdentifier) { _, newID in
                         if let p = producer {
@@ -135,7 +136,11 @@ struct RootView: View {
     }
 
     private func producerConfig() -> Producer.Config {
-        Producer.Config(djEnabled: settings.djEnabled, newsEnabled: settings.newsEnabled)
+        Producer.Config(
+            djEnabled: settings.djEnabled,
+            newsEnabled: settings.newsEnabled,
+            djFrequency: settings.djFrequency
+        )
     }
 
     private func updateProducerConfig() {
