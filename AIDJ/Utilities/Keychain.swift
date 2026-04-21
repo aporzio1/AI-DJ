@@ -51,4 +51,9 @@ enum Keychain {
 
 enum KeychainKey {
     static let openAIAPIKey = "openai.apiKey"
+    static let spotifyAccessToken = "spotify.accessToken"
+    static let spotifyRefreshToken = "spotify.refreshToken"
+    /// ISO-8601 timestamp of access-token expiration. Stored as a string for
+    /// simplicity — the Keychain wrapper is generic-password-only.
+    static let spotifyExpiresAt = "spotify.expiresAt"
 }
