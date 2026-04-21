@@ -16,14 +16,61 @@ final class LibraryViewModel {
     private(set) var searchResults: [AIDJ.Track] = []
     private(set) var isSearching = false
 
-    private let musicService: any MusicProviderService
+    private let router: MusicProviderRouter
     private let coordinator: PlaybackCoordinator
     private let producer: Producer?
 
-    init(musicService: any MusicProviderService, coordinator: PlaybackCoordinator, producer: Producer? = nil) {
-        self.musicService = musicService
+    /// Which provider the Library tab is currently browsing. Driven from
+    /// `SettingsViewModel.browseProvider` via `setProvider(_:)`. Changes
+    /// dump the previous provider's cached state (playlists, songs,
+    /// recently-played, recommendations) so the UI never shows mixed-origin
+    /// rows.
+    private(set) var activeProvider: Track.MusicProviderID
+
+    private var musicService: any MusicProviderService {
+        switch activeProvider {
+        case .appleMusic: return router.appleMusic
+        case .spotify:    return router.spotify
+        }
+    }
+
+    init(router: MusicProviderRouter,
+         coordinator: PlaybackCoordinator,
+         producer: Producer? = nil,
+         initialProvider: Track.MusicProviderID = .appleMusic) {
+        self.router = router
         self.coordinator = coordinator
         self.producer = producer
+        self.activeProvider = initialProvider
+    }
+
+    /// Swap the active provider, clear per-provider state, and reload all
+    /// sections for the new provider. No-op if already active.
+    func setProvider(_ provider: Track.MusicProviderID) async {
+        guard provider != activeProvider else { return }
+        activeProvider = provider
+        playlists = []
+        songs = []
+        selectedPlaylist = nil
+        recentlyPlayed = []
+        recommendations = []
+        searchResults = []
+        errorMessage = nil
+        await loadPlaylists()
+        await loadRecentlyPlayed()
+        await loadRecommendations()
+    }
+
+    /// Phase 2a ships Spotify read-only — playback lands in 2b. When the
+    /// active provider is Spotify, any play attempt sets a user-visible
+    /// message explaining the gate instead of silently hitting the
+    /// coordinator's `notSupportedYet` throw.
+    private func guardPlaybackSupported() -> Bool {
+        if activeProvider == .spotify {
+            errorMessage = "Spotify playback is coming in Phase 2b. Browsing works now."
+            return false
+        }
+        return true
     }
 
     func loadPlaylists() async {
@@ -115,6 +162,7 @@ final class LibraryViewModel {
     /// (stations are open-ended; we can't insert intros between tracks
     /// the way we do for queued playlists).
     func playStation(_ station: StationInfo) async {
+        guard guardPlaybackSupported() else { return }
         errorMessage = nil
         do {
             try await coordinator.startStation(id: station.id)
@@ -124,6 +172,7 @@ final class LibraryViewModel {
     }
 
     func playAlbum(_ album: AlbumInfo) async {
+        guard guardPlaybackSupported() else { return }
         isLoading = true
         errorMessage = nil
         defer { isLoading = false }
@@ -157,6 +206,7 @@ final class LibraryViewModel {
     }
 
     func playPlaylist(_ playlist: PlaylistInfo) async {
+        guard guardPlaybackSupported() else { return }
         await selectPlaylist(playlist)
         let items = songs.map { PlayableItem.track($0) }
         await coordinator.replaceQueue(items)
@@ -167,6 +217,7 @@ final class LibraryViewModel {
     }
 
     func shufflePlaylist(_ playlist: PlaylistInfo) async {
+        guard guardPlaybackSupported() else { return }
         await selectPlaylist(playlist)
         let items = songs.shuffled().map { PlayableItem.track($0) }
         await coordinator.replaceQueue(items)
@@ -177,6 +228,7 @@ final class LibraryViewModel {
     }
 
     func playSong(_ track: AIDJ.Track) async {
+        guard guardPlaybackSupported() else { return }
         await coordinator.replaceQueue([.track(track)])
         if let producer {
             await producer.primeOpeningIntro()

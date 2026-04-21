@@ -117,7 +117,7 @@ struct RootView: View {
         npVM.startObserving()   // keep the mini-player state fresh for the whole session
         nowPlayingVM = npVM
         queueVM = QueueViewModel(coordinator: c)
-        libraryVM = LibraryViewModel(musicService: musicProvider.appleMusic, coordinator: c, producer: p)
+        libraryVM = LibraryViewModel(router: musicProvider, coordinator: c, producer: p, initialProvider: settings.browseProvider)
         Task { await p.start() }
         // Apply persisted voice + provider settings on boot
         djVoice.provider = settings.ttsProvider
@@ -192,7 +192,7 @@ struct RootView: View {
         }
 #else
         TabView(selection: $selectedTab) {
-            NavigationStack { LibraryView(vm: library) }
+            NavigationStack { LibraryView(vm: library, settings: settings) }
                 .miniPlayerBarOverlay(vm: nowPlaying, download: kokoroDownload, onTap: { showingNowPlaying = true })
                 .tabItem { Label("Library", systemImage: "music.note.list") }
                 .tag(AppTab.library)
@@ -213,7 +213,7 @@ struct RootView: View {
                                queue: QueueViewModel,
                                library: LibraryViewModel) -> some View {
         switch selectedTab {
-        case .library:  NavigationStack { LibraryView(vm: library) }
+        case .library:  NavigationStack { LibraryView(vm: library, settings: settings) }
         case .queue:    NavigationStack { QueueView(vm: queue) }
         case .settings: NavigationStack { SettingsView(vm: settings, djVoice: djVoice, musicProvider: musicProvider) }
         }
