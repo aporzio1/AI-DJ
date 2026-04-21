@@ -51,6 +51,29 @@ enum SpotifyAuthError: Error, Equatable {
     case notAuthenticated
 }
 
+/// Lock-protected store for the `ASPresentationAnchor` that
+/// `ASWebAuthenticationSession` asks for via its delegate callback. The
+/// callback is `nonisolated` (Obj-C protocol), and on macOS 26 / iOS 26 it
+/// fires from internal dispatch queues — not always the main one. Grabbing
+/// `UIApplication.shared.keyWindow` or `NSApp.keyWindow` from that callback
+/// via `MainActor.assumeIsolated` tripped a libdispatch assertion
+/// (`_dispatch_assert_queue_fail`) on the first redirect-handling call.
+///
+/// Solution: capture the window on MainActor before `session.start()`, stash
+/// it here, read it back from the callback with zero cross-queue access.
+private final class AnchorBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var anchor: ASPresentationAnchor?
+    func set(_ value: ASPresentationAnchor?) {
+        lock.lock(); defer { lock.unlock() }
+        anchor = value
+    }
+    func get() -> ASPresentationAnchor? {
+        lock.lock(); defer { lock.unlock() }
+        return anchor
+    }
+}
+
 @MainActor
 final class SpotifyAuthCoordinator: NSObject {
 
@@ -66,6 +89,7 @@ final class SpotifyAuthCoordinator: NSObject {
     // MARK: - State
 
     private(set) var tokens: SpotifyTokens?
+    private let anchorBox = AnchorBox()
 
     var isAuthenticated: Bool { tokens != nil }
 
@@ -97,6 +121,11 @@ final class SpotifyAuthCoordinator: NSObject {
         let state = Self.randomState()
         let authURL = try buildAuthorizeURL(pkce: pkce, state: state)
 
+        // Capture the current key window now, on MainActor — the callback
+        // that reads it back (`presentationAnchor(for:)`) is nonisolated.
+        anchorBox.set(Self.currentAnchor())
+        defer { anchorBox.set(nil) }
+
         let callback = try await withCheckedThrowingContinuation { (cont: CheckedContinuation<URL, Error>) in
             let session = ASWebAuthenticationSession(
                 url: authURL,
@@ -126,6 +155,23 @@ final class SpotifyAuthCoordinator: NSObject {
         let newTokens = try await exchangeCode(code, verifier: pkce.verifier)
         persist(newTokens)
         return newTokens
+    }
+
+    /// Current key window, grabbed on MainActor. Called synchronously before
+    /// `session.start()` so the value is stable by the time
+    /// `ASWebAuthenticationSession` asks for a presentation anchor.
+    @MainActor
+    private static func currentAnchor() -> ASPresentationAnchor {
+#if os(iOS)
+        return UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap { $0.windows }
+            .first(where: { $0.isKeyWindow }) ?? ASPresentationAnchor()
+#elseif os(macOS)
+        return NSApp.keyWindow ?? NSApp.mainWindow ?? ASPresentationAnchor()
+#else
+        return ASPresentationAnchor()
+#endif
     }
 
     /// Refreshes the access token if it's within the default 60-second leeway
@@ -326,15 +372,12 @@ final class SpotifyAuthCoordinator: NSObject {
 
 extension SpotifyAuthCoordinator: ASWebAuthenticationPresentationContextProviding {
     nonisolated func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
-        // Return a plain anchor and let ASWebAuthenticationSession pick the
-        // key window. An earlier implementation used `MainActor.assumeIsolated`
-        // to grab UIApplication.shared's key window, but iOS 26 invokes this
-        // delegate off the main queue in the redirect-handling path — which
-        // tripped a libdispatch `_dispatch_assert_queue_fail` on sign-in.
-        // The empty-anchor pattern matches Apple's ASWebAuthenticationSession
-        // sample code and is the stable choice when the class isn't a
-        // UIViewController that owns a view.window.
-        ASPresentationAnchor()
+        // Read the anchor captured by `beginAuthFlow()` on MainActor. The
+        // NSLock inside `anchorBox` makes this safe from whichever queue
+        // ASWebAuthenticationSession uses to invoke the delegate — no
+        // MainActor.assumeIsolated (which crashes off-main), no empty
+        // placeholder NSWindow (which macOS rejects during presentation).
+        anchorBox.get() ?? ASPresentationAnchor()
     }
 }
 
