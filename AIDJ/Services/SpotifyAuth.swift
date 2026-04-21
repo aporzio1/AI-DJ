@@ -4,11 +4,10 @@ import AuthenticationServices
 
 /// Spotify OAuth constants. Client ID is intentionally not a secret — D2 locks
 /// a single public Client ID shipped in the binary, per hobby-app scope. The
-/// value lands in Phase 2a Commit 2 after Andrew registers the app at
-/// developer.spotify.com; this placeholder keeps Commit 1 self-contained and
-/// unit-testable.
+/// Client Secret is deliberately absent; D3 locks on-device PKCE, which
+/// replaces the need for a secret.
 enum SpotifyAuth {
-    static let clientID: String = "PLACEHOLDER_CLIENT_ID"
+    static let clientID: String = "6901b52a107348d083b5b9dc84dbbdb1"
     static let redirectURI: String = "aidj://spotify-callback"
     static let authorizeEndpoint = URL(string: "https://accounts.spotify.com/authorize")!
     static let tokenEndpoint = URL(string: "https://accounts.spotify.com/api/token")!
