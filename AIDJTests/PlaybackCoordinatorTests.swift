@@ -85,4 +85,57 @@ struct PlaybackCoordinatorTests {
         try await coordinator.play()
         #expect(audio.playedURLs.contains(segURL))
     }
+
+    // MARK: - K15 regression: transport transitions must bump generation
+    // + stop audioGraph. Both fixes landed in 688bbf8 after smoke testing.
+
+    @Test func resumeFromPauseFlipsStateBackToPlaying() async throws {
+        // Regression: play() resume branch used to skip `state = .playing`
+        // before entering monitorTrackUntilEnd, leaving the coordinator
+        // stuck in .paused even though MusicKit had resumed. The mirror
+        // in NowPlayingViewModel then kept showing the "play" button.
+        let (coordinator, _, _) = makeCoordinator()
+        let track = AIDJ.Track.stub(duration: 60)
+        await coordinator.replaceQueue([.track(track)])
+
+        let playTask = Task { try? await coordinator.play() }
+        try? await Task.sleep(for: .milliseconds(50))
+        #expect(await coordinator.state == .playing)
+
+        try await coordinator.pause()
+        #expect(await coordinator.state == .paused)
+
+        let resumeTask = Task { try? await coordinator.play() }
+        try? await Task.sleep(for: .milliseconds(50))
+        #expect(await coordinator.state == .playing, "resume-from-pause must flip state back to .playing")
+
+        resumeTask.cancel()
+        playTask.cancel()
+    }
+
+    @Test func skipStopsAudioGraph() async throws {
+        // Regression: skip() used to just advance the index without
+        // stopping the audio graph. If a DJ segment was mid-sentence, the
+        // player node kept speaking over the new track.
+        let (coordinator, _, audio) = makeCoordinator()
+        let t1 = AIDJ.Track.stub(id: "t1", duration: 60)
+        let t2 = AIDJ.Track.stub(id: "t2", duration: 60)
+        await coordinator.replaceQueue([.track(t1), .track(t2)])
+        let before = audio.stopCallCount
+        try await coordinator.skip()
+        #expect(audio.stopCallCount > before, "skip must stop the audio graph to kill any in-flight DJ segment")
+    }
+
+    @Test func previousStopsAudioGraph() async throws {
+        // Same invariant as skip() — symmetrical fix.
+        let (coordinator, _, audio) = makeCoordinator()
+        let t1 = AIDJ.Track.stub(id: "t1", duration: 60)
+        let t2 = AIDJ.Track.stub(id: "t2", duration: 60)
+        await coordinator.replaceQueue([.track(t1), .track(t2)])
+        // advance so previous() has somewhere to go
+        try await coordinator.skip()
+        let before = audio.stopCallCount
+        try await coordinator.previous()
+        #expect(audio.stopCallCount > before, "previous must stop the audio graph to kill any in-flight DJ segment")
+    }
 }
