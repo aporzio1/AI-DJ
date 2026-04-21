@@ -231,7 +231,7 @@ actor Producer {
     }
 
     private func coordinatorIsTrackPlayable(_ track: AIDJ.Track) async -> Bool {
-        await coordinator.isPlayable(trackId: track.id)
+        await coordinator.isPlayable(track)
     }
 
     private func shouldGenerate() -> Bool {

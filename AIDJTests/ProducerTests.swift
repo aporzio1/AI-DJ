@@ -9,7 +9,8 @@ struct ProducerTests {
     func makeStack() -> (Producer, PlaybackCoordinator, FakeDJBrain, FakeDJVoice, FakeRSSFetcher) {
         let music = FakeMusicService()
         let audio = FakeAudioGraph()
-        let coordinator = PlaybackCoordinator(musicService: music, audioGraph: audio)
+        let router = MusicProviderRouter(appleMusic: music)
+        let coordinator = PlaybackCoordinator(router: router, audioGraph: audio)
         let brain = FakeDJBrain()
         let voice = FakeDJVoice()
         let rss = FakeRSSFetcher()

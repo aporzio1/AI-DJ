@@ -8,6 +8,8 @@ final class MusicKitService: MusicProviderService {
     private var observationTask: Task<Void, Never>?
     private var artworkCache: [String: Artwork] = [:]
 
+    let providerID: AIDJ.Track.MusicProviderID = .appleMusic
+
     var authorizationStatus: ProviderAuthStatus {
         ProviderAuthStatus(MusicAuthorization.currentStatus)
     }

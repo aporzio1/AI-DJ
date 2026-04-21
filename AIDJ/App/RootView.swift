@@ -8,7 +8,7 @@ struct RootView: View {
     let djVoice: DJVoiceRouter
 
     // Services — @State so they're created once and survive re-renders
-    @State private var musicService = MusicKitService()
+    @State private var musicProvider = MusicProviderRouter(appleMusic: MusicKitService())
     @State private var audioGraph = AudioGraph()
     @State private var djBrain = DJBrain()
     @State private var feedbackStore = TrackFeedbackStore()
@@ -93,14 +93,14 @@ struct RootView: View {
         .task {
             if onboardingVM == nil {
                 Log.app.info("Creating OnboardingViewModel")
-                onboardingVM = OnboardingViewModel(musicService: musicService)
+                onboardingVM = OnboardingViewModel(musicService: musicProvider.appleMusic)
             }
         }
     }
 
     private func handleReady() {
         Log.app.info("handleReady — wiring coordinator + producer (listener=\(settings.listenerName, privacy: .public))")
-        let c = PlaybackCoordinator(musicService: musicService, audioGraph: audioGraph)
+        let c = PlaybackCoordinator(router: musicProvider, audioGraph: audioGraph)
         rssFetcher.updateFeeds(settings.feedURLs)
         let p = Producer(
             coordinator: c,
@@ -114,11 +114,11 @@ struct RootView: View {
         )
         coordinator = c
         producer = p
-        let npVM = NowPlayingViewModel(coordinator: c, musicService: musicService, producer: p, feedbackStore: feedbackStore)
+        let npVM = NowPlayingViewModel(coordinator: c, router: musicProvider, producer: p, feedbackStore: feedbackStore)
         npVM.startObserving()   // keep the mini-player state fresh for the whole session
         nowPlayingVM = npVM
         queueVM = QueueViewModel(coordinator: c)
-        libraryVM = LibraryViewModel(musicService: musicService, coordinator: c, producer: p)
+        libraryVM = LibraryViewModel(musicService: musicProvider.appleMusic, coordinator: c, producer: p)
         Task { await p.start() }
         // Apply persisted voice + provider settings on boot
         djVoice.provider = settings.ttsProvider

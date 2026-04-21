@@ -9,7 +9,8 @@ struct PlaybackCoordinatorTests {
     func makeCoordinator() -> (PlaybackCoordinator, FakeMusicService, FakeAudioGraph) {
         let music = FakeMusicService()
         let audio = FakeAudioGraph()
-        let coordinator = PlaybackCoordinator(musicService: music, audioGraph: audio)
+        let router = MusicProviderRouter(appleMusic: music)
+        let coordinator = PlaybackCoordinator(router: router, audioGraph: audio)
         return (coordinator, music, audio)
     }
 

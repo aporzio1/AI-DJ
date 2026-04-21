@@ -14,7 +14,7 @@ actor PlaybackCoordinator {
 
     // MARK: Dependencies
 
-    private let musicService: any MusicProviderService
+    private let router: MusicProviderRouter
     private let audioGraph: any AudioGraphProtocol
 
     // MARK: Queue state
@@ -26,7 +26,7 @@ actor PlaybackCoordinator {
     /// True when MusicKit is playing open-ended content (a station) that
     /// doesn't fit our [PlayableItem] queue model. Transport still works
     /// via ApplicationMusicPlayer directly; NowPlayingViewModel falls
-    /// back to `musicService.currentTrack` for display.
+    /// back to `router.currentTrack` for display.
     private(set) var externalPlaybackActive: Bool = false
 
     // Incremented every time a new playback starts. In-flight loops check this to detect
@@ -49,8 +49,8 @@ actor PlaybackCoordinator {
 
     // MARK: Init
 
-    init(musicService: any MusicProviderService, audioGraph: any AudioGraphProtocol) {
-        self.musicService = musicService
+    init(router: MusicProviderRouter, audioGraph: any AudioGraphProtocol) {
+        self.router = router
         self.audioGraph = audioGraph
     }
 
@@ -64,7 +64,7 @@ actor PlaybackCoordinator {
     /// the new opening intro to generate, bleeding over the new audio.
     func replaceQueue(_ items: [PlayableItem]) async {
         playbackGeneration += 1
-        try? await musicService.stop()
+        try? await router.stop()
         audioGraph.stop()
         queue = items
         currentIndex = 0
@@ -74,7 +74,7 @@ actor PlaybackCoordinator {
 
     /// Start a station via MusicKit, bypassing our track queue entirely.
     /// Sets `externalPlaybackActive` so transport (pause / resume / skip)
-    /// knows to route through `musicService` directly, and so the VM
+    /// knows to route through `router` directly, and so the VM
     /// knows to display MusicKit's current track instead of our (empty)
     /// queue.
     func startStation(id: String) async throws {
@@ -83,7 +83,7 @@ actor PlaybackCoordinator {
         queue = []
         currentIndex = 0
         externalPlaybackActive = true
-        try await musicService.startStation(id: id)
+        try await router.startStation(id: id)
         state = .playing
     }
 
@@ -131,7 +131,7 @@ actor PlaybackCoordinator {
         if externalPlaybackActive {
             if state == .paused {
                 state = .playing
-                try await musicService.resume()
+                try await router.resume()
             }
             return
         }
@@ -142,9 +142,9 @@ actor PlaybackCoordinator {
         if state == .paused,
            currentIndex < queue.count,
            case .track(let track) = queue[currentIndex] {
-            let resumePoint = await musicService.currentPlaybackTime
+            let resumePoint = await router.currentPlaybackTime
             Log.coordinator.info("play() — resuming '\(track.title, privacy: .public)' at \(resumePoint)s")
-            try await musicService.resume()
+            try await router.resume()
             try await monitorTrackUntilEnd(track: track)
             return
         }
@@ -156,20 +156,20 @@ actor PlaybackCoordinator {
         guard state == .playing else { return }
         state = .paused
         if externalPlaybackActive {
-            try await musicService.pause()
+            try await router.pause()
             return
         }
         // Preserve position for tracks; DJ segments have no seek-resume so
         // their audioGraph output just gets stopped.
         if currentIndex < queue.count, case .track = queue[currentIndex] {
-            try await musicService.pause()
+            try await router.pause()
         }
         audioGraph.stop()
     }
 
     func skip() async throws {
         if externalPlaybackActive {
-            try await musicService.skipToNext()
+            try await router.skipToNext()
             return
         }
         guard currentIndex + 1 < queue.count else {
@@ -192,7 +192,7 @@ actor PlaybackCoordinator {
 
     func seek(to time: TimeInterval) async throws {
         Log.coordinator.debug("seek(to: \(time, format: .fixed(precision: 1)))")
-        try await musicService.seek(to: time)
+        try await router.seek(to: time)
     }
 
     // MARK: Shuffle + Repeat
@@ -229,15 +229,15 @@ actor PlaybackCoordinator {
     }
 
     func musicPlaybackTime() async -> TimeInterval {
-        await musicService.currentPlaybackTime
+        await router.currentPlaybackTime
     }
 
     func musicTrackDuration() async -> TimeInterval? {
-        await musicService.currentTrackDuration
+        await router.currentTrackDuration
     }
 
-    func isPlayable(trackId: String) async -> Bool {
-        await musicService.isPlayable(trackId: trackId)
+    func isPlayable(_ track: Track) async -> Bool {
+        await router.isPlayable(track)
     }
 
     // MARK: Private
@@ -268,7 +268,7 @@ actor PlaybackCoordinator {
     private func playTrack(_ track: Track) async throws {
         state = .playing
         Log.coordinator.info("playTrack '\(track.title, privacy: .public)' duration=\(track.duration)s")
-        try await musicService.start(track: track)
+        try await router.start(track: track)
         try await monitorTrackUntilEnd(track: track)
     }
 
@@ -304,8 +304,8 @@ actor PlaybackCoordinator {
             }
 
             tickCount += 1
-            let elapsed = await musicService.currentPlaybackTime
-            let duration = await musicService.currentTrackDuration ?? track.duration
+            let elapsed = await router.currentPlaybackTime
+            let duration = await router.currentTrackDuration ?? track.duration
             let remaining = duration - elapsed
             maxElapsedSeen = max(maxElapsedSeen, elapsed)
 
@@ -354,7 +354,7 @@ actor PlaybackCoordinator {
         let myGen = playbackGeneration
         state = .playing
         Log.coordinator.info("playSegment kind=\(String(describing: segment.kind), privacy: .public) script=\"\(segment.script, privacy: .public)\" (gen=\(myGen))")
-        try? await musicService.pause()
+        try? await router.pause()
         do {
             try await audioGraph.play(url: segment.audioFileURL)
             Log.coordinator.info("segment done, resuming queue (gen=\(myGen))")

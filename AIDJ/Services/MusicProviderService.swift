@@ -14,6 +14,11 @@ struct PlaylistInfo: Identifiable, Codable, Sendable, Hashable {
 
 @MainActor
 protocol MusicProviderService: AnyObject, Sendable {
+    /// Identifies which music provider this service wraps. `MusicProviderRouter`
+    /// dispatches track-bearing methods (e.g. `start(track:)`) to the service
+    /// whose `providerID` matches `track.providerID`.
+    var providerID: Track.MusicProviderID { get }
+
     var authorizationStatus: ProviderAuthStatus { get }
 
     func requestAuthorization() async -> ProviderAuthStatus

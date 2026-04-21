@@ -6,6 +6,7 @@ import MusicKit
 
 @MainActor
 final class FakeMusicService: MusicProviderService {
+    var providerID: AIDJ.Track.MusicProviderID = .appleMusic
     var authorizationStatus: ProviderAuthStatus = .authorized
 
     var startedTracks: [AIDJ.Track] = []

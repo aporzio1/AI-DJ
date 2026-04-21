@@ -27,17 +27,17 @@ final class NowPlayingViewModel {
     private static let repeatModeKey = "nowPlayingRepeatMode"
 
     private let coordinator: PlaybackCoordinator
-    private let musicService: any MusicProviderService
+    private let router: MusicProviderRouter
     private let producer: Producer?
     private let feedbackStore: TrackFeedbackStore?
     private var monitorTask: Task<Void, Never>?
 
     init(coordinator: PlaybackCoordinator,
-         musicService: any MusicProviderService,
+         router: MusicProviderRouter,
          producer: Producer? = nil,
          feedbackStore: TrackFeedbackStore? = nil) {
         self.coordinator = coordinator
-        self.musicService = musicService
+        self.router = router
         self.producer = producer
         self.feedbackStore = feedbackStore
 
@@ -66,7 +66,7 @@ final class NowPlayingViewModel {
                 // Station/external playback: fall back to MusicKit's own
                 // currentTrack so the mini-player shows "Song — Artist"
                 // instead of "Nothing Playing" while a station plays.
-                let externalTrack = external ? self.musicService.currentTrack : nil
+                let externalTrack = external ? self.router.currentTrack : nil
                 let item: PlayableItem? = {
                     if let externalTrack { return .track(externalTrack) }
                     return queuedItem
@@ -91,7 +91,7 @@ final class NowPlayingViewModel {
                         return false
                     }()
                     self.currentArtwork = {
-                        if case .track(let t) = item { return self.musicService.artwork(for: t.id) }
+                        if case .track(let t) = item { return self.router.artwork(for: t.id) }
                         return nil
                     }()
                     self.currentFeedback = currentRating
