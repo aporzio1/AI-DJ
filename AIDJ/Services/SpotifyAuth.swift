@@ -139,12 +139,29 @@ final class SpotifyAuthCoordinator: NSObject {
         persist(refreshed)
     }
 
+    /// Unconditionally refreshes, bypassing the leeway check. Used by
+    /// `SpotifyAPIClient` when Spotify rejects the current token with 401 —
+    /// the token looked valid to us but Spotify revoked it.
+    func forceRefresh() async throws {
+        guard let current = tokens else { throw SpotifyAuthError.notAuthenticated }
+        let refreshed = try await refresh(using: current.refreshToken)
+        persist(refreshed)
+    }
+
     /// Clears persisted tokens. No-op if not authenticated.
     func signOut() {
         Keychain.remove(KeychainKey.spotifyAccessToken)
         Keychain.remove(KeychainKey.spotifyRefreshToken)
         Keychain.remove(KeychainKey.spotifyExpiresAt)
         tokens = nil
+    }
+
+    /// Test-only seed. Directly injects tokens without touching the Keychain,
+    /// so unit tests don't have to stub the Security framework. Not intended
+    /// for production code paths — production must go through `beginAuthFlow`
+    /// or `refreshIfNeeded` so tokens land in the Keychain.
+    func setTestTokens(access: String, refresh: String, expiresAt: Date) {
+        self.tokens = SpotifyTokens(accessToken: access, refreshToken: refresh, expiresAt: expiresAt)
     }
 
     // MARK: - Token exchange
