@@ -144,6 +144,12 @@ actor PlaybackCoordinator {
            case .track(let track) = queue[currentIndex] {
             let resumePoint = await router.currentPlaybackTime
             Log.coordinator.info("play() — resuming '\(track.title, privacy: .public)' at \(resumePoint)s")
+            // Flip state BEFORE entering the monitor. monitorTrackUntilEnd
+            // exits immediately if state != .playing, so missing this
+            // assignment left the coordinator stuck in .paused even though
+            // MusicKit had already resumed — the play/pause button in the
+            // UI never flipped back to "pause" on second-play-after-pause.
+            state = .playing
             try await router.resume()
             try await monitorTrackUntilEnd(track: track)
             return
@@ -172,6 +178,12 @@ actor PlaybackCoordinator {
             try await router.skipToNext()
             return
         }
+        // Kill any in-flight DJ segment audio and invalidate in-flight
+        // monitor / playSegment loops so they don't race the next item.
+        // Without this, skipping while the DJ was mid-sentence left the
+        // audio-graph player node playing the segment over the new track.
+        playbackGeneration += 1
+        audioGraph.stop()
         guard currentIndex + 1 < queue.count else {
             state = .idle
             return
@@ -184,6 +196,9 @@ actor PlaybackCoordinator {
 
     func previous() async throws {
         guard currentIndex > 0 else { return }
+        // Same DJ-audio + generation invalidation as skip().
+        playbackGeneration += 1
+        audioGraph.stop()
         currentIndex -= 1
         if state == .playing || state == .buffering {
             try await playCurrentItem()
