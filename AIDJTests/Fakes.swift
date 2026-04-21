@@ -31,13 +31,12 @@ final class FakeMusicService: MusicProviderService {
     func skipToNext() async throws {}
     func searchCatalogSongs(query: String, limit: Int) async throws -> [AIDJ.Track] { [] }
     func isPlayable(trackId: String) async -> Bool { true }
-    func artwork(for trackId: String) -> Artwork? { nil }
+    func artwork(for trackId: String) -> ProviderArtwork? { nil }
 
     var fakeRecentlyPlayed: [LibraryItem] = []
     var fakeRecommendations: [LibraryItem] = []
     func recentlyPlayed() async throws -> [LibraryItem] { fakeRecentlyPlayed }
     func recommendations() async throws -> [LibraryItem] { fakeRecommendations }
-    func providerArtwork(for itemId: String) -> ProviderArtwork? { nil }
 }
 
 // MARK: - FakeAudioGraph

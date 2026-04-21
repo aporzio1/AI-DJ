@@ -84,8 +84,9 @@ final class MusicKitService: MusicProviderService {
         return Track(song: song)
     }
 
-    func artwork(for trackId: String) -> Artwork? {
-        artworkCache[trackId]
+    func artwork(for trackId: String) -> ProviderArtwork? {
+        if let art = artworkCache[trackId] { return .musicKit(art) }
+        return nil
     }
 
     private func cacheArtwork(for song: Song) {
@@ -274,10 +275,6 @@ final class MusicKitService: MusicProviderService {
         return songs.map(Track.init(song:))
     }
 
-    func providerArtwork(for itemId: String) -> ProviderArtwork? {
-        if let art = artworkCache[itemId] { return .musicKit(art) }
-        return nil
-    }
 }
 
 enum MusicKitServiceError: Error {

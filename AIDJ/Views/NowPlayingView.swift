@@ -1,5 +1,4 @@
 import SwiftUI
-import MusicKit
 
 struct NowPlayingView: View {
     @State private var vm: NowPlayingViewModel
@@ -93,25 +92,13 @@ struct NowPlayingView: View {
 
     @ViewBuilder
     private var artworkView: some View {
-        Group {
-            if let artwork = vm.currentArtwork {
-                ArtworkImage(artwork, width: 260, height: 260)
-            } else {
-                artworkPlaceholder
-            }
-        }
-        .frame(width: 260, height: 260)
+        ProviderArtworkView(
+            artwork: vm.currentArtwork,
+            fallbackURL: vm.currentArtworkFallbackURL,
+            placeholderSystemImage: "music.note",
+            size: 260
+        )
         .clipShape(RoundedRectangle(cornerRadius: 12))
-    }
-
-    private var artworkPlaceholder: some View {
-        Rectangle()
-            .fill(.quaternary)
-            .overlay {
-                Image(systemName: "music.note")
-                    .font(.largeTitle)
-                    .foregroundStyle(.tertiary)
-            }
     }
 
     private var infoView: some View {

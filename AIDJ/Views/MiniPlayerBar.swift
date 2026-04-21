@@ -1,5 +1,4 @@
 import SwiftUI
-import MusicKit
 
 struct MiniPlayerBar: View {
     let vm: NowPlayingViewModel
@@ -200,15 +199,13 @@ struct MiniPlayerBar: View {
                             .controlSize(.small)
 #endif
                     }
-            } else if let art = vm.currentArtwork {
-                ArtworkImage(art, width: 44, height: 44)
             } else {
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(.quaternary)
-                    .overlay {
-                        Image(systemName: "music.note")
-                            .foregroundStyle(.tertiary)
-                    }
+                ProviderArtworkView(
+                    artwork: vm.currentArtwork,
+                    fallbackURL: vm.currentArtworkFallbackURL,
+                    placeholderSystemImage: "music.note",
+                    size: 44
+                )
             }
         }
         .frame(width: 44, height: 44)

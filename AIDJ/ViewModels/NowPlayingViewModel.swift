@@ -1,5 +1,4 @@
 import Foundation
-import MusicKit
 
 @Observable
 @MainActor
@@ -10,9 +9,18 @@ final class NowPlayingViewModel {
     private(set) var isDJSpeaking: Bool = false
     private(set) var playbackTime: TimeInterval = 0
     private(set) var duration: TimeInterval = 0
-    private(set) var currentArtwork: Artwork?
+    private(set) var currentArtwork: ProviderArtwork?
     private(set) var repeatMode: RepeatMode = .off
     private(set) var currentFeedback: TrackFeedback.Rating? = nil
+
+    /// URL to use when `currentArtwork` is nil — e.g. the track is known from
+    /// the queue but its artwork hasn't been cached (Library-origin playback
+    /// where only the card URL is available). Views pass this to
+    /// `ProviderArtworkView` as `fallbackURL`.
+    var currentArtworkFallbackURL: URL? {
+        if case .track(let t) = currentItem { return t.artworkURL }
+        return nil
+    }
 
     private(set) var isRegenerating = false
 

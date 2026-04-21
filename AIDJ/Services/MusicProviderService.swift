@@ -1,5 +1,4 @@
 import Foundation
-@preconcurrency import MusicKit
 
 /// Playback state mirroring ApplicationMusicPlayer states relevant to our queue logic.
 enum MusicPlaybackStatus: Sendable, Equatable {
@@ -56,17 +55,15 @@ protocol MusicProviderService: AnyObject, Sendable {
     /// a consistent tap-to-detail behavior.
     func recommendations() async throws -> [LibraryItem]
 
-    /// Provider-neutral artwork for a previously-fetched item, or nil if not cached.
-    /// Phase 1 only wires this up for cached tracks; containers fall back to
-    /// `LibraryItem.fallbackArtworkURL` via the `.url` case.
-    func providerArtwork(for itemId: String) -> ProviderArtwork?
-
     /// Returns true if the provider thinks this track can actually be played right now.
     /// Library or catalog items with nil playParameters are unavailable (region,
     /// rights, removal, or stale cloud reference).
     func isPlayable(trackId: String) async -> Bool
 
-    /// Returns cached MusicKit Artwork for a previously-fetched track, or nil if not cached.
-    /// Used to drive ArtworkImage which handles the `musicKit://` URLs that AsyncImage can't.
-    func artwork(for trackId: String) -> Artwork?
+    /// Provider-neutral artwork for a previously-fetched track or item, or nil
+    /// if not cached. `.musicKit` routes through MusicKit's `ArtworkImage` (which
+    /// handles `musicKit://` URLs that `AsyncImage` can't); `.url` routes through
+    /// `AsyncImage`. Callers pair this with an optional fallback URL for items
+    /// that are known but not yet cached.
+    func artwork(for trackId: String) -> ProviderArtwork?
 }
