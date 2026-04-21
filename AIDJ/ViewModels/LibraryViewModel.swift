@@ -16,11 +16,11 @@ final class LibraryViewModel {
     private(set) var searchResults: [AIDJ.Track] = []
     private(set) var isSearching = false
 
-    private let musicService: any MusicKitServiceProtocol
+    private let musicService: any MusicProviderService
     private let coordinator: PlaybackCoordinator
     private let producer: Producer?
 
-    init(musicService: any MusicKitServiceProtocol, coordinator: PlaybackCoordinator, producer: Producer? = nil) {
+    init(musicService: any MusicProviderService, coordinator: PlaybackCoordinator, producer: Producer? = nil) {
         self.musicService = musicService
         self.coordinator = coordinator
         self.producer = producer

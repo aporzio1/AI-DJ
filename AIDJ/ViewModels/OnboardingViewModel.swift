@@ -1,5 +1,4 @@
 import Foundation
-import MusicKit
 @preconcurrency import FoundationModels
 
 @Observable
@@ -24,9 +23,9 @@ final class OnboardingViewModel {
     static let onboardingCompletedKey = "onboardingCompleted"
     static let autoCompleteMigrationRanKey = "onboardingAutoCompleteMigrationRan"
 
-    private let musicService: any MusicKitServiceProtocol
+    private let musicService: any MusicProviderService
 
-    init(musicService: any MusicKitServiceProtocol) {
+    init(musicService: any MusicProviderService) {
         self.musicService = musicService
     }
 

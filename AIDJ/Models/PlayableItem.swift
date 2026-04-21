@@ -8,7 +8,7 @@ enum PlayableItem: Sendable {
 extension PlayableItem: Identifiable {
     var id: String {
         switch self {
-        case .track(let t): "track-\(t.id)"
+        case .track(let t): "track-\(t.providerID.rawValue)-\(t.id)"
         case .djSegment(let s): "segment-\(s.id)"
         }
     }

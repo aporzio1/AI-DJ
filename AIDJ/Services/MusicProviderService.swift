@@ -1,5 +1,5 @@
 import Foundation
-import MusicKit
+@preconcurrency import MusicKit
 
 /// Playback state mirroring ApplicationMusicPlayer states relevant to our queue logic.
 enum MusicPlaybackStatus: Sendable, Equatable {
@@ -14,10 +14,10 @@ struct PlaylistInfo: Identifiable, Codable, Sendable, Hashable {
 }
 
 @MainActor
-protocol MusicKitServiceProtocol: AnyObject, Sendable {
-    var authorizationStatus: MusicAuthorization.Status { get }
+protocol MusicProviderService: AnyObject, Sendable {
+    var authorizationStatus: ProviderAuthStatus { get }
 
-    func requestAuthorization() async -> MusicAuthorization.Status
+    func requestAuthorization() async -> ProviderAuthStatus
     func start(track: Track) async throws
     func pause() async throws
     func resume() async throws
@@ -61,7 +61,7 @@ protocol MusicKitServiceProtocol: AnyObject, Sendable {
     /// `LibraryItem.fallbackArtworkURL` via the `.url` case.
     func providerArtwork(for itemId: String) -> ProviderArtwork?
 
-    /// Returns true if MusicKit thinks this track can actually be played right now.
+    /// Returns true if the provider thinks this track can actually be played right now.
     /// Library or catalog items with nil playParameters are unavailable (region,
     /// rights, removal, or stale cloud reference).
     func isPlayable(trackId: String) async -> Bool

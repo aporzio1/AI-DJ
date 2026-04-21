@@ -19,13 +19,13 @@ final class NowPlayingViewModel {
     private static let repeatModeKey = "nowPlayingRepeatMode"
 
     private let coordinator: PlaybackCoordinator
-    private let musicService: any MusicKitServiceProtocol
+    private let musicService: any MusicProviderService
     private let producer: Producer?
     private let feedbackStore: TrackFeedbackStore?
     private var monitorTask: Task<Void, Never>?
 
     init(coordinator: PlaybackCoordinator,
-         musicService: any MusicKitServiceProtocol,
+         musicService: any MusicProviderService,
          producer: Producer? = nil,
          feedbackStore: TrackFeedbackStore? = nil) {
         self.coordinator = coordinator

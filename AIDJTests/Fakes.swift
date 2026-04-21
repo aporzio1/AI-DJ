@@ -5,8 +5,8 @@ import MusicKit
 // MARK: - FakeMusicService
 
 @MainActor
-final class FakeMusicService: MusicKitServiceProtocol {
-    var authorizationStatus: MusicAuthorization.Status = .authorized
+final class FakeMusicService: MusicProviderService {
+    var authorizationStatus: ProviderAuthStatus = .authorized
 
     var startedTracks: [AIDJ.Track] = []
     var pauseCallCount = 0
@@ -18,7 +18,7 @@ final class FakeMusicService: MusicKitServiceProtocol {
     var currentTrack: AIDJ.Track? = nil
     var playbackStatus: MusicPlaybackStatus = .stopped
 
-    func requestAuthorization() async -> MusicAuthorization.Status { .authorized }
+    func requestAuthorization() async -> ProviderAuthStatus { .authorized }
     func start(track: AIDJ.Track) async throws { startedTracks.append(track); currentTrack = track }
     func pause() async throws { pauseCallCount += 1 }
     func resume() async throws { resumeCallCount += 1 }

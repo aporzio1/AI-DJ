@@ -2,18 +2,18 @@ import Foundation
 @preconcurrency import MusicKit
 
 @MainActor
-final class MusicKitService: MusicKitServiceProtocol {
+final class MusicKitService: MusicProviderService {
 
     private let player = ApplicationMusicPlayer.shared
     private var observationTask: Task<Void, Never>?
     private var artworkCache: [String: Artwork] = [:]
 
-    var authorizationStatus: MusicAuthorization.Status {
-        MusicAuthorization.currentStatus
+    var authorizationStatus: ProviderAuthStatus {
+        ProviderAuthStatus(MusicAuthorization.currentStatus)
     }
 
-    func requestAuthorization() async -> MusicAuthorization.Status {
-        await MusicAuthorization.request()
+    func requestAuthorization() async -> ProviderAuthStatus {
+        ProviderAuthStatus(await MusicAuthorization.request())
     }
 
     // MARK: Playback control
@@ -282,6 +282,17 @@ final class MusicKitService: MusicKitServiceProtocol {
 
 enum MusicKitServiceError: Error {
     case trackNotFound(id: String)
+}
+
+private extension ProviderAuthStatus {
+    init(_ status: MusicAuthorization.Status) {
+        switch status {
+        case .authorized:          self = .authorized
+        case .denied, .restricted: self = .notAuthorized
+        case .notDetermined:       self = .unknown
+        @unknown default:          self = .unknown
+        }
+    }
 }
 
 private extension Track {

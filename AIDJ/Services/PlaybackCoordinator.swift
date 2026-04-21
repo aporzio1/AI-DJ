@@ -14,7 +14,7 @@ actor PlaybackCoordinator {
 
     // MARK: Dependencies
 
-    private let musicService: any MusicKitServiceProtocol
+    private let musicService: any MusicProviderService
     private let audioGraph: any AudioGraphProtocol
 
     // MARK: Queue state
@@ -49,7 +49,7 @@ actor PlaybackCoordinator {
 
     // MARK: Init
 
-    init(musicService: any MusicKitServiceProtocol, audioGraph: any AudioGraphProtocol) {
+    init(musicService: any MusicProviderService, audioGraph: any AudioGraphProtocol) {
         self.musicService = musicService
         self.audioGraph = audioGraph
     }
