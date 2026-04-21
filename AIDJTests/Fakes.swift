@@ -42,8 +42,12 @@ final class FakeMusicService: MusicProviderService {
 
 // MARK: - FakeAudioGraph
 
-@MainActor
-final class FakeAudioGraph: AudioGraphProtocol {
+/// `AudioGraphProtocol` is non-isolated + `Sendable`, matching the production
+/// `AudioGraph` actor which exposes a `nonisolated func stop()`. The fake
+/// mirrors that isolation — `@unchecked Sendable` is safe here because the
+/// unit tests exercise this class sequentially from a single `@MainActor`
+/// context.
+final class FakeAudioGraph: AudioGraphProtocol, @unchecked Sendable {
     var playedURLs: [URL] = []
     var stopCallCount = 0
     var playDelay: TimeInterval = 0

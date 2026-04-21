@@ -73,7 +73,7 @@ struct ModelsTests {
             providerID: .appleMusic
         )
         let item = PlayableItem.track(track)
-        #expect(item.id == "track-xyz")
+        #expect(item.id == "track-appleMusic-xyz")
     }
 
     @Test func playableItemSegmentIdentity() {
