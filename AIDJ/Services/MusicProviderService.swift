@@ -22,6 +22,11 @@ protocol MusicProviderService: AnyObject, Sendable {
     var authorizationStatus: ProviderAuthStatus { get }
 
     func requestAuthorization() async -> ProviderAuthStatus
+
+    /// Clear persisted credentials for providers that vend their own tokens
+    /// (Spotify). MusicKit ignores this — Apple Music authorization is
+    /// OS-managed and can only be revoked through Settings.
+    func signOut() async
     func start(track: Track) async throws
     func pause() async throws
     func resume() async throws

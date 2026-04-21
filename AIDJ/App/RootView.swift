@@ -6,17 +6,8 @@ struct RootView: View {
     // Owned by AIDJApp so the macOS Settings scene shares the same instances.
     let settings: SettingsViewModel
     let djVoice: DJVoiceRouter
+    let musicProvider: MusicProviderRouter
 
-    // Services — @State so they're created once and survive re-renders.
-    // The Spotify auth coordinator, API client, and service all share
-    // lifetime with the router; they're constructed once here so the auth
-    // state (tokens in memory + Keychain) is a single source of truth.
-    @State private var musicProvider: MusicProviderRouter = {
-        let spotifyAuth = SpotifyAuthCoordinator()
-        let spotifyAPI = SpotifyAPIClient(auth: spotifyAuth)
-        let spotifyService = SpotifyService(auth: spotifyAuth, api: spotifyAPI)
-        return MusicProviderRouter(appleMusic: MusicKitService(), spotify: spotifyService)
-    }()
     @State private var audioGraph = AudioGraph()
     @State private var djBrain = DJBrain()
     @State private var feedbackStore = TrackFeedbackStore()
@@ -209,7 +200,7 @@ struct RootView: View {
                 .miniPlayerBarOverlay(vm: nowPlaying, download: kokoroDownload, onTap: { showingNowPlaying = true })
                 .tabItem { Label("Queue", systemImage: "list.bullet") }
                 .tag(AppTab.queue)
-            NavigationStack { SettingsView(vm: settings, djVoice: djVoice) }
+            NavigationStack { SettingsView(vm: settings, djVoice: djVoice, musicProvider: musicProvider) }
                 .miniPlayerBarOverlay(vm: nowPlaying, download: kokoroDownload, onTap: { showingNowPlaying = true })
                 .tabItem { Label("Settings", systemImage: "gear") }
                 .tag(AppTab.settings)
@@ -224,7 +215,7 @@ struct RootView: View {
         switch selectedTab {
         case .library:  NavigationStack { LibraryView(vm: library) }
         case .queue:    NavigationStack { QueueView(vm: queue) }
-        case .settings: NavigationStack { SettingsView(vm: settings, djVoice: djVoice) }
+        case .settings: NavigationStack { SettingsView(vm: settings, djVoice: djVoice, musicProvider: musicProvider) }
         }
     }
 }

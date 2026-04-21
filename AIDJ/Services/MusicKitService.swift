@@ -18,6 +18,10 @@ final class MusicKitService: MusicProviderService {
         ProviderAuthStatus(await MusicAuthorization.request())
     }
 
+    /// Apple Music authorization is OS-managed — the user revokes access from
+    /// system Settings, not in-app. No-op.
+    func signOut() async {}
+
     // MARK: Playback control
 
     func start(track: Track) async throws {

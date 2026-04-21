@@ -45,6 +45,11 @@ final class SpotifyService: MusicProviderService {
         }
     }
 
+    func signOut() async {
+        auth.signOut()
+        artworkCache.removeAll()
+    }
+
     // MARK: - Playback (Phase 2a throws; Phase 2b fills in)
 
     func start(track: Track) async throws { throw SpotifyServiceError.notSupportedYet }

@@ -19,6 +19,7 @@ final class SettingsViewModel {
     var openAIModel: String = OpenAITTSModel.tts_1.rawValue
     var openAIAPIKey: String = ""   // mirrored in Keychain; this is the in-memory copy for the SecureField
     var kokoroVoice: String = KokoroVoice.defaultVoice.rawValue
+    var browseProvider: Track.MusicProviderID = .appleMusic
 
     private static let feedsKey = "rssFeedURLs"
     private static let djEnabledKey = "djEnabled"
@@ -31,6 +32,7 @@ final class SettingsViewModel {
     private static let openAIVoiceKey = "openAIVoice"
     private static let openAIModelKey = "openAIModel"
     private static let kokoroVoiceKey = "kokoroVoice"
+    private static let browseProviderKey = "browseProvider"
     private static let legacyPersonaKey = "djPersona"         // Phase 1 single-persona storage
     private static let customPersonasKey = "djCustomPersonas"
     private static let activePersonaIDKey = "djActivePersonaID"
@@ -53,7 +55,8 @@ final class SettingsViewModel {
         openAIModelKey,
         kokoroVoiceKey,
         customPersonasKey,
-        activePersonaIDKey
+        activePersonaIDKey,
+        browseProviderKey
     ]
 
     /// Soft cap on user-edited prompt instructions. Longer descriptors tend to
@@ -154,6 +157,7 @@ final class SettingsViewModel {
         write(openAIVoice, forKey: Self.openAIVoiceKey)
         write(openAIModel, forKey: Self.openAIModelKey)
         write(kokoroVoice, forKey: Self.kokoroVoiceKey)
+        write(browseProvider.rawValue, forKey: Self.browseProviderKey)
         if let data = try? JSONEncoder().encode(customPersonas) {
             write(data, forKey: Self.customPersonasKey)
         }
@@ -190,6 +194,10 @@ final class SettingsViewModel {
         openAIModel = UserDefaults.standard.string(forKey: Self.openAIModelKey) ?? OpenAITTSModel.tts_1.rawValue
         openAIAPIKey = Keychain.get(KeychainKey.openAIAPIKey) ?? ""
         kokoroVoice = UserDefaults.standard.string(forKey: Self.kokoroVoiceKey) ?? KokoroVoice.defaultVoice.rawValue
+        if let raw = UserDefaults.standard.string(forKey: Self.browseProviderKey),
+           let provider = Track.MusicProviderID(rawValue: raw) {
+            browseProvider = provider
+        }
         // Phase 2: load the custom persona list and the active-ID pointer.
         if let data = UserDefaults.standard.data(forKey: Self.customPersonasKey),
            let decoded = try? JSONDecoder().decode([DJPersona].self, from: data) {
@@ -302,6 +310,15 @@ final class SettingsViewModel {
             activePersonaID = preserved.id
         }
         defaults.removeObject(forKey: Self.legacyPersonaKey)
+    }
+
+    /// Switch which provider's library the user sees in the Library tab.
+    /// Separate from `ttsProvider` / `openAIVoice` — this is a UI-only
+    /// preference that the LibraryViewModel observes in Phase 2a.5.
+    func setBrowseProvider(_ provider: Track.MusicProviderID) {
+        guard browseProvider != provider else { return }
+        browseProvider = provider
+        saveToUserDefaults()
     }
 
     /// Persist the OpenAI API key to Keychain. Called from the Settings view.

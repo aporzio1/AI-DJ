@@ -20,6 +20,7 @@ final class FakeMusicService: MusicProviderService {
     var playbackStatus: MusicPlaybackStatus = .stopped
 
     func requestAuthorization() async -> ProviderAuthStatus { .authorized }
+    func signOut() async { authorizationStatus = .notAuthorized }
     func start(track: AIDJ.Track) async throws { startedTracks.append(track); currentTrack = track }
     func pause() async throws { pauseCallCount += 1 }
     func resume() async throws { resumeCallCount += 1 }
@@ -61,6 +62,7 @@ final class FakeSpotifyService: MusicProviderService {
     var playbackStatus: MusicPlaybackStatus = .stopped
 
     func requestAuthorization() async -> ProviderAuthStatus { .authorized }
+    func signOut() async { authorizationStatus = .notAuthorized }
     func start(track: AIDJ.Track) async throws { startedTracks.append(track); currentTrack = track }
     func pause() async throws { pauseCallCount += 1 }
     func resume() async throws { resumeCallCount += 1 }
