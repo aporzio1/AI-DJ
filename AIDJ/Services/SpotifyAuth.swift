@@ -326,20 +326,15 @@ final class SpotifyAuthCoordinator: NSObject {
 
 extension SpotifyAuthCoordinator: ASWebAuthenticationPresentationContextProviding {
     nonisolated func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
-#if os(iOS)
-        return MainActor.assumeIsolated {
-            UIApplication.shared.connectedScenes
-                .compactMap { $0 as? UIWindowScene }
-                .flatMap { $0.windows }
-                .first(where: { $0.isKeyWindow }) ?? ASPresentationAnchor()
-        }
-#elseif os(macOS)
-        return MainActor.assumeIsolated {
-            NSApp.keyWindow ?? NSApp.mainWindow ?? ASPresentationAnchor()
-        }
-#else
-        return ASPresentationAnchor()
-#endif
+        // Return a plain anchor and let ASWebAuthenticationSession pick the
+        // key window. An earlier implementation used `MainActor.assumeIsolated`
+        // to grab UIApplication.shared's key window, but iOS 26 invokes this
+        // delegate off the main queue in the redirect-handling path — which
+        // tripped a libdispatch `_dispatch_assert_queue_fail` on sign-in.
+        // The empty-anchor pattern matches Apple's ASWebAuthenticationSession
+        // sample code and is the stable choice when the class isn't a
+        // UIViewController that owns a view.window.
+        ASPresentationAnchor()
     }
 }
 
