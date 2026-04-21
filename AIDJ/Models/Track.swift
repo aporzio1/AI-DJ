@@ -11,5 +11,6 @@ struct Track: Identifiable, Codable, Sendable, Hashable {
 
     enum MusicProviderID: String, Codable, Sendable {
         case appleMusic
+        case spotify
     }
 }

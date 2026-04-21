@@ -14,15 +14,18 @@ import Foundation
 final class MusicProviderRouter {
 
     let appleMusic: any MusicProviderService
+    let spotify: any MusicProviderService
 
-    init(appleMusic: any MusicProviderService) {
+    init(appleMusic: any MusicProviderService, spotify: any MusicProviderService) {
         self.appleMusic = appleMusic
+        self.spotify = spotify
     }
 
     // MARK: Track-bearing dispatch
 
     func start(track: Track) async throws {
         try await provider(for: track.providerID).start(track: track)
+        lastStartedProviderID = track.providerID
     }
 
     func isPlayable(_ track: Track) async -> Bool {
@@ -47,11 +50,21 @@ final class MusicProviderRouter {
 
     // MARK: Internals
 
-    private var currentProvider: any MusicProviderService { appleMusic }
+    /// The provider whose track we most recently started — drives the
+    /// current-playback delegation block. Defaults to Apple Music; flips
+    /// inside `start(track:)` on each successful dispatch. Phase 2a only
+    /// Apple Music's `start` actually succeeds, so this stays `.appleMusic`
+    /// in practice until Phase 2b wires Spotify playback.
+    private var lastStartedProviderID: Track.MusicProviderID = .appleMusic
+
+    private var currentProvider: any MusicProviderService {
+        provider(for: lastStartedProviderID)
+    }
 
     private func provider(for id: Track.MusicProviderID) -> any MusicProviderService {
         switch id {
         case .appleMusic: return appleMusic
+        case .spotify:    return spotify
         }
     }
 }

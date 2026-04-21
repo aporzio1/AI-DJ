@@ -7,8 +7,16 @@ struct RootView: View {
     let settings: SettingsViewModel
     let djVoice: DJVoiceRouter
 
-    // Services — @State so they're created once and survive re-renders
-    @State private var musicProvider = MusicProviderRouter(appleMusic: MusicKitService())
+    // Services — @State so they're created once and survive re-renders.
+    // The Spotify auth coordinator, API client, and service all share
+    // lifetime with the router; they're constructed once here so the auth
+    // state (tokens in memory + Keychain) is a single source of truth.
+    @State private var musicProvider: MusicProviderRouter = {
+        let spotifyAuth = SpotifyAuthCoordinator()
+        let spotifyAPI = SpotifyAPIClient(auth: spotifyAuth)
+        let spotifyService = SpotifyService(auth: spotifyAuth, api: spotifyAPI)
+        return MusicProviderRouter(appleMusic: MusicKitService(), spotify: spotifyService)
+    }()
     @State private var audioGraph = AudioGraph()
     @State private var djBrain = DJBrain()
     @State private var feedbackStore = TrackFeedbackStore()
