@@ -60,6 +60,23 @@ final class SpotifyService: MusicProviderService {
     }
 #endif
 
+    /// Probes the Spotify `/me` endpoint to confirm the stored access /
+    /// refresh tokens are still valid. Called from `SettingsView.onAppear`
+    /// so the UI can't claim "Connected" against tokens Spotify has already
+    /// revoked (and tokens that survived across app reinstalls). Silent on
+    /// network errors — only clears on a hard auth failure.
+    func validateAuthorization() async {
+        guard auth.tokens != nil else { return }
+        do {
+            _ = try await api.me()
+        } catch SpotifyAPIError.needsReauth {
+            Log.spotify.info("validateAuthorization: token rejected, signing out")
+            await signOut()
+        } catch {
+            Log.spotify.info("validateAuthorization: \(String(describing: error), privacy: .public) — leaving tokens in place (likely transient)")
+        }
+    }
+
     // MARK: - Playback (Phase 2a throws; Phase 2b fills in)
 
     func start(track: Track) async throws { throw SpotifyServiceError.notSupportedYet }

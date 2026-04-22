@@ -34,6 +34,13 @@ protocol MusicProviderService: AnyObject, Sendable {
     /// don't have to care.
     func handleAuthCallback(_ url: URL)
 
+    /// Verify the currently-stored credentials by probing a lightweight
+    /// provider endpoint. Clears the stored credentials and flips status to
+    /// `.notAuthorized` if the probe fails with an auth error (e.g. Spotify
+    /// 401 after forced refresh). No-op by default — MusicKit's
+    /// authorization is OS-managed and doesn't need this.
+    func validateAuthorization() async
+
     func start(track: Track) async throws
     func pause() async throws
     func resume() async throws
@@ -89,4 +96,9 @@ extension MusicProviderService {
     /// Default no-op for providers that don't need app-level URL events.
     /// `SpotifyService` overrides this on macOS to drive its PKCE redirect.
     func handleAuthCallback(_ url: URL) {}
+
+    /// Default no-op. `SpotifyService` overrides this to probe `/me` and
+    /// clear stale tokens that survive across reinstalls or fail after a
+    /// Spotify-side revocation.
+    func validateAuthorization() async {}
 }

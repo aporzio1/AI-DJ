@@ -104,6 +104,13 @@ struct SettingsView: View {
             }
             kokoroModelInstalled = djVoice.isKokoroModelInstalled
             spotifyAuthStatus = musicProvider.spotify.authorizationStatus
+            // Silently validate in the background — if tokens survived a
+            // reinstall or were revoked on the Spotify side, this flips the
+            // chip to Not Connected instead of lying about the state.
+            Task {
+                await musicProvider.spotify.validateAuthorization()
+                spotifyAuthStatus = musicProvider.spotify.authorizationStatus
+            }
         }
         .confirmationDialog(
             "Remove Kokoro model?",
