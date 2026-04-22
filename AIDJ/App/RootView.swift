@@ -126,13 +126,14 @@ struct RootView: View {
         }
         applyVoiceSelection()
         Task.detached(priority: .utility) { [djBrain] in await djBrain.warmUp() }
-        // If Kokoro is the active provider, warm it up now (in the
-        // background, fire-and-forget) so the first DJ segment doesn't
-        // eat a 2-3 second CoreML compile + warm-up stall. The shared
-        // KokoroDownloadState surface will show "Loading DJ voice…" in
-        // the MiniPlayerBar if the user notices the indicator during
-        // this window.
-        if settings.ttsProvider == .kokoro {
+        // If Kokoro is the active provider AND the DJ is enabled, warm it
+        // up now (in the background, fire-and-forget) so the first DJ
+        // segment doesn't eat the CoreML compile + warm-up stall. Skipping
+        // this when the DJ is off — there's no point paying the compile
+        // cost (and surfacing the "Loading DJ voice…" indicator) if no
+        // segment will ever be rendered. The KokoroDownloadState overlay
+        // in MiniPlayerBar shows during this window if the user notices.
+        if settings.djEnabled && settings.ttsProvider == .kokoro {
             Task.detached(priority: .utility) { [djVoice] in
                 try? await djVoice.prepareKokoroModel()
             }

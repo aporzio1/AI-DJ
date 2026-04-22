@@ -25,12 +25,15 @@ enum KokoroVoice: String, CaseIterable, Identifiable {
 enum KokoroDJVoiceError: Error, LocalizedError {
     case initializationFailed(underlying: Error)
     case synthesisFailed(underlying: Error)
+    case initializationTimeout(seconds: TimeInterval)
     var errorDescription: String? {
         switch self {
         case .initializationFailed(let e):
             "Kokoro failed to initialize: \(e.localizedDescription). The model may still be downloading."
         case .synthesisFailed(let e):
             "Kokoro synthesis failed: \(e.localizedDescription)"
+        case .initializationTimeout(let s):
+            "Kokoro initialization timed out after \(Int(s)) seconds. CoreML compile may be stuck — try a different voice provider in Settings."
         }
     }
 }
@@ -60,21 +63,48 @@ private actor KokoroSynthesizer {
     func ensureInitialized() async throws {
         if box != nil { return }
         // Distinguish "downloading from HuggingFace" (~30 s) from "cached
-        // but needs CoreML compile + warm-up" (~2-3 s) by checking whether
-        // the model directory is already populated. Different user
-        // messaging for each. Defer end() so errors and cancellations
-        // still reset the flag.
+        // but needs CoreML compile + warm-up" (~2-3 s on macOS, 15-30 s on
+        // iOS 26) by checking whether the model directory is already
+        // populated. Different user messaging for each. Defer end() so
+        // errors and cancellations still reset the indicator.
         let mode: KokoroDownloadState.Mode = KokoroDJVoice.isModelInstalled
             ? .loading
             : .downloading
         await KokoroDownloadState.shared.begin(mode)
         defer { Task { @MainActor in KokoroDownloadState.shared.end() } }
+        // Guard initialize() with a timeout — iOS 26's CoreML Metal compile
+        // has occasionally hung on the second (15 s) model, leaving the
+        // "Loading DJ voice…" indicator stuck in the MiniPlayerBar forever.
+        // Throwing here lets the defer end the indicator and forces a
+        // retry path on the next render attempt. 120 s is a very generous
+        // upper bound for a legitimate compile.
         do {
             let m = KokoroTtsManager()
-            try await m.initialize()
+            try await withTimeout(seconds: 120) {
+                try await m.initialize()
+            }
             box = ManagerBox(m)
         } catch {
             throw KokoroDJVoiceError.initializationFailed(underlying: error)
+        }
+    }
+
+    /// Runs `operation` but races it against a sleep of `seconds`; whichever
+    /// finishes first wins. Throws `KokoroDJVoiceError.initializationTimeout`
+    /// if the timeout hits. Cancels the loser in both directions.
+    private func withTimeout<T: Sendable>(
+        seconds: TimeInterval,
+        operation: @Sendable @escaping () async throws -> T
+    ) async throws -> T {
+        try await withThrowingTaskGroup(of: T.self) { group in
+            group.addTask { try await operation() }
+            group.addTask {
+                try await Task.sleep(for: .seconds(seconds))
+                throw KokoroDJVoiceError.initializationTimeout(seconds: seconds)
+            }
+            defer { group.cancelAll() }
+            let result = try await group.next()!
+            return result
         }
     }
 
