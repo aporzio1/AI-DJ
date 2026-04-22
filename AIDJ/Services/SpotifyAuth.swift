@@ -33,6 +33,9 @@ struct SpotifyTokens: Codable, Equatable, Sendable {
     let accessToken: String
     let refreshToken: String
     let expiresAt: Date
+    /// Space-separated scope string granted by Spotify at consent time.
+    /// Preserved across refreshes when Spotify omits it from the response.
+    var scope: String?
 
     /// True when the access token is within `leeway` of expiring. Callers
     /// should refresh before the next API call to avoid a 401-retry round trip.
@@ -119,6 +122,11 @@ final class SpotifyAuthCoordinator: NSObject {
         self.urlSession = urlSession
         super.init()
         self.tokens = Self.loadTokens()
+        if let scope = tokens?.scope, !scope.isEmpty {
+            Log.spotify.info("loaded Spotify tokens from Keychain: granted scopes=\(scope, privacy: .public)")
+        } else if tokens != nil {
+            Log.spotify.info("loaded Spotify tokens from Keychain: scope not stored (signed in before scope tracking landed — reconnect to populate)")
+        }
     }
 
     // MARK: - Public API
@@ -296,6 +304,7 @@ final class SpotifyAuthCoordinator: NSObject {
         Keychain.remove(KeychainKey.spotifyAccessToken)
         Keychain.remove(KeychainKey.spotifyRefreshToken)
         Keychain.remove(KeychainKey.spotifyExpiresAt)
+        Keychain.remove(KeychainKey.spotifyScope)
         tokens = nil
     }
 
@@ -304,7 +313,7 @@ final class SpotifyAuthCoordinator: NSObject {
     /// for production code paths — production must go through `beginAuthFlow`
     /// or `refreshIfNeeded` so tokens land in the Keychain.
     func setTestTokens(access: String, refresh: String, expiresAt: Date) {
-        self.tokens = SpotifyTokens(accessToken: access, refreshToken: refresh, expiresAt: expiresAt)
+        self.tokens = SpotifyTokens(accessToken: access, refreshToken: refresh, expiresAt: expiresAt, scope: nil)
     }
 
     // MARK: - Token exchange
@@ -350,10 +359,12 @@ final class SpotifyAuthCoordinator: NSObject {
         Log.spotify.info("token exchange: granted scopes=\(payload.scope ?? "<none>", privacy: .public) expiresIn=\(payload.expiresIn)")
         // Spotify sometimes omits `refresh_token` on refresh responses — the
         // existing one stays valid. If we never had one and none came back,
-        // that's an auth error.
+        // that's an auth error. Scope is also sometimes omitted on refresh;
+        // preserve the previously-known scope in that case.
         let refresh = payload.refreshToken ?? previousRefreshToken
         guard let refresh else { throw SpotifyAuthError.noRefreshToken }
-        return SpotifyTokens(accessToken: payload.accessToken, refreshToken: refresh, expiresAt: expiresAt)
+        let scope = payload.scope ?? tokens?.scope
+        return SpotifyTokens(accessToken: payload.accessToken, refreshToken: refresh, expiresAt: expiresAt, scope: scope)
     }
 
     // MARK: - URL building (internal for tests)
@@ -381,6 +392,11 @@ final class SpotifyAuthCoordinator: NSObject {
         Keychain.set(tokens.accessToken, forKey: KeychainKey.spotifyAccessToken)
         Keychain.set(tokens.refreshToken, forKey: KeychainKey.spotifyRefreshToken)
         Keychain.set(Self.iso8601Formatter.string(from: tokens.expiresAt), forKey: KeychainKey.spotifyExpiresAt)
+        if let scope = tokens.scope {
+            Keychain.set(scope, forKey: KeychainKey.spotifyScope)
+        } else {
+            Keychain.remove(KeychainKey.spotifyScope)
+        }
         self.tokens = tokens
     }
 
@@ -391,7 +407,8 @@ final class SpotifyAuthCoordinator: NSObject {
               let expiresAt = iso8601Formatter.date(from: expiresAtString) else {
             return nil
         }
-        return SpotifyTokens(accessToken: access, refreshToken: refresh, expiresAt: expiresAt)
+        let scope = Keychain.get(KeychainKey.spotifyScope)
+        return SpotifyTokens(accessToken: access, refreshToken: refresh, expiresAt: expiresAt, scope: scope)
     }
 
     private static let iso8601Formatter: ISO8601DateFormatter = {

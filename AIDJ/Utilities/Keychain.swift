@@ -56,4 +56,8 @@ enum KeychainKey {
     /// ISO-8601 timestamp of access-token expiration. Stored as a string for
     /// simplicity — the Keychain wrapper is generic-password-only.
     static let spotifyExpiresAt = "spotify.expiresAt"
+    /// Space-separated scope string returned in the token exchange. Logged on
+    /// app launch so we can diagnose 403s that are actually missing-scope
+    /// issues without forcing the user to reconnect.
+    static let spotifyScope = "spotify.scope"
 }
