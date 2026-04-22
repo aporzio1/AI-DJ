@@ -90,6 +90,11 @@ final class SpotifyAuthCoordinator: NSObject {
 
     private(set) var tokens: SpotifyTokens?
     private let anchorBox = AnchorBox()
+    /// Retained reference to the in-flight ASWebAuthenticationSession. Without
+    /// this the session is only held by the `withCheckedThrowingContinuation`
+    /// closure's locals; if ARC releases it early under strict Swift 6
+    /// semantics, the session tears down before the callback fires.
+    private var activeSession: ASWebAuthenticationSession?
 
     var isAuthenticated: Bool { tokens != nil }
 
@@ -117,20 +122,24 @@ final class SpotifyAuthCoordinator: NSObject {
     /// for the callback, and exchanges the returned auth code for tokens.
     /// Persists to Keychain on success.
     func beginAuthFlow() async throws -> SpotifyTokens {
+        Log.spotify.info("beginAuthFlow: start")
         let pkce = Self.generatePKCEPair()
         let state = Self.randomState()
         let authURL = try buildAuthorizeURL(pkce: pkce, state: state)
+        Log.spotify.info("beginAuthFlow: authURL built, capturing anchor")
 
         // Capture the current key window now, on MainActor — the callback
         // that reads it back (`presentationAnchor(for:)`) is nonisolated.
         anchorBox.set(Self.currentAnchor())
         defer { anchorBox.set(nil) }
+        Log.spotify.info("beginAuthFlow: anchor captured, starting session")
 
         let callback = try await withCheckedThrowingContinuation { (cont: CheckedContinuation<URL, Error>) in
             let session = ASWebAuthenticationSession(
                 url: authURL,
                 callbackURLScheme: Self.callbackScheme(from: redirectURI)
             ) { url, error in
+                Log.spotify.info("beginAuthFlow: session completion fired (hasURL=\(url != nil), hasError=\(error != nil))")
                 if let nsError = error as NSError?,
                    nsError.domain == ASWebAuthenticationSessionErrorDomain,
                    nsError.code == ASWebAuthenticationSessionError.canceledLogin.rawValue {
@@ -145,15 +154,29 @@ final class SpotifyAuthCoordinator: NSObject {
             }
             session.presentationContextProvider = self
             session.prefersEphemeralWebBrowserSession = false
-            session.start()
+            activeSession = session
+            Log.spotify.info("beginAuthFlow: calling session.start()")
+            let started = session.start()
+            Log.spotify.info("beginAuthFlow: session.start() returned \(started)")
         }
+        Log.spotify.info("beginAuthFlow: continuation resumed, parsing callback")
 
+        activeSession = nil
         let params = Self.queryItems(from: callback)
-        guard params["state"] == state else { throw SpotifyAuthError.stateMismatch }
-        guard let code = params["code"] else { throw SpotifyAuthError.missingCode }
+        guard params["state"] == state else {
+            Log.spotify.error("beginAuthFlow: state mismatch")
+            throw SpotifyAuthError.stateMismatch
+        }
+        guard let code = params["code"] else {
+            Log.spotify.error("beginAuthFlow: missing code in callback")
+            throw SpotifyAuthError.missingCode
+        }
+        Log.spotify.info("beginAuthFlow: got auth code, exchanging for tokens")
 
         let newTokens = try await exchangeCode(code, verifier: pkce.verifier)
+        Log.spotify.info("beginAuthFlow: tokens received, persisting")
         persist(newTokens)
+        Log.spotify.info("beginAuthFlow: done")
         return newTokens
     }
 
