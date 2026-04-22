@@ -158,7 +158,32 @@ actor SpotifyAPIClient {
             query: [
                 URLQueryItem(name: "limit", value: String(limit)),
                 URLQueryItem(name: "offset", value: String(offset)),
+                // Some Spotify regions/accounts require `market` even when
+                // optional in docs. Passing `from_token` lets Spotify use the
+                // token's associated country without us having to plumb it.
+                URLQueryItem(name: "market", value: "from_token"),
             ],
+            as: SpotifyPage<SpotifyPlaylistItem>.self
+        )
+    }
+
+    /// Fetches playlist metadata only (no tracks subresource). Used as a
+    /// diagnostic — if `/playlists/{id}` succeeds but `/playlists/{id}/tracks`
+    /// 403s, Spotify is specifically restricting the tracks endpoint.
+    func playlistMetadata(id: String) async throws -> SpotifyPlaylist {
+        try await request(
+            path: "playlists/\(id)",
+            as: SpotifyPlaylist.self
+        )
+    }
+
+    /// Fetches the authenticated user's saved tracks. Used as a diagnostic —
+    /// if this works, we know basic Web API access is fine and the 403 is
+    /// endpoint-specific.
+    func savedTracks(limit: Int = 5) async throws -> SpotifyPage<SpotifyPlaylistItem> {
+        try await request(
+            path: "me/tracks",
+            query: [URLQueryItem(name: "limit", value: String(limit))],
             as: SpotifyPage<SpotifyPlaylistItem>.self
         )
     }
@@ -246,29 +271,12 @@ actor SpotifyAPIClient {
         guard (200..<300).contains(status) else {
             let body = String(data: data, encoding: .utf8) ?? "<unreadable>"
             Log.spotify.error("HTTP \(status) response: \(body, privacy: .public)")
-            // Fire-and-forget diagnostic: when Spotify returns 403 we want to
-            // know which user the token actually resolves to server-side.
-            // Mismatch between the dashboard's "Users and Access" entry and
-            // the token's user_id is the usual cause of opaque 403s on
-            // user-owned playlists under Development Mode.
-            if status == 403 {
-                Task { [weak self] in await self?.logAuthenticatedUser() }
-            }
             throw SpotifyAPIError.httpError(status: status, body: body)
         }
         do {
             return try JSONDecoder().decode(type, from: data)
         } catch {
             throw SpotifyAPIError.malformedResponse
-        }
-    }
-
-    private func logAuthenticatedUser() async {
-        do {
-            let me = try await self.me()
-            Log.spotify.info("diagnostic /me: id=\(me.id, privacy: .public) email=\(me.email ?? "<nil>", privacy: .public)")
-        } catch {
-            Log.spotify.error("diagnostic /me failed: \(String(describing: error), privacy: .public)")
         }
     }
 }

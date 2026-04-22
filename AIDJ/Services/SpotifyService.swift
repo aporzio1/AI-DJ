@@ -200,13 +200,47 @@ final class SpotifyService: NSObject, MusicProviderService {
             return []
         }
         Log.spotify.info("songs(inPlaylistWith: \(id, privacy: .public)): fetching /playlists/{id}/tracks")
-        let page = try await api.tracks(inPlaylist: id)
-        let tracks = page.items.compactMap { item -> Track? in
-            guard let s = item.track else { return nil }
-            return cacheAndMap(s)
+        do {
+            let page = try await api.tracks(inPlaylist: id)
+            let tracks = page.items.compactMap { item -> Track? in
+                guard let s = item.track else { return nil }
+                return cacheAndMap(s)
+            }
+            Log.spotify.info("songs(inPlaylistWith:): page.items=\(page.items.count) mapped tracks=\(tracks.count)")
+            return tracks
+        } catch {
+            // Diagnostic on failure: probe adjacent endpoints so we know
+            // whether the 403 is specific to /playlists/{id}/tracks or a
+            // broader access issue.
+            await runAccessDiagnostics(failingPlaylistID: id)
+            throw error
         }
-        Log.spotify.info("songs(inPlaylistWith:): page.items=\(page.items.count) mapped tracks=\(tracks.count)")
-        return tracks
+    }
+
+    /// Runs a sequence of low-cost API probes after a playlist-tracks
+    /// failure so we can see in the log which endpoints work vs which
+    /// are restricted. Result interpretation in the log:
+    /// - /me OK + /me/tracks OK + /playlists/{id} OK + tracks 403 →
+    ///   Spotify is restricting the tracks subresource specifically
+    ///   (likely Extended Quota requirement beyond docs).
+    /// - /me OK + /me/tracks 403 → broader Web API Dev Mode clamp-down.
+    /// - /playlists/{id} 403 → we can't read the playlist at all.
+    private func runAccessDiagnostics(failingPlaylistID id: String) async {
+        Log.spotify.info("=== Spotify access diagnostic (after 403 on /playlists/\(id, privacy: .public)/tracks) ===")
+        await probe("GET /me") { try await self.api.me() }
+        await probe("GET /me/tracks") { try await self.api.savedTracks() }
+        await probe("GET /playlists/\(id)") { try await self.api.playlistMetadata(id: id) }
+        await probe("GET /search?q=ok") { try await self.api.searchTracks(query: "ok", limit: 1) }
+        Log.spotify.info("=== end Spotify access diagnostic ===")
+    }
+
+    private func probe(_ label: String, _ body: @Sendable () async throws -> some Sendable) async {
+        do {
+            _ = try await body()
+            Log.spotify.info("probe [\(label, privacy: .public)]: OK")
+        } catch {
+            Log.spotify.error("probe [\(label, privacy: .public)]: \(String(describing: error), privacy: .public)")
+        }
     }
 
     func songs(inAlbumWith id: String) async throws -> [Track] {
