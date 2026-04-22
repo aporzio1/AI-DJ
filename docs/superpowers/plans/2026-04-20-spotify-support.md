@@ -275,3 +275,97 @@ Spike first: WKWebView + Web Playback SDK + valid access token. Budget: 1 day.
 3. On-device only vs token-swap server.
 4. macOS Spotify: do Phase 4 or defer with UI message?
 5. Update CLAUDE.md Build section re: simulator unusability?
+
+## 12. Phase 2b Addendum — 2026-04-22 Reconciliation
+
+Written after Phase 2a closed (`3c968fc`, 2026-04-21) and 7 in-smoke fix commits. The §9 Phase 2b paragraph was drafted before any implementation; reality has moved. This addendum supersedes §9 Phase 2b for the actual commit block.
+
+### 12a. Revised Phase 2b commit split
+
+Lead-with. Each slice is independently commit-able with its own ship gate, mirroring the 2a split discipline. Andrew vs Claude indicates who holds the blocking work on that slice.
+
+| # | Title | Owner | Deps | Ship gate |
+|---|-------|-------|------|-----------|
+| 2b.1 | Spotify SDK package + Info.plist + LSApplicationQueriesSchemes (no wiring) | Andrew (dev portal) + Claude (project.yml, plist, `xcodegen generate`) | D6 resolved for macOS guard strategy | Green build both platforms; no behavior change; SDK symbols importable under `#if canImport(SpotifyiOS)` |
+| 2b.2 | `SpotifyPlayback` iOS helper — SPTSessionManager + SPTAppRemote lifecycle, no integration | Claude | 2b.1, Andrew confirms Premium + Spotify app installed on test iPhone | Physical-device smoke: helper connects, receives `playerStateDidChange`, logs track URI. No routing into `SpotifyService` yet. |
+| 2b.3 | Swap PKCE handshake to SPTSessionManager on iOS; macOS keeps NSWorkspace path | Claude | 2b.2 | iOS auth uses SDK; macOS unaffected; Keychain token shape unchanged; `SettingsView` Connect flow still works on both platforms |
+| 2b.4 | `SpotifyService` playback methods wired to SPTAppRemote (iOS) + Premium gate | Claude | 2b.2, 2b.3, D6 | Physical iPhone: tap Spotify playlist track, playback starts, pause/resume/seek/skip all route; non-Premium returns typed `premiumRequired` surfaced as alert |
+| 2b.5 | `AIDJApp` URL forwarding + foreground reconnect + position polling | Claude | 2b.4 | 30-second DJ-enabled listen on iPhone: DJ speaks between tracks, position advances, app backgrounded+foregrounded without stuck state |
+| 2b.6 (optional) | Cleanup: K15 unit tests for playbackGeneration+state ordering on Spotify path; K17 cycle investigation if smoke surfaces any hangs | Claude | 2b.5 | `xcodebuild test` green; no new AttributeGraph warnings in smoke log |
+
+Rationale for the split: 2b.1/2b.2 are pure plumbing with clean rollback; they land even if 2b.3+ slip. 2b.3 is the SPTSessionManager swap — isolates the "does SPTSessionManager avoid K16 on macOS" question from playback. 2b.4 is the first user-visible feature. 2b.5 handles the Phase 3 items the plan punted, but they're cheap once 2b.4 works and they catch the common failure modes (stuck state after app switch) that would otherwise block a clean smoke.
+
+### 12b. Scope deltas since 2026-04-20 plan
+
+These are the things that changed between plan-write and now. Read before starting 2b.1.
+
+1. **`SPTSessionManager` ships in 2b, not 2a.** Plan §9 Phase 2a said "PKCE via SPTSessionManager"; actually 2a shipped manual PKCE via `ASWebAuthenticationSession` (iOS) and `NSWorkspace.open` + `.onOpenURL` (macOS, K16 workaround). Token shape on both paths is identical to what `SPTSessionManager` produces (`accessToken`/`refreshToken`/`expiresAt`), so 2b.3 is a service-level swap — **do not touch `KeychainKey.spotify*`, `SpotifyTokens`, or `SpotifyAPIClient`'s refresh path**.
+2. **macOS auth is NSWorkspace + `.onOpenURL`, not ASWebAuthenticationSession.** `SPTSessionManager` is iOS-only per the SDK, so macOS can't use it at all. 2b.3 must not regress macOS — the existing path stays untouched, and the SPTSessionManager swap is `#if os(iOS)` only.
+3. **`MusicProviderRouter` already exists and registers Spotify.** Plan §4d listed it as "new"; it landed in Phase 1c (`3d09898`) and Spotify was registered in 2a.3 (`ac8a5ed`). 2b extends `SpotifyService` in place; it does not introduce a new service or touch the router.
+4. **`SpotifyService` playback methods throw `SpotifyServiceError.notSupportedYet`.** 2b.4 replaces these throws. **macOS must keep throwing** (plan D6 recommendation); use `#if os(iOS)` around the real implementations and keep a friendlier `macOSNotSupported` error branch for D4's sake.
+5. **iCloud sync already persists `browseProvider`.** 2a.4 (`8a1eeee`) wired it through `CloudSyncService`. 2b does not touch curated keys or sync.
+6. **K17 `AttributeGraph: cycle detected` is present.** Low severity but flagged: don't let 2b wire new bindings that write to `settings` from inside `.onOpenURL` handlers or `onChange` observers. Prefer routing through a coordinator method (e.g. `SpotifyService.handleAuthCallback(_:)` pattern from 2a).
+7. **K15 playback invariants now codified.** Any new transport method on `SpotifyService` must respect: (a) bump `playbackGeneration` + stop `audioGraph` for methods that end the current segment (skip/stop); (b) set `state = .playing` before entering `monitorTrackUntilEnd` on resume. Add a comment block at the top of any Spotify transport method listing which invariant applies.
+8. **`project.yml` already has `CFBundleURLTypes` for `aidj://`.** 2b.1 only needs to add `LSApplicationQueriesSchemes: [spotify]` and the SPM package entry — not the URL scheme again.
+9. **`handleAuthCallback(_:)` is on `MusicProviderService`, not macOS-guarded.** The protocol has it with a no-op default; `AIDJApp.onOpenURL` forwards unconditionally. No changes required in 2b — SPTSessionManager's iOS URL handling is independent of this path.
+
+### 12c. Andrew-owned prerequisites
+
+Enumerated crisply so nothing stalls mid-commit.
+
+| Prereq | Blocks | Notes |
+|--------|--------|-------|
+| Physical iPhone running iOS 26 with Spotify app installed + signed in | 2b.2, 2b.4, 2b.5 | Spotify SDK doesn't work in simulator (same posture as Apple Intelligence gate). Plan on one device-test session per slice after 2b.2. |
+| **Spotify Premium** on the test account | 2b.4 (verification), 2b.5 (smoke) | Non-Premium returns `playback_error` from SPTAppRemote; 2b.4 needs to both gate the UX and verify the gate works. If Andrew's account is non-Premium, 2b.4 can still ship the gate path but needs a second account to verify the happy-path playback. |
+| Spotify dev portal — confirm `aidj://spotify-callback` still registered on Client ID `6901b52a…` | 2b.1 | Already set for 2a.1; just eyeball that it's still there. |
+| Spotify dev portal — add iOS Bundle ID `com.andrewporzio.aidj` under App iOS SDK section | 2b.1 | SPTAppRemote refuses to connect if the bundle ID isn't registered. Required once, not per-build. |
+| LaunchServices URL handler decision — only if D6 resolves to "WKWebView spike now" | 2b.1 (macOS branch) | Not required if D6 defers macOS to Phase 4 (current recommendation). |
+| Test account sanity check — tracks playable in the Spotify app itself | 2b.4 | Region/device-limit issues on the Spotify account show up here first; cheaper to rule out before blaming SPTAppRemote. |
+
+### 12d. New open decisions (D6, D7) + re-surfaced
+
+- **D6 (new)** — macOS Spotify in Phase 2b.
+  - Options: (a) ship friendly "Spotify playback is iOS-only for now" alert — macOS `SpotifyService` playback methods continue to throw, Library picker still surfaces browse/search (2a capability); (b) attempt WKWebView + Web Playback SDK spike inside 2b. Plan has option (b) under Phase 4.
+  - Recommendation: **(a).** Keeps 2b small and uniformly iOS-focused; option (b) is a day-plus DRM/WebKit spike with an independent risk profile. D4's "defer until iOS phases land" still applies — 2b isn't "iOS done," it's "iOS SDK wired" — so push the WKWebView spike to a separate Phase 4 commit block after 2b smoke closes. The `SpotifyServiceError` enum should gain a `macOSNotSupported` case (or reuse `notSupportedYet` with a better copy path at the UI). Closes D4 implicitly if resolved (a).
+- **D7 (new)** — Polish commit scope.
+  - Question: should 2b absorb the K17 AttributeGraph cycle warnings + the Library unauth empty-state alignment (Backlog) + any other smoke-adjacent polish? Plan had "Phase 3 polish" as a separate block; 2a smoke already surfaced a handful of small things.
+  - Recommendation: **separate polish commit block after 2b.5** (call it 2c if macOS deferred, otherwise bundled into Phase 3). Don't pollute 2b's physical-device smoke with UI polish — keep 2b commits focused on SDK integration so regressions are attributable. Note: the original task brief mentioned `ITMediaItem` / MPMediaEntityProperty warnings "found in the Phase 1 smoke log"; grep finds no such identifiers in the repo, so either they're system-framework log noise (likely — those are MediaPlayer/iTunesLibrary log lines from inside Apple's frameworks, not ours) or they were in a log Andrew has locally. Flagged for Andrew to confirm; treating as "not our code" until evidence appears.
+- **D4 (re-surfaced)** — resolved by D6 above; move D4 to Locked if D6 resolves (a).
+
+### 12e. Watch-outs and risk flags
+
+- **SDK distribution.** Spotify's iOS SDK lists SPM as supported since 2023. Confirm during 2b.1 that the SPM URL (`https://github.com/spotify/ios-sdk` or the current package repo — verify) still resolves; fall back to `SpotifyiOS.xcframework` drop-in if SPM doesn't work on macOS 26 / Xcode 26. Budget an hour.
+- **`@preconcurrency import SpotifyiOS`** is almost certainly required. The SDK predates Swift 6 strict concurrency and its delegate protocols are Obj-C. Pattern matches FluidAudio (K2).
+- **Delegate callbacks.** `SPTAppRemoteDelegate` / `SPTSessionManagerDelegate` fire on the main queue per SDK docs, but verify — if they fire off-main, wrap in `Task { @MainActor in ... }` inside `SpotifyService` so `currentPlaybackTime` / `playbackStatus` reads stay main-isolated. Any discrepancy from the docs is a Feedback Assistant report.
+- **Entitlements.** No new entitlements expected (network client already there). `com.apple.security.network.client` covers both the Web API (2a) and SPTAppRemote's local socket (2b). If SPTAppRemote needs something extra, it'll surface in the 2b.2 smoke.
+- **`Info.plist` additions.** Only `LSApplicationQueriesSchemes: [spotify]` is new. Declare in `project.yml` under `targets.AIDJ.info.properties` so `xcodegen generate` doesn't strip it (K10 lesson).
+- **`project.yml` churn.** Adding the SPM package: mirror FluidAudio's entry shape. Re-run `xcodegen generate` after every package edit.
+- **K15 crossover.** When wiring `SpotifyService.skipToNext` / `.pause` / `.stop`, `PlaybackCoordinator` still owns `playbackGeneration` and `audioGraph.stop()` — 2b.4 doesn't need to bump them inside `SpotifyService`, but it does need to ensure coordinator's generation-bump path is exercised for Spotify tracks too. The router already dispatches, so a test in 2b.6 that asserts skip-over-DJ works for Spotify tracks (matching `688bbf8`'s fix for Apple Music) is worth the extra hour.
+- **K16 crossover.** SPTSessionManager wraps `ASWebAuthenticationSession` under the hood on iOS. iOS doesn't hit K16 (iOS was never crashing). Watching the smoke log on macOS during 2b.3 — if the NSWorkspace path regresses when `SpotifyService` gains SDK imports under `#if canImport(SpotifyiOS)`, that's a signal the conditional-compilation boundaries leaked.
+- **`PlayableItem.id` namespacing.** Phase 1a prefixes with `providerID`; 2b.4 just forwards SPTAppRemote's track URI as the Spotify `Track.id` (strip `spotify:track:` prefix or leave as-is — pick one at the service boundary and document in 2b.4).
+
+### 12f. Smoke test matrix
+
+Every slice from 2b.2 onward needs a physical-device pass before the next merges. Matrix here so 2b doesn't repeat the 2a experience of finding 7 bugs post-commit.
+
+| Scenario | 2b.2 | 2b.3 | 2b.4 | 2b.5 |
+|----------|------|------|------|------|
+| Clean sign-in from zero tokens | — | ✓ iPhone + Mac | — | — |
+| Re-auth after `signOut()` | — | ✓ iPhone + Mac | — | — |
+| Refresh token round-trip (expire, retry) | — | ✓ (mock clock) | — | — |
+| SPTAppRemote connects + receives `playerStateDidChange` | ✓ iPhone | — | ✓ iPhone | ✓ iPhone |
+| Play track from Spotify playlist with DJ disabled | — | — | ✓ iPhone | ✓ iPhone |
+| Play track with DJ enabled, DJ speaks between tracks | — | — | ✓ iPhone | ✓ iPhone |
+| Pause → resume (K15 rule #2) | — | — | ✓ iPhone | ✓ iPhone |
+| Mid-DJ skip (K15 rule #1) | — | — | ✓ iPhone | ✓ iPhone |
+| Non-Premium account → typed `premiumRequired` → alert | — | — | ✓ iPhone | — |
+| Spotify app force-quit mid-playback → error surfaced, not crash | — | — | — | ✓ iPhone |
+| App background → foreground → reconnect | — | — | — | ✓ iPhone |
+| macOS Spotify track tap → "iOS-only" alert (D6a) | — | ✓ Mac | ✓ Mac | ✓ Mac |
+| Apple Music playback unaffected (regression) | ✓ both | ✓ both | ✓ both | ✓ both |
+
+Smoke lessons encoded: K15 invariants get explicit rows (2a missed these); regression row for Apple Music is mandatory every slice because Phase 2a had zero Apple-Music regressions only because the refactor was audited carefully — an SDK integration could break it subtly (shared audio session category, for instance); macOS regression row catches K16 leakage.
+
+### 12g. Sequencing note
+
+2b.1 is unblocked today. 2b.2 gates on Andrew confirming Premium + Spotify app on the test iPhone (five-minute check). 2b.3 gates on 2b.2 being green. 2b.4 is the first slice that requires a full 30-minute listening test.
