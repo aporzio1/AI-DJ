@@ -226,6 +226,7 @@ struct SettingsView: View {
     private var djSection: some View {
         Section {
             Toggle("Enable DJ", isOn: $vm.djEnabled)
+                .onChange(of: vm.djEnabled) { _, _ in vm.save() }
 
             Picker("Frequency", selection: $vm.djFrequency) {
                 ForEach(DJFrequency.allCases) { freq in
@@ -588,6 +589,7 @@ struct SettingsView: View {
         Section {
             Toggle("Include News Headlines", isOn: $vm.newsEnabled)
                 .disabled(!vm.djEnabled)
+                .onChange(of: vm.newsEnabled) { _, _ in vm.save() }
 
             Picker("Frequency", selection: $vm.newsFrequency) {
                 ForEach(NewsFrequency.allCases) { freq in
