@@ -1,7 +1,9 @@
 # Implementation Plan — Spotify Support for AI DJ
 
+> **WITHDRAWN 2026-04-22 per K21.** No first-party iOS SDK path exists for a third-party App Store app to stream Spotify audio standalone. SPTAppRemote is IPC to the installed Spotify app (not a streaming SDK); Web Playback SDK is browser JS + EME DRM (unsupported in WKWebView on iOS); Spotify Connect Partner Program is hardware-OEM only; Spotify Developer Terms §III.2 prohibits streaming/proxying raw audio (djay lost Spotify in 2020 when the partnership was revoked). Spotify integration ripped out in commit `ca23170`. Document retained for historical context — the phased-refactor pattern (Phase 1a/1b/1c + `MusicProviderRouter`) shipped successfully and remains in the codebase; the rest is a cautionary record of ~2 working days spent before vendor-constraint research was run. See K21, K22 in `docs/project-tracker.md`.
+
 **Date:** 2026-04-20
-**Status:** Proposed
+**Status:** **Withdrawn 2026-04-22** (was: Proposed)
 **Author:** Andrew P (with Claude Code)
 **Supersedes:** "No Spotify" exclusion in `CLAUDE.md` and `docs/superpowers/specs/2026-04-17-ai-dj-design.md`
 
