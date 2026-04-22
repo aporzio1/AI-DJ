@@ -23,6 +23,13 @@ actor PlaybackCoordinator {
     private(set) var currentIndex: Int = 0
     private(set) var state: CoordinatorState = .idle
     private(set) var repeatMode: RepeatMode = .off
+    /// Localized description of the most recent track-playback failure.
+    /// Reset by `replaceQueue`. Surfaced to the caller (LibraryViewModel
+    /// via `invokePlay`) so silent per-track try/catch skips don't leave
+    /// the user staring at a UI that did nothing. Read once after
+    /// `play()` returns; if non-nil and the queue exhausted, the UI
+    /// shows it as a `playbackAlertMessage`.
+    private(set) var lastPlaybackError: String?
     /// True when MusicKit is playing open-ended content (a station) that
     /// doesn't fit our [PlayableItem] queue model. Transport still works
     /// via ApplicationMusicPlayer directly; NowPlayingViewModel falls
@@ -70,6 +77,7 @@ actor PlaybackCoordinator {
         currentIndex = 0
         state = .idle
         externalPlaybackActive = false
+        lastPlaybackError = nil
     }
 
     /// Start a station via MusicKit, bypassing our track queue entirely.
@@ -269,10 +277,13 @@ actor PlaybackCoordinator {
             do {
                 try await playTrack(track)
             } catch {
-                // MusicKit can fail for a specific track (unavailable in region,
-                // removed from catalog, network blip, etc.). Don't stall the queue —
-                // log and move to the next item.
+                // MusicKit or SPTAppRemote can fail per-track (unavailable
+                // in region, removed from catalog, Spotify app not running,
+                // etc.). Don't stall the queue — log the specific error so
+                // the VM can surface it after play() returns, then try the
+                // next track.
                 Log.coordinator.error("playTrack failed for '\(track.title, privacy: .public)': \(error, privacy: .public) — skipping")
+                lastPlaybackError = error.localizedDescription
                 await advance()
             }
         case .djSegment(let segment):

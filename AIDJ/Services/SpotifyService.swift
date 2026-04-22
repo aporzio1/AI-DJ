@@ -12,6 +12,24 @@ enum SpotifyServiceError: Error, Equatable {
     case notAuthenticated
     case appRemoteUnavailable
     case playbackFailed(String)
+    case spotifyAppNotRunning
+}
+
+extension SpotifyServiceError: LocalizedError {
+    var errorDescription: String? {
+        switch self {
+        case .notSupportedYet:
+            return "Spotify playback isn't wired up on this platform yet."
+        case .notAuthenticated:
+            return "Connect your Spotify account in Settings → Music Services."
+        case .appRemoteUnavailable:
+            return "Couldn't reach the Spotify app. Make sure it's installed and open on your iPhone."
+        case .playbackFailed(let message):
+            return "Spotify playback failed: \(message)"
+        case .spotifyAppNotRunning:
+            return "Open the Spotify app on your iPhone, start any song there, then come back to AIDJ and try again."
+        }
+    }
 }
 
 /// `MusicProviderService` implementation backed by the Spotify Web API for
@@ -382,7 +400,19 @@ extension SpotifyService: SPTAppRemoteDelegate {
         let message = error?.localizedDescription ?? "unknown error"
         Task { @MainActor in
             Log.spotify.error("SPTAppRemote connection attempt failed: \(message, privacy: .public)")
-            let failure: Error = error ?? SpotifyServiceError.appRemoteUnavailable
+            // Connection refused on the local IPC socket (com.spotify.app-remote
+            // transport error with POSIX 61) means the Spotify app isn't
+            // running. Rewrite the opaque SDK error into a user-actionable
+            // one so LibraryViewModel can surface a clear "open Spotify"
+            // message instead of a cryptic "stream error."
+            let underlying = error as NSError?
+            let posix = (underlying?.userInfo[NSUnderlyingErrorKey] as? NSError)?
+                .userInfo[NSUnderlyingErrorKey] as? NSError
+            let isRefused = underlying?.domain == "com.spotify.app-remote.transport"
+                || posix?.domain == NSPOSIXErrorDomain && posix?.code == 61
+            let failure: Error = isRefused
+                ? SpotifyServiceError.spotifyAppNotRunning
+                : (error ?? SpotifyServiceError.appRemoteUnavailable)
             connectionContinuation?.resume(throwing: failure)
             connectionContinuation = nil
         }
