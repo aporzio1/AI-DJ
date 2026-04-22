@@ -34,11 +34,28 @@ struct SpotifyPlaylistOwner: Decodable, Sendable, Equatable {
     let id: String
 }
 
+/// Simplified playlist object returned by `/me/playlists` (list responses).
+/// The `tracks` field in the list response is just `{ href, total }` — a
+/// reference, not the tracks themselves. Use `SpotifyPlaylistDetail` when
+/// fetching a single playlist to get the embedded tracks page.
 struct SpotifyPlaylist: Decodable, Sendable, Equatable {
     let id: String
     let name: String
     let images: [SpotifyImage]?
     let owner: SpotifyPlaylistOwner?
+}
+
+/// Full playlist object returned by `GET /playlists/{id}`. Includes the
+/// embedded first page of tracks (`tracks.items`). Used as a workaround
+/// for the Nov-2024 Spotify restriction that 403s the dedicated
+/// `GET /playlists/{id}/tracks` endpoint for Dev Mode apps — the full
+/// playlist endpoint stays accessible and carries the same track data.
+struct SpotifyPlaylistDetail: Decodable, Sendable {
+    let id: String
+    let name: String
+    let images: [SpotifyImage]?
+    let owner: SpotifyPlaylistOwner?
+    let tracks: SpotifyPage<SpotifyPlaylistItem>
 }
 
 struct SpotifyArtist: Decodable, Sendable, Equatable {
@@ -167,9 +184,20 @@ actor SpotifyAPIClient {
         )
     }
 
-    /// Fetches playlist metadata only (no tracks subresource). Used as a
-    /// diagnostic — if `/playlists/{id}` succeeds but `/playlists/{id}/tracks`
-    /// 403s, Spotify is specifically restricting the tracks endpoint.
+    /// Fetches the full playlist — id, name, owner, artwork, AND the first
+    /// page of tracks embedded in `tracks.items`. Preferred over
+    /// `tracks(inPlaylist:)` because Spotify's Nov-2024 Dev Mode enforcement
+    /// 403s the dedicated `/playlists/{id}/tracks` endpoint while leaving
+    /// this one open.
+    func playlistDetail(id: String) async throws -> SpotifyPlaylistDetail {
+        try await request(
+            path: "playlists/\(id)",
+            query: [URLQueryItem(name: "market", value: "from_token")],
+            as: SpotifyPlaylistDetail.self
+        )
+    }
+
+    /// Fetches playlist metadata only. Lightweight probe used in diagnostics.
     func playlistMetadata(id: String) async throws -> SpotifyPlaylist {
         try await request(
             path: "playlists/\(id)",

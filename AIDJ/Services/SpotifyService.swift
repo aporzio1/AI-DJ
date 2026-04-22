@@ -199,18 +199,22 @@ final class SpotifyService: NSObject, MusicProviderService {
             Log.spotify.info("songs(inPlaylistWith: \(id, privacy: .public)): no tokens, returning []")
             return []
         }
-        Log.spotify.info("songs(inPlaylistWith: \(id, privacy: .public)): fetching /playlists/{id}/tracks")
+        // Prefer /playlists/{id} over /playlists/{id}/tracks — the latter
+        // 403s under Spotify's Nov-2024 Dev Mode enforcement, while the
+        // former returns the same data with playlist metadata attached.
+        // Verified via the access diagnostic matrix in Andrew's smoke.
+        Log.spotify.info("songs(inPlaylistWith: \(id, privacy: .public)): fetching /playlists/{id}")
         do {
-            let page = try await api.tracks(inPlaylist: id)
-            let tracks = page.items.compactMap { item -> Track? in
+            let detail = try await api.playlistDetail(id: id)
+            let tracks = detail.tracks.items.compactMap { item -> Track? in
                 guard let s = item.track else { return nil }
                 return cacheAndMap(s)
             }
-            Log.spotify.info("songs(inPlaylistWith:): page.items=\(page.items.count) mapped tracks=\(tracks.count)")
+            Log.spotify.info("songs(inPlaylistWith:): tracks.items=\(detail.tracks.items.count) tracks.total=\(detail.tracks.total) mapped tracks=\(tracks.count)")
             return tracks
         } catch {
             // Diagnostic on failure: probe adjacent endpoints so we know
-            // whether the 403 is specific to /playlists/{id}/tracks or a
+            // whether the 403 is specific to the playlists endpoint or a
             // broader access issue.
             await runAccessDiagnostics(failingPlaylistID: id)
             throw error
