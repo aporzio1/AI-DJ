@@ -1,20 +1,25 @@
 import Foundation
+#if os(iOS)
+@preconcurrency import SpotifyiOS
+#endif
 
 /// Errors surfaced from the Spotify service at the protocol boundary. Phase 2a
-/// ships read-only — every playback-control method on `MusicProviderService`
-/// throws `.notSupportedYet`. Phase 2b wires SPTAppRemote playback and
-/// replaces these throws with real implementations.
+/// shipped read-only; Phase 2b wires playback on iOS via SPTAppRemote. macOS
+/// playback throws `.notSupportedYet` and surfaces a friendly iOS-only message
+/// via the LibraryViewModel gate (D6-locked).
 enum SpotifyServiceError: Error, Equatable {
     case notSupportedYet
     case notAuthenticated
+    case appRemoteUnavailable
+    case playbackFailed(String)
 }
 
-/// `MusicProviderService` implementation backed by the Spotify Web API. Read
-/// paths (playlists, playlist tracks, search) work in Phase 2a; playback
-/// paths (start/pause/resume/stop/seek/skip/startStation) deliberately throw
-/// `SpotifyServiceError.notSupportedYet` until Phase 2b adds the iOS SDK.
+/// `MusicProviderService` implementation backed by the Spotify Web API for
+/// browsing and `SPTAppRemote` for playback on iOS. macOS conforms for the
+/// compile-time abstraction but every playback method throws — D6 ships the
+/// "Spotify is iOS-only for now" message until the WKWebView spike under D4.
 @MainActor
-final class SpotifyService: MusicProviderService {
+final class SpotifyService: NSObject, MusicProviderService {
 
     let providerID: AIDJ.Track.MusicProviderID = .spotify
 
@@ -22,9 +27,30 @@ final class SpotifyService: MusicProviderService {
     private let api: SpotifyAPIClient
     private var artworkCache: [String: URL] = [:]
 
+#if os(iOS)
+    /// SPTAppRemote talks to the Spotify app over an app-to-app RPC channel.
+    /// Lazy so we don't construct it until the first playback attempt — Phase
+    /// 2a users who never tap play on a Spotify track never pay the init cost.
+    private lazy var appRemote: SPTAppRemote = {
+        let config = SPTConfiguration(
+            clientID: SpotifyAuth.clientID,
+            redirectURL: URL(string: SpotifyAuth.redirectURI)!
+        )
+        let remote = SPTAppRemote(configuration: config, logLevel: .debug)
+        remote.delegate = self
+        return remote
+    }()
+
+    /// Continuation resumed by SPTAppRemoteDelegate when the in-flight
+    /// `appRemote.connect()` completes. nil when no connection attempt is in
+    /// flight.
+    private var connectionContinuation: CheckedContinuation<Void, Error>?
+#endif
+
     init(auth: SpotifyAuthCoordinator, api: SpotifyAPIClient) {
         self.auth = auth
         self.api = api
+        super.init()
     }
 
     // MARK: - Auth
@@ -48,6 +74,11 @@ final class SpotifyService: MusicProviderService {
     func signOut() async {
         auth.signOut()
         artworkCache.removeAll()
+#if os(iOS)
+        if appRemote.isConnected {
+            appRemote.disconnect()
+        }
+#endif
     }
 
 #if os(macOS)
@@ -77,15 +108,64 @@ final class SpotifyService: MusicProviderService {
         }
     }
 
-    // MARK: - Playback (Phase 2a throws; Phase 2b fills in)
+    // MARK: - Playback
 
-    func start(track: Track) async throws { throw SpotifyServiceError.notSupportedYet }
-    func pause() async throws { throw SpotifyServiceError.notSupportedYet }
-    func resume() async throws { throw SpotifyServiceError.notSupportedYet }
-    func stop() async throws { throw SpotifyServiceError.notSupportedYet }
-    func seek(to time: TimeInterval) async throws { throw SpotifyServiceError.notSupportedYet }
-    func skipToNext() async throws { throw SpotifyServiceError.notSupportedYet }
-    func startStation(id: String) async throws { throw SpotifyServiceError.notSupportedYet }
+    func start(track: Track) async throws {
+#if os(iOS)
+        try await iosStart(track: track)
+#else
+        throw SpotifyServiceError.notSupportedYet
+#endif
+    }
+
+    func pause() async throws {
+#if os(iOS)
+        try await iosInvokePlayerAPI { api, cont in api.pause { _, error in SpotifyService.finish(cont, error: error) } }
+#else
+        throw SpotifyServiceError.notSupportedYet
+#endif
+    }
+
+    func resume() async throws {
+#if os(iOS)
+        try await iosInvokePlayerAPI { api, cont in api.resume { _, error in SpotifyService.finish(cont, error: error) } }
+#else
+        throw SpotifyServiceError.notSupportedYet
+#endif
+    }
+
+    func stop() async throws {
+        // SPTAppRemote has no dedicated "stop" — pause is the closest match.
+        // The coordinator uses stop() mostly at queue-replace time to
+        // silence whatever was playing; pausing satisfies that contract.
+        try await pause()
+    }
+
+    func seek(to time: TimeInterval) async throws {
+#if os(iOS)
+        // SPTAppRemote's seek takes milliseconds.
+        let ms = Int(time * 1000)
+        try await iosInvokePlayerAPI { api, cont in
+            api.seek(toPosition: ms) { _, error in SpotifyService.finish(cont, error: error) }
+        }
+#else
+        throw SpotifyServiceError.notSupportedYet
+#endif
+    }
+
+    func skipToNext() async throws {
+#if os(iOS)
+        try await iosInvokePlayerAPI { api, cont in api.skip(toNext: { _, error in SpotifyService.finish(cont, error: error) }) }
+#else
+        throw SpotifyServiceError.notSupportedYet
+#endif
+    }
+
+    func startStation(id: String) async throws {
+        // Stations are an Apple Music concept; Spotify's equivalent is radio
+        // URIs, wired in a later phase if demand surfaces.
+        throw SpotifyServiceError.notSupportedYet
+    }
 
     var currentPlaybackTime: TimeInterval { 0 }
     var currentTrackDuration: TimeInterval? { nil }
@@ -114,9 +194,9 @@ final class SpotifyService: MusicProviderService {
     }
 
     func songs(inAlbumWith id: String) async throws -> [Track] {
-        // Spotify exposes /albums/{id}/tracks — not wired yet in 2a because
-        // the Library Spotify tab only surfaces playlists for the MVP.
-        // Revisit once the library UX has an "Albums" row for Spotify.
+        // Spotify exposes /albums/{id}/tracks — not wired yet because the
+        // Library Spotify tab only surfaces playlists for the MVP. Revisit
+        // once the library UX has an "Albums" row for Spotify.
         []
     }
 
@@ -130,7 +210,10 @@ final class SpotifyService: MusicProviderService {
     func recommendations() async throws -> [LibraryItem] { [] }
 
     func isPlayable(trackId: String) async -> Bool {
-        // Phase 2a has no playback. 2b will verify against SPTAppRemote state.
+        // 2b.2 ships playback methods; isPlayable real impl + Producer
+        // integration are 2b.5. Keep returning false so the DJ flow doesn't
+        // proactively queue Spotify tracks yet — user-initiated Spotify play
+        // (via the Library picker) doesn't check isPlayable, so it still works.
         false
     }
 
@@ -154,3 +237,104 @@ final class SpotifyService: MusicProviderService {
         )
     }
 }
+
+// MARK: - SPTAppRemote integration (iOS)
+
+#if os(iOS)
+extension SpotifyService: SPTAppRemoteDelegate {
+
+    fileprivate func iosStart(track: Track) async throws {
+        try await ensureAppRemoteConnected()
+        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
+            guard let playerAPI = appRemote.playerAPI else {
+                cont.resume(throwing: SpotifyServiceError.appRemoteUnavailable)
+                return
+            }
+            Log.spotify.info("start(track: '\(track.title, privacy: .public)') via SPTAppRemote")
+            playerAPI.play("spotify:track:\(track.id)") { _, error in
+                SpotifyService.finish(cont, error: error)
+            }
+        }
+    }
+
+    fileprivate func iosInvokePlayerAPI(
+        _ body: (SPTAppRemotePlayerAPI, CheckedContinuation<Void, Error>) -> Void
+    ) async throws {
+        try await ensureAppRemoteConnected()
+        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
+            guard let playerAPI = appRemote.playerAPI else {
+                cont.resume(throwing: SpotifyServiceError.appRemoteUnavailable)
+                return
+            }
+            body(playerAPI, cont)
+        }
+    }
+
+    fileprivate static func finish(_ cont: CheckedContinuation<Void, Error>, error: Error?) {
+        if let error {
+            cont.resume(throwing: SpotifyServiceError.playbackFailed(error.localizedDescription))
+        } else {
+            cont.resume()
+        }
+    }
+
+    /// Ensures SPTAppRemote is connected to the Spotify app. Reads the current
+    /// access token from `SpotifyAuthCoordinator` and kicks off a connect if
+    /// needed, awaiting the delegate callback via a stored continuation.
+    /// Concurrent callers queue on the same continuation pattern — only one
+    /// connect can be in flight at a time.
+    fileprivate func ensureAppRemoteConnected() async throws {
+        guard let token = auth.tokens?.accessToken else {
+            throw SpotifyServiceError.notAuthenticated
+        }
+        appRemote.connectionParameters.accessToken = token
+
+        if appRemote.isConnected {
+            return
+        }
+
+        if connectionContinuation != nil {
+            // Another call is already connecting; fail fast rather than stack
+            // continuations. Callers can retry.
+            throw SpotifyServiceError.appRemoteUnavailable
+        }
+
+        Log.spotify.info("ensureAppRemoteConnected: calling appRemote.connect()")
+        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
+            connectionContinuation = cont
+            appRemote.connect()
+        }
+    }
+
+    // MARK: SPTAppRemoteDelegate
+
+    nonisolated func appRemoteDidEstablishConnection(_ appRemote: SPTAppRemote) {
+        Task { @MainActor in
+            Log.spotify.info("SPTAppRemote connected")
+            connectionContinuation?.resume()
+            connectionContinuation = nil
+        }
+    }
+
+    nonisolated func appRemote(_ appRemote: SPTAppRemote, didFailConnectionAttemptWithError error: Error?) {
+        let message = error?.localizedDescription ?? "unknown error"
+        Task { @MainActor in
+            Log.spotify.error("SPTAppRemote connection attempt failed: \(message, privacy: .public)")
+            let failure: Error = error ?? SpotifyServiceError.appRemoteUnavailable
+            connectionContinuation?.resume(throwing: failure)
+            connectionContinuation = nil
+        }
+    }
+
+    nonisolated func appRemote(_ appRemote: SPTAppRemote, didDisconnectWithError error: Error?) {
+        let message = error?.localizedDescription ?? "(no error)"
+        Task { @MainActor in
+            Log.spotify.info("SPTAppRemote disconnected: \(message, privacy: .public)")
+            // If a connect was in flight, fail it so the caller sees the
+            // disconnection rather than hanging.
+            connectionContinuation?.resume(throwing: SpotifyServiceError.appRemoteUnavailable)
+            connectionContinuation = nil
+        }
+    }
+}
+#endif

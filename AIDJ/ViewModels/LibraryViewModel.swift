@@ -69,16 +69,21 @@ final class LibraryViewModel {
 
     func clearPlaybackAlert() { playbackAlertMessage = nil }
 
-    /// Phase 2a ships Spotify read-only — playback lands in 2b. When the
-    /// active provider is Spotify, any play attempt sets a user-visible
-    /// message explaining the gate instead of silently hitting the
-    /// coordinator's `notSupportedYet` throw.
+    /// Gates play attempts when the active provider can't actually play on
+    /// the current platform. Phase 2b.2 wires iOS SPTAppRemote playback, so
+    /// iOS builds pass through and the coordinator handles the rest. macOS
+    /// keeps the D6-locked "Spotify is iOS-only for now" message until the
+    /// WKWebView spike lands (Phase 4 or D4 resolution).
     private func guardPlaybackSupported() -> Bool {
+#if os(iOS)
+        return true
+#else
         if activeProvider == .spotify {
-            playbackAlertMessage = "Spotify playback lands in Phase 2b. Browsing, search, and sign-in work now — playback needs the iOS SDK on a physical device."
+            playbackAlertMessage = "Spotify playback is iOS-only for now. This build can browse Spotify but can't play it — open the app on your iPhone to listen."
             return false
         }
         return true
+#endif
     }
 
     func loadPlaylists() async {
