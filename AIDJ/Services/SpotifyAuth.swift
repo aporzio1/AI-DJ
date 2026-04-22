@@ -186,12 +186,35 @@ final class SpotifyAuthCoordinator: NSObject {
     @MainActor
     private static func currentAnchor() -> ASPresentationAnchor {
 #if os(iOS)
-        return UIApplication.shared.connectedScenes
+        let window = UIApplication.shared.connectedScenes
             .compactMap { $0 as? UIWindowScene }
             .flatMap { $0.windows }
-            .first(where: { $0.isKeyWindow }) ?? ASPresentationAnchor()
+            .first(where: { $0.isKeyWindow })
+        if let window {
+            Log.spotify.info("currentAnchor: captured UIWindow (key)")
+            return window
+        }
+        Log.spotify.error("currentAnchor: no key UIWindow — falling back to empty anchor; auth may fail")
+        return ASPresentationAnchor()
 #elseif os(macOS)
-        return NSApp.keyWindow ?? NSApp.mainWindow ?? ASPresentationAnchor()
+        if let window = NSApp.keyWindow {
+            Log.spotify.info("currentAnchor: captured NSApp.keyWindow '\(window.title, privacy: .public)'")
+            return window
+        }
+        if let window = NSApp.mainWindow {
+            Log.spotify.info("currentAnchor: captured NSApp.mainWindow '\(window.title, privacy: .public)' (no key window)")
+            return window
+        }
+        // Last-resort fallback: iterate visible windows and take the first
+        // on-screen one. Settings scenes on macOS 26 occasionally report
+        // nil for both keyWindow and mainWindow when presenting from a
+        // detached Settings window.
+        if let window = NSApp.windows.first(where: { $0.isVisible && $0.canBecomeMain }) {
+            Log.spotify.info("currentAnchor: captured first visible window '\(window.title, privacy: .public)' (scan fallback)")
+            return window
+        }
+        Log.spotify.error("currentAnchor: no NSWindow available — ASWebAuthenticationSession will reject an empty NSWindow() and ViewBridge will terminate")
+        return ASPresentationAnchor()
 #else
         return ASPresentationAnchor()
 #endif
