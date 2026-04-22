@@ -199,18 +199,18 @@ final class SpotifyService: NSObject, MusicProviderService {
             Log.spotify.info("songs(inPlaylistWith: \(id, privacy: .public)): no tokens, returning []")
             return []
         }
-        // Prefer /playlists/{id} over /playlists/{id}/tracks — the latter
-        // 403s under Spotify's Nov-2024 Dev Mode enforcement, while the
-        // former returns the same data with playlist metadata attached.
-        // Verified via the access diagnostic matrix in Andrew's smoke.
-        Log.spotify.info("songs(inPlaylistWith: \(id, privacy: .public)): fetching /playlists/{id}")
+        // Post Feb-2026 migration: /playlists/{id}/items is the canonical
+        // paginated endpoint, and each row exposes the track under `item`
+        // (was `track` pre-migration). SpotifyAPIClient.tracks(inPlaylist:)
+        // hits the right endpoint; SpotifyPlaylistItem.item is the new key.
+        Log.spotify.info("songs(inPlaylistWith: \(id, privacy: .public)): fetching /playlists/{id}/items")
         do {
-            let detail = try await api.playlistDetail(id: id)
-            let tracks: [Track] = detail.tracks.items.compactMap { item in
-                guard let s = item.track else { return nil }
+            let page = try await api.tracks(inPlaylist: id)
+            let tracks: [Track] = page.items.compactMap { row in
+                guard let s = row.item else { return nil }
                 return cacheAndMap(s)
             }
-            Log.spotify.info("songs(inPlaylistWith:): tracks.items=\(detail.tracks.items.count) tracks.total=\(detail.tracks.total) mapped tracks=\(tracks.count)")
+            Log.spotify.info("songs(inPlaylistWith:): page.items=\(page.items.count) total=\(page.total) mapped tracks=\(tracks.count)")
             return tracks
         } catch {
             // Diagnostic on failure: probe adjacent endpoints so we know

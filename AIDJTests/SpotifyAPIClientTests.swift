@@ -74,14 +74,18 @@ struct SpotifyAPIClientTests {
     }
 
     @Test func playlistTracksHandlesNilTrack() async throws {
-        let (client, _) = await Self.makeClient { _ in
+        // Feb-2026 Spotify Web API migration: per-row field renamed from
+        // `track` to `item`, and the endpoint path is now
+        // `/playlists/{id}/items` rather than `/tracks`.
+        let (client, _) = await Self.makeClient { request in
+            #expect(request.url?.path == "/v1/playlists/p1/items")
             let body = #"""
             {
               "items": [
-                { "track": { "id": "t1", "name": "Song", "artists": [{"id": "a1", "name": "Artist"}],
-                             "album": { "id": "al1", "name": "Album", "images": [] },
-                             "duration_ms": 210000 } },
-                { "track": null }
+                { "item": { "id": "t1", "name": "Song", "artists": [{"id": "a1", "name": "Artist"}],
+                            "album": { "id": "al1", "name": "Album", "images": [] },
+                            "duration_ms": 210000 } },
+                { "item": null }
               ],
               "limit": 100, "offset": 0, "total": 2, "next": null, "previous": null
             }
@@ -90,8 +94,8 @@ struct SpotifyAPIClientTests {
         }
         let page = try await client.tracks(inPlaylist: "p1")
         #expect(page.items.count == 2)
-        #expect(page.items[0].track?.id == "t1")
-        #expect(page.items[1].track == nil)
+        #expect(page.items[0].item?.id == "t1")
+        #expect(page.items[1].item == nil)
     }
 
     @Test func searchTracksDecodes() async throws {

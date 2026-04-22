@@ -79,16 +79,17 @@ struct SpotifyPlaylist: Decodable, Sendable, Equatable {
 }
 
 /// Full playlist object returned by `GET /playlists/{id}`. Includes the
-/// embedded first page of tracks (`tracks.items`). Used as a workaround
-/// for the Nov-2024 Spotify restriction that 403s the dedicated
-/// `GET /playlists/{id}/tracks` endpoint for Dev Mode apps — the full
-/// playlist endpoint stays accessible and carries the same track data.
+/// embedded first page of tracks at `items.items[*].item`.
+///
+/// Feb-2026 API migration: Spotify renamed the top-level `tracks` field
+/// on this object to `items`. Verified against Spotify Web API docs
+/// 2026-04-22.
 struct SpotifyPlaylistDetail: Decodable, Sendable {
     let id: String
     let name: String
     let images: [SpotifyImage]?
     let owner: SpotifyPlaylistOwner?
-    let tracks: SpotifyPage<SpotifyPlaylistItem>
+    let items: SpotifyPage<SpotifyPlaylistItem>
 }
 
 struct SpotifyArtist: Decodable, Sendable, Equatable {
@@ -120,23 +121,27 @@ struct SpotifyTrack: Decodable, Sendable, Equatable {
     }
 }
 
-/// Envelope returned by `/me/playlists/{id}/tracks`. Each entry is a track
-/// plus metadata; local files, removed tracks, and podcast episodes can
-/// produce shapes that don't match `SpotifyTrack`. Custom decoder ensures
-/// a single bad row doesn't take down the whole response.
+/// Envelope returned by `/playlists/{id}/items` (or embedded in the full
+/// playlist object). Each entry is a track plus metadata; local files,
+/// removed tracks, and podcast episodes can produce shapes that don't
+/// match `SpotifyTrack`, so a custom decoder skips unparseable rows.
+///
+/// Feb-2026 API migration: Spotify renamed the per-item `track` field to
+/// `item`. Apps that migrated before 2026-03-09 must use the new key.
+/// Verified against Spotify Web API docs 2026-04-22.
 struct SpotifyPlaylistItem: Decodable, Sendable, Equatable {
-    let track: SpotifyTrack?
+    let item: SpotifyTrack?
 
     enum CodingKeys: String, CodingKey {
-        case track
+        case item
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        // Try to decode the track; if it's a podcast episode or otherwise
-        // doesn't match the Track shape, keep the item with track = nil so
-        // compactMap at the service layer filters it out cleanly.
-        self.track = (try? container.decodeIfPresent(SpotifyTrack.self, forKey: .track)) ?? nil
+        // Try to decode the inner track; if it's a podcast episode or
+        // otherwise doesn't match the Track shape, keep the item with
+        // item = nil so compactMap at the service layer filters it out.
+        self.item = (try? container.decodeIfPresent(SpotifyTrack.self, forKey: .item)) ?? nil
     }
 }
 
@@ -161,12 +166,11 @@ extension SpotifyAPIError: LocalizedError {
         case .httpError(let status, _):
             switch status {
             case 403:
-                // Spotify's Development Mode + Nov-2024 algorithmic-content
-                // restrictions return 403 on playlists/{id}/tracks for
-                // Spotify-owned personalized playlists (Discover Weekly,
-                // Your Top Songs, Daily Mixes, Release Radar). User-owned
-                // playlists work fine.
-                return "Spotify blocked this one. Personalized playlists like Discover Weekly or Your Top Songs aren't accessible to third-party apps — try a playlist you created yourself."
+                // Most 403s in 2026+ mean (a) the playlist is Spotify-owned
+                // / algorithmic (Discover Weekly, Your Top Songs, etc. — we
+                // filter these at the service layer) or (b) an endpoint we
+                // haven't migrated to the Feb-2026 Web API shape yet.
+                return "Spotify blocked that request. If this was a playlist, it may be a Spotify-owned personalized playlist that third-party apps can't read — try one you created yourself."
             case 404:
                 return "Spotify couldn't find that playlist (maybe deleted or made private)."
             case 429:
@@ -220,9 +224,15 @@ actor SpotifyAPIClient {
         )
     }
 
+    /// Paginated fetch of tracks in a playlist.
+    ///
+    /// Feb-2026 API migration: Spotify renamed this endpoint from
+    /// `/playlists/{id}/tracks` to `/playlists/{id}/items`. Apps that
+    /// haven't migrated get 403s. Verified against Spotify Web API docs
+    /// 2026-04-22.
     func tracks(inPlaylist id: String, limit: Int = 100, offset: Int = 0) async throws -> SpotifyPage<SpotifyPlaylistItem> {
         try await request(
-            path: "playlists/\(id)/tracks",
+            path: "playlists/\(id)/items",
             query: [
                 URLQueryItem(name: "limit", value: String(limit)),
                 URLQueryItem(name: "offset", value: String(offset)),
@@ -236,10 +246,11 @@ actor SpotifyAPIClient {
     }
 
     /// Fetches the full playlist — id, name, owner, artwork, AND the first
-    /// page of tracks embedded in `tracks.items`. Preferred over
-    /// `tracks(inPlaylist:)` because Spotify's Nov-2024 Dev Mode enforcement
-    /// 403s the dedicated `/playlists/{id}/tracks` endpoint while leaving
-    /// this one open.
+    /// page of tracks embedded at `items.items[*].item`. Kept as a fallback
+    /// / metadata lookup; the primary tracks-fetch path uses the paginated
+    /// `tracks(inPlaylist:)` against `/playlists/{id}/items`.
+    ///
+    /// Verified against Spotify Web API docs 2026-04-22 (Feb-2026 migration).
     func playlistDetail(id: String) async throws -> SpotifyPlaylistDetail {
         try await request(
             path: "playlists/\(id)",
