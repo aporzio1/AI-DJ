@@ -61,13 +61,21 @@ final class LibraryViewModel {
         await loadRecommendations()
     }
 
+    /// Surfaced by LibraryView as a dismissible alert so the user sees
+    /// playback-gate messages even when the library has content to render.
+    /// Separate from `errorMessage` (which is reserved for fetch errors
+    /// displayed as a ContentUnavailableView when the list is empty).
+    private(set) var playbackAlertMessage: String?
+
+    func clearPlaybackAlert() { playbackAlertMessage = nil }
+
     /// Phase 2a ships Spotify read-only — playback lands in 2b. When the
     /// active provider is Spotify, any play attempt sets a user-visible
     /// message explaining the gate instead of silently hitting the
     /// coordinator's `notSupportedYet` throw.
     private func guardPlaybackSupported() -> Bool {
         if activeProvider == .spotify {
-            errorMessage = "Spotify playback is coming in Phase 2b. Browsing works now."
+            playbackAlertMessage = "Spotify playback lands in Phase 2b. Browsing, search, and sign-in work now — playback needs the iOS SDK on a physical device."
             return false
         }
         return true

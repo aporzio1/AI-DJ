@@ -58,6 +58,18 @@ struct LibraryView: View {
         .refreshable {
             await vm.refreshLibrarySections()
         }
+        .alert(
+            "Heads up",
+            isPresented: Binding(
+                get: { vm.playbackAlertMessage != nil },
+                set: { if !$0 { vm.clearPlaybackAlert() } }
+            ),
+            presenting: vm.playbackAlertMessage
+        ) { _ in
+            Button("OK", role: .cancel) { vm.clearPlaybackAlert() }
+        } message: { message in
+            Text(message)
+        }
     }
 
     // MARK: - Browse (no query)
