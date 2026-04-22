@@ -220,17 +220,17 @@ final class LibraryViewModel {
 
     /// Central play-kickoff that logs the attempt and surfaces errors to the
     /// UI via playbackAlertMessage instead of silently swallowing them. The
-    /// Phase 1 try? pattern masked real failures during Phase 2b smoke —
-    /// tapping play just did nothing with no user feedback.
+    /// earlier try? pattern masked real failures — tapping play just did
+    /// nothing with no user feedback when a track was unavailable.
     private func invokePlay() async {
         do {
             try await coordinator.play()
             Log.app.info("invokePlay: coordinator.play() returned")
             // play() returning does NOT mean playback started — the
             // coordinator might have silently exhausted the queue after
-            // every track failed (e.g. SPTAppRemote couldn't connect).
-            // Pick up the specific error the coordinator recorded and
-            // surface it so the user sees why nothing happened.
+            // every track failed (unplayable / removed from catalog /
+            // rights changed). Pick up the specific error the coordinator
+            // recorded and surface it so the user sees why nothing happened.
             if let lastError = await coordinator.lastPlaybackError,
                await coordinator.state == .idle {
                 Log.app.error("invokePlay: queue exhausted with error: \(lastError, privacy: .public)")

@@ -277,11 +277,10 @@ actor PlaybackCoordinator {
             do {
                 try await playTrack(track)
             } catch {
-                // MusicKit or SPTAppRemote can fail per-track (unavailable
-                // in region, removed from catalog, Spotify app not running,
-                // etc.). Don't stall the queue — log the specific error so
-                // the VM can surface it after play() returns, then try the
-                // next track.
+                // MusicKit can fail per-track (unavailable in region,
+                // removed from catalog, rights changed, etc.). Don't stall
+                // the queue — log the specific error so the VM can surface
+                // it after play() returns, then try the next track.
                 Log.coordinator.error("playTrack failed for '\(track.title, privacy: .public)': \(error, privacy: .public) — skipping")
                 lastPlaybackError = error.localizedDescription
                 await advance()

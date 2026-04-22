@@ -1,9 +1,9 @@
 import Foundation
 
-/// Provider-neutral authorization status. MusicKit maps its own
-/// `MusicAuthorization.Status` into these cases; Spotify's PKCE flow
-/// surfaces the full set including `.needsReauth` when a token refresh
-/// returns 400/401.
+/// Provider-neutral authorization status. Apple Music maps its own
+/// `MusicAuthorization.Status` into the first three cases; `.needsReauth`
+/// is reserved for a future token-based provider whose credentials can
+/// expire mid-session.
 enum ProviderAuthStatus: Sendable, Equatable {
     case unknown
     case notAuthorized

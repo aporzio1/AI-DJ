@@ -60,7 +60,7 @@ protocol MusicProviderService: AnyObject, Sendable {
     func skipToNext() async throws
 
     /// Recently-played items (tracks, playlists, albums, stations). Kept
-    /// provider-neutral so Spotify can provide the same shape later.
+    /// provider-neutral so a future provider can return the same shape.
     func recentlyPlayed() async throws -> [LibraryItem]
 
     /// Personal recommendations flattened into a simple list. Phase 2

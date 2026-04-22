@@ -34,9 +34,9 @@ enum LibrarySectionCache {
             }
         }
 
-        /// v2 key namespaces the cache by provider. v1 keys (pre-2b) were
-        /// shared across providers, which caused Apple Music's cached rows
-        /// to bleed into the Spotify tab after Phase 2a shipped the picker.
+        /// v2 key namespaces the cache by provider. v1 keys (pre-provider
+        /// abstraction) were shared; namespacing prevents bleed when a
+        /// future second provider is added without re-migrating callers.
         fileprivate func defaultsKey(for providerID: Track.MusicProviderID) -> String {
             "\(baseKey).\(providerID.rawValue)"
         }
