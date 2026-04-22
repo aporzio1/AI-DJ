@@ -75,8 +75,13 @@ final class DJBrain: DJBrainProtocol {
             instructions += """
 
 
-            A news headline is provided below. You MUST weave it into the script — paraphrase it naturally,
-            NEVER recite it verbatim. Do not ignore it; the listener has explicitly opted in to hear news.
+            A news headline and (usually) a short context blurb are provided below. You MUST weave them
+            into the script — paraphrase naturally, NEVER recite the headline or blurb verbatim. Do not
+            ignore them; the listener has explicitly opted in to hear news.
+
+            Give the listener 2–3 sentences of actual context on the story — what happened, who's
+            involved, why it matters — before bridging back to the track coming up. For this news
+            segment, override the usual length guidance: aim for 4–5 sentences, 60–100 words.
             """
         }
         let session = LanguageModelSession(instructions: instructions)
@@ -123,9 +128,17 @@ final class DJBrain: DJBrainProtocol {
         if let headline = context.newsHeadline {
             // Producer already gated on NewsFrequency probability before
             // fetching — if a headline is here, the user asked for news on
-            // this segment. Pass the cleaned title; the system instructions
-            // demand a paraphrase, never verbatim.
+            // this segment. Pass the cleaned title + the feed's summary /
+            // description field (HTML-stripped, truncated); system
+            // instructions demand paraphrasing over verbatim recital.
             parts.append("News headline to reference: \(cleanHeadline(headline.title))")
+            let context = stripHTML(headline.summary)
+            if !context.isEmpty {
+                let truncated = context.count > 500
+                    ? String(context.prefix(500)) + "…"
+                    : context
+                parts.append("Headline context (paraphrase, never read verbatim): \(truncated)")
+            }
         }
 
         return parts.joined(separator: " ")
@@ -139,6 +152,36 @@ final class DJBrain: DJBrainProtocol {
         }
         cleaned = cleaned.replacingOccurrences(of: "\"", with: "")
         return cleaned.trimmingCharacters(in: .whitespaces)
+    }
+
+    /// Best-effort strip of HTML tags and decoded entities from an RSS
+    /// description / summary field. Feeds often embed `<p>`, `<br>`,
+    /// `&nbsp;`, etc. — we want plain text in the prompt so the model
+    /// doesn't paraphrase tag syntax into the spoken script.
+    private func stripHTML(_ s: String) -> String {
+        var result = s
+        result = result.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
+        let entities: [(String, String)] = [
+            ("&amp;", "&"),
+            ("&lt;", "<"),
+            ("&gt;", ">"),
+            ("&quot;", "\""),
+            ("&apos;", "'"),
+            ("&#39;", "'"),
+            ("&nbsp;", " "),
+            ("&ndash;", "–"),
+            ("&mdash;", "—"),
+            ("&hellip;", "…"),
+            ("&rsquo;", "'"),
+            ("&lsquo;", "'"),
+            ("&rdquo;", "\""),
+            ("&ldquo;", "\""),
+        ]
+        for (entity, replacement) in entities {
+            result = result.replacingOccurrences(of: entity, with: replacement)
+        }
+        result = result.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+        return result.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     /// Strip awkward prefixes so the DJ doesn't read "Show HN: …" aloud.
