@@ -206,7 +206,7 @@ final class SpotifyService: NSObject, MusicProviderService {
         Log.spotify.info("songs(inPlaylistWith: \(id, privacy: .public)): fetching /playlists/{id}")
         do {
             let detail = try await api.playlistDetail(id: id)
-            let tracks = detail.tracks.items.compactMap { item -> Track? in
+            let tracks: [Track] = detail.tracks.items.compactMap { item in
                 guard let s = item.track else { return nil }
                 return cacheAndMap(s)
             }
@@ -257,7 +257,7 @@ final class SpotifyService: NSObject, MusicProviderService {
     func searchCatalogSongs(query: String, limit: Int) async throws -> [Track] {
         guard !query.isEmpty, auth.tokens != nil else { return [] }
         let response = try await api.searchTracks(query: query, limit: limit)
-        return response.tracks.items.map { cacheAndMap($0) }
+        return response.tracks.items.compactMap { cacheAndMap($0) }
     }
 
     func recentlyPlayed() async throws -> [LibraryItem] { [] }
@@ -278,15 +278,23 @@ final class SpotifyService: NSObject, MusicProviderService {
 
     // MARK: - Helpers
 
-    private func cacheAndMap(_ s: SpotifyTrack) -> Track {
-        if let url = s.album.images?.first?.url { artworkCache[s.id] = url }
+    /// Converts a Spotify wire-format track into our provider-neutral Track.
+    /// Returns nil when required fields are missing — local files, podcast
+    /// episodes, and removed tracks can produce partially-populated shapes
+    /// that we can't route through the playback pipeline.
+    private func cacheAndMap(_ s: SpotifyTrack) -> Track? {
+        guard let id = s.id, let name = s.name, let durationMs = s.durationMs else {
+            return nil
+        }
+        let artworkURL = s.album?.images?.first?.url
+        if let artworkURL { artworkCache[id] = artworkURL }
         return Track(
-            id: s.id,
-            title: s.name,
-            artist: s.artists.map(\.name).joined(separator: ", "),
-            album: s.album.name,
-            artworkURL: s.album.images?.first?.url,
-            duration: TimeInterval(s.durationMs) / 1000,
+            id: id,
+            title: name,
+            artist: (s.artists ?? []).map(\.name).joined(separator: ", "),
+            album: s.album?.name ?? "",
+            artworkURL: artworkURL,
+            duration: TimeInterval(durationMs) / 1000,
             providerID: .spotify
         )
     }

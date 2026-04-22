@@ -3,6 +3,9 @@ import Foundation
 // MARK: - Wire format
 
 /// Spotify Web API paged response. Every list endpoint returns this shape.
+/// Decodes items individually and skips any that fail — Spotify occasionally
+/// returns heterogeneous rows (podcast episodes inside "tracks" arrays,
+/// deprecated shapes) that would otherwise take down the whole response.
 struct SpotifyPage<Item: Decodable & Sendable & Equatable>: Decodable, Sendable, Equatable {
     let items: [Item]
     let limit: Int
@@ -10,6 +13,36 @@ struct SpotifyPage<Item: Decodable & Sendable & Equatable>: Decodable, Sendable,
     let total: Int
     let next: URL?
     let previous: URL?
+
+    enum CodingKeys: String, CodingKey {
+        case items, limit, offset, total, next, previous
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.limit = try container.decode(Int.self, forKey: .limit)
+        self.offset = try container.decode(Int.self, forKey: .offset)
+        self.total = try container.decode(Int.self, forKey: .total)
+        self.next = try container.decodeIfPresent(URL.self, forKey: .next)
+        self.previous = try container.decodeIfPresent(URL.self, forKey: .previous)
+
+        var itemsContainer = try container.nestedUnkeyedContainer(forKey: .items)
+        var collected: [Item] = []
+        while !itemsContainer.isAtEnd {
+            if let item = try? itemsContainer.decode(Item.self) {
+                collected.append(item)
+            } else {
+                // Skip the unparseable row so the rest of the page still loads.
+                _ = try? itemsContainer.decode(SpotifyPageSkip.self)
+            }
+        }
+        self.items = collected
+    }
+}
+
+/// No-op decoder used by SpotifyPage to advance past rows it can't parse.
+private struct SpotifyPageSkip: Decodable {
+    init(from decoder: Decoder) throws {}
 }
 
 struct SpotifyUser: Decodable, Sendable, Equatable {
@@ -69,12 +102,17 @@ struct SpotifyAlbum: Decodable, Sendable, Equatable {
     let images: [SpotifyImage]?
 }
 
+/// Best-effort track decoder. All fields are optional because real-world
+/// playlist items come in many shapes: regular tracks, podcast episodes,
+/// local files (added from the user's device with no Spotify ID), and
+/// removed/unavailable tracks. Non-Track items are culled at the service
+/// layer in `cacheAndMap` via required-field guards.
 struct SpotifyTrack: Decodable, Sendable, Equatable {
-    let id: String
-    let name: String
-    let artists: [SpotifyArtist]
-    let album: SpotifyAlbum
-    let durationMs: Int
+    let id: String?
+    let name: String?
+    let artists: [SpotifyArtist]?
+    let album: SpotifyAlbum?
+    let durationMs: Int?
 
     enum CodingKeys: String, CodingKey {
         case id, name, artists, album
@@ -83,10 +121,23 @@ struct SpotifyTrack: Decodable, Sendable, Equatable {
 }
 
 /// Envelope returned by `/me/playlists/{id}/tracks`. Each entry is a track
-/// plus metadata; local or removed tracks can have a nil `track`, so we
-/// model it as optional and filter at the service layer.
+/// plus metadata; local files, removed tracks, and podcast episodes can
+/// produce shapes that don't match `SpotifyTrack`. Custom decoder ensures
+/// a single bad row doesn't take down the whole response.
 struct SpotifyPlaylistItem: Decodable, Sendable, Equatable {
     let track: SpotifyTrack?
+
+    enum CodingKeys: String, CodingKey {
+        case track
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        // Try to decode the track; if it's a podcast episode or otherwise
+        // doesn't match the Track shape, keep the item with track = nil so
+        // compactMap at the service layer filters it out cleanly.
+        self.track = (try? container.decodeIfPresent(SpotifyTrack.self, forKey: .track)) ?? nil
+    }
 }
 
 struct SpotifySearchResponse: Decodable, Sendable, Equatable {
