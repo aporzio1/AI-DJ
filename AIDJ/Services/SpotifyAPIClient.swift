@@ -355,6 +355,14 @@ actor SpotifyAPIClient {
         do {
             return try JSONDecoder().decode(type, from: data)
         } catch {
+            // Log the exact decoding error AND a snippet of the body so the
+            // next smoke surfaces the real shape Spotify is returning.
+            // Truncate to 2KB so the Console doesn't get swamped on big
+            // playlists.
+            let raw = String(data: data, encoding: .utf8) ?? "<unreadable>"
+            let snippet = raw.count > 2048 ? String(raw.prefix(2048)) + "…[truncated]" : raw
+            Log.spotify.error("decode failed for \(String(describing: type), privacy: .public): \(String(describing: error), privacy: .public)")
+            Log.spotify.error("raw body: \(snippet, privacy: .public)")
             throw SpotifyAPIError.malformedResponse
         }
     }
