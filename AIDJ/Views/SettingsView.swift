@@ -61,20 +61,13 @@ struct SettingsView: View {
     @State private var showingResetOnboardingConfirm = false
     @State private var showingResetOnboardingDone = false
 
-    // Music Services (Spotify connect/disconnect)
-    private let musicProvider: MusicProviderRouter
-    @State private var spotifyAuthStatus: ProviderAuthStatus = .unknown
-    @State private var spotifyConnecting = false
-    @State private var spotifyAuthError: String?
-
     private enum KokoroPreviewState: Equatable {
         case idle, rendering, playing
     }
 
-    init(vm: SettingsViewModel, djVoice: DJVoiceRouter, musicProvider: MusicProviderRouter) {
+    init(vm: SettingsViewModel, djVoice: DJVoiceRouter) {
         self._vm = State(initialValue: vm)
         self.djVoice = djVoice
-        self.musicProvider = musicProvider
     }
 
     var body: some View {
@@ -103,14 +96,6 @@ struct SettingsView: View {
                 vm.save()
             }
             kokoroModelInstalled = djVoice.isKokoroModelInstalled
-            spotifyAuthStatus = musicProvider.spotify.authorizationStatus
-            // Silently validate in the background — if tokens survived a
-            // reinstall or were revoked on the Spotify side, this flips the
-            // chip to Not Connected instead of lying about the state.
-            Task {
-                await musicProvider.spotify.validateAuthorization()
-                spotifyAuthStatus = musicProvider.spotify.authorizationStatus
-            }
         }
         .confirmationDialog(
             "Remove Kokoro model?",
@@ -143,82 +128,11 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 }
             }
-
-            LabeledContent("Spotify") {
-                HStack(spacing: 8) {
-                    switch spotifyAuthStatus {
-                    case .authorized:
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundStyle(.green)
-                        Text("Connected")
-                            .foregroundStyle(.secondary)
-                    case .needsReauth:
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .foregroundStyle(.orange)
-                        Text("Reconnect needed")
-                            .foregroundStyle(.secondary)
-                    case .notAuthorized, .unknown:
-                        Image(systemName: "circle")
-                            .foregroundStyle(.secondary)
-                        Text("Not Connected")
-                            .foregroundStyle(.secondary)
-                    }
-                }
-            }
-
-            if spotifyAuthStatus == .authorized {
-                Button(role: .destructive) {
-                    Task { await disconnectSpotify() }
-                } label: {
-                    Label("Disconnect Spotify", systemImage: "xmark.circle")
-                }
-                .buttonStyle(.bordered)
-            } else {
-                Button {
-                    Task { await connectSpotify() }
-                } label: {
-                    if spotifyConnecting {
-                        HStack(spacing: 8) {
-                            ProgressView()
-#if os(macOS)
-                                .controlSize(.small)
-#endif
-                            Text("Connecting…")
-                        }
-                    } else {
-                        Label(
-                            spotifyAuthStatus == .needsReauth ? "Reconnect Spotify" : "Connect Spotify",
-                            systemImage: "link"
-                        )
-                    }
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(spotifyConnecting)
-            }
-
-            if let err = spotifyAuthError {
-                Text(err)
-                    .font(.footnote)
-                    .foregroundStyle(.red)
-            }
         } header: {
             Text("Music Services")
         } footer: {
-            Text("Apple Music authorization is managed in system Settings. Spotify requires a Premium account for playback (Phase 2b); read-only library access works on Free.")
+            Text("Apple Music authorization is managed in the system Settings app.")
         }
-    }
-
-    private func connectSpotify() async {
-        spotifyConnecting = true
-        spotifyAuthError = nil
-        let result = await musicProvider.spotify.requestAuthorization()
-        spotifyAuthStatus = result
-        spotifyConnecting = false
-    }
-
-    private func disconnectSpotify() async {
-        await musicProvider.spotify.signOut()
-        spotifyAuthStatus = .notAuthorized
     }
 
     // MARK: - DJ

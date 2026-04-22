@@ -41,45 +41,6 @@ final class FakeMusicService: MusicProviderService {
     func recommendations() async throws -> [LibraryItem] { fakeRecommendations }
 }
 
-// MARK: - FakeSpotifyService
-
-/// Trivial second provider for tests — shape-identical to `FakeMusicService`
-/// but tagged `.spotify`. Lets tests exercise router dispatch across providers
-/// without pulling in the real `SpotifyAuthCoordinator` / `SpotifyAPIClient`.
-@MainActor
-final class FakeSpotifyService: MusicProviderService {
-    var providerID: AIDJ.Track.MusicProviderID = .spotify
-    var authorizationStatus: ProviderAuthStatus = .authorized
-
-    var startedTracks: [AIDJ.Track] = []
-    var pauseCallCount = 0
-    var resumeCallCount = 0
-    var stopCallCount = 0
-
-    var currentPlaybackTime: TimeInterval = 0
-    var currentTrackDuration: TimeInterval? = nil
-    var currentTrack: AIDJ.Track? = nil
-    var playbackStatus: MusicPlaybackStatus = .stopped
-
-    func requestAuthorization() async -> ProviderAuthStatus { .authorized }
-    func signOut() async { authorizationStatus = .notAuthorized }
-    func start(track: AIDJ.Track) async throws { startedTracks.append(track); currentTrack = track }
-    func pause() async throws { pauseCallCount += 1 }
-    func resume() async throws { resumeCallCount += 1 }
-    func stop() async throws { stopCallCount += 1 }
-    func seek(to time: TimeInterval) async throws { currentPlaybackTime = time }
-    func playlists() async throws -> [PlaylistInfo] { [] }
-    func songs(inPlaylistWith id: String) async throws -> [AIDJ.Track] { [] }
-    func songs(inAlbumWith id: String) async throws -> [AIDJ.Track] { [] }
-    func startStation(id: String) async throws {}
-    func skipToNext() async throws {}
-    func searchCatalogSongs(query: String, limit: Int) async throws -> [AIDJ.Track] { [] }
-    func isPlayable(trackId: String) async -> Bool { true }
-    func artwork(for trackId: String) -> ProviderArtwork? { nil }
-    func recentlyPlayed() async throws -> [LibraryItem] { [] }
-    func recommendations() async throws -> [LibraryItem] { [] }
-}
-
 // MARK: - FakeAudioGraph
 
 /// `AudioGraphProtocol` is non-isolated + `Sendable`, matching the production

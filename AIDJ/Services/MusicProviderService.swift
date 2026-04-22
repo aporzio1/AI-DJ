@@ -23,23 +23,12 @@ protocol MusicProviderService: AnyObject, Sendable {
 
     func requestAuthorization() async -> ProviderAuthStatus
 
-    /// Clear persisted credentials for providers that vend their own tokens
-    /// (Spotify). MusicKit ignores this — Apple Music authorization is
-    /// OS-managed and can only be revoked through Settings.
+    /// Clear persisted credentials for providers that vend their own tokens.
+    /// MusicKit is a no-op — Apple Music authorization is OS-managed and can
+    /// only be revoked through system Settings. Kept on the protocol so a
+    /// future non-OS-managed provider can implement it without reshaping the
+    /// call sites.
     func signOut() async
-
-    /// Hook for providers that observe app-level URL events (e.g. Spotify's
-    /// macOS PKCE redirect flow via `.onOpenURL` in `AIDJApp`). Default
-    /// implementation is a no-op so MusicKit and non-web-auth providers
-    /// don't have to care.
-    func handleAuthCallback(_ url: URL)
-
-    /// Verify the currently-stored credentials by probing a lightweight
-    /// provider endpoint. Clears the stored credentials and flips status to
-    /// `.notAuthorized` if the probe fails with an auth error (e.g. Spotify
-    /// 401 after forced refresh). No-op by default — MusicKit's
-    /// authorization is OS-managed and doesn't need this.
-    func validateAuthorization() async
 
     func start(track: Track) async throws
     func pause() async throws
@@ -92,13 +81,3 @@ protocol MusicProviderService: AnyObject, Sendable {
     func artwork(for trackId: String) -> ProviderArtwork?
 }
 
-extension MusicProviderService {
-    /// Default no-op for providers that don't need app-level URL events.
-    /// `SpotifyService` overrides this on macOS to drive its PKCE redirect.
-    func handleAuthCallback(_ url: URL) {}
-
-    /// Default no-op. `SpotifyService` overrides this to probe `/me` and
-    /// clear stale tokens that survive across reinstalls or fail after a
-    /// Spotify-side revocation.
-    func validateAuthorization() async {}
-}

@@ -8,31 +8,16 @@ struct AIDJApp: App {
     // than the one in the main window, and edits wouldn't be reflected.
     @State private var settings = SettingsViewModel()
     @State private var djVoice = DJVoiceRouter()
-    @State private var musicProvider: MusicProviderRouter = {
-        let spotifyAuth = SpotifyAuthCoordinator()
-        let spotifyAPI = SpotifyAPIClient(auth: spotifyAuth)
-        let spotifyService = SpotifyService(auth: spotifyAuth, api: spotifyAPI)
-        return MusicProviderRouter(appleMusic: MusicKitService(), spotify: spotifyService)
-    }()
+    @State private var musicProvider = MusicProviderRouter(appleMusic: MusicKitService())
 
     var body: some Scene {
         WindowGroup {
             RootView(settings: settings, djVoice: djVoice, musicProvider: musicProvider)
-                .onOpenURL { url in
-                    guard url.scheme == "aidj" else { return }
-                    // Route Spotify PKCE redirects (macOS only — iOS gets
-                    // the URL through ASWebAuthenticationSession instead).
-                    musicProvider.spotify.handleAuthCallback(url)
-                }
         }
 #if os(macOS)
         Settings {
-            SettingsView(vm: settings, djVoice: djVoice, musicProvider: musicProvider)
+            SettingsView(vm: settings, djVoice: djVoice)
                 .frame(minWidth: 520, minHeight: 520)
-                .onOpenURL { url in
-                    guard url.scheme == "aidj" else { return }
-                    musicProvider.spotify.handleAuthCallback(url)
-                }
         }
 #endif
     }

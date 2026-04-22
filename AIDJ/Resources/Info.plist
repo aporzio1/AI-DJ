@@ -18,23 +18,8 @@
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
 	<string>1.0</string>
-	<key>CFBundleURLTypes</key>
-	<array>
-		<dict>
-			<key>CFBundleURLName</key>
-			<string>com.andrewporzio.aidj.spotify</string>
-			<key>CFBundleURLSchemes</key>
-			<array>
-				<string>aidj</string>
-			</array>
-		</dict>
-	</array>
 	<key>CFBundleVersion</key>
 	<string>1</string>
-	<key>LSApplicationQueriesSchemes</key>
-	<array>
-		<string>spotify</string>
-	</array>
 	<key>NSAppleMusicUsageDescription</key>
 	<string>AI DJ needs access to your Apple Music library to play music.</string>
 	<key>UILaunchScreen</key>

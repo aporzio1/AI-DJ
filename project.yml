@@ -7,9 +7,6 @@ packages:
   FluidAudio:
     url: https://github.com/FluidInference/FluidAudio.git
     exactVersion: 0.13.5
-  SpotifyiOS:
-    url: https://github.com/spotify/ios-sdk
-    exactVersion: 5.0.1
 
 settings:
   base:
@@ -31,9 +28,6 @@ targets:
     dependencies:
       - package: FluidAudio
         product: FluidAudio
-      - package: SpotifyiOS
-        product: SpotifyiOS
-        platformFilter: iOS
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.andrewporzio.aidj
@@ -67,15 +61,6 @@ targets:
           - UIInterfaceOrientationPortraitUpsideDown
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
-        CFBundleURLTypes:
-          - CFBundleURLName: com.andrewporzio.aidj.spotify
-            CFBundleURLSchemes:
-              - aidj
-        # Required by the Spotify iOS SDK so SPTAppRemote can canOpenURL-detect
-        # whether the Spotify app is installed before attempting to connect.
-        # macOS ignores this key but it's safe to ship on both platforms.
-        LSApplicationQueriesSchemes:
-          - spotify
 
   AIDJTests:
     type: bundle.unit-test

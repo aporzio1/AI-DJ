@@ -2,29 +2,15 @@ import SwiftUI
 
 struct LibraryView: View {
     @State private var vm: LibraryViewModel
-    private let settings: SettingsViewModel
     @State private var query = ""
     @State private var searchTask: Task<Void, Never>?
 
-    init(vm: LibraryViewModel, settings: SettingsViewModel) {
+    init(vm: LibraryViewModel) {
         self._vm = State(initialValue: vm)
-        self.settings = settings
     }
 
     var body: some View {
         List {
-            Section {
-                Picker("Provider", selection: Binding(
-                    get: { settings.browseProvider },
-                    set: { settings.setBrowseProvider($0) }
-                )) {
-                    Text("Apple Music").tag(Track.MusicProviderID.appleMusic)
-                    Text("Spotify").tag(Track.MusicProviderID.spotify)
-                }
-                .pickerStyle(.segmented)
-                .listRowBackground(Color.clear)
-                .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
-            }
             if query.isEmpty {
                 playlistsContent
             } else {
@@ -41,19 +27,10 @@ struct LibraryView: View {
                 await vm.performSearch(query: newValue)
             }
         }
-        .onChange(of: settings.browseProvider) { _, newProvider in
-            Task { await vm.setProvider(newProvider) }
-        }
         .task {
-            // Sync the VM's provider to the persisted setting on first appear,
-            // so a fresh launch respects the last browse choice.
-            if vm.activeProvider != settings.browseProvider {
-                await vm.setProvider(settings.browseProvider)
-            } else {
-                await vm.loadPlaylists()
-                await vm.loadRecentlyPlayed()
-                await vm.loadRecommendations()
-            }
+            await vm.loadPlaylists()
+            await vm.loadRecentlyPlayed()
+            await vm.loadRecommendations()
         }
         .refreshable {
             await vm.refreshLibrarySections()

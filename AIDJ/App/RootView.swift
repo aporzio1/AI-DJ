@@ -117,7 +117,7 @@ struct RootView: View {
         npVM.startObserving()   // keep the mini-player state fresh for the whole session
         nowPlayingVM = npVM
         queueVM = QueueViewModel(coordinator: c)
-        libraryVM = LibraryViewModel(router: musicProvider, coordinator: c, producer: p, initialProvider: settings.browseProvider)
+        libraryVM = LibraryViewModel(router: musicProvider, coordinator: c, producer: p)
         Task { await p.start() }
         // Apply persisted voice + provider settings on boot
         djVoice.provider = settings.ttsProvider
@@ -193,7 +193,7 @@ struct RootView: View {
         }
 #else
         TabView(selection: $selectedTab) {
-            NavigationStack { LibraryView(vm: library, settings: settings) }
+            NavigationStack { LibraryView(vm: library) }
                 .miniPlayerBarOverlay(vm: nowPlaying, download: kokoroDownload, onTap: { showingNowPlaying = true })
                 .tabItem { Label("Library", systemImage: "music.note.list") }
                 .tag(AppTab.library)
@@ -201,7 +201,7 @@ struct RootView: View {
                 .miniPlayerBarOverlay(vm: nowPlaying, download: kokoroDownload, onTap: { showingNowPlaying = true })
                 .tabItem { Label("Queue", systemImage: "list.bullet") }
                 .tag(AppTab.queue)
-            NavigationStack { SettingsView(vm: settings, djVoice: djVoice, musicProvider: musicProvider) }
+            NavigationStack { SettingsView(vm: settings, djVoice: djVoice) }
                 .miniPlayerBarOverlay(vm: nowPlaying, download: kokoroDownload, onTap: { showingNowPlaying = true })
                 .tabItem { Label("Settings", systemImage: "gear") }
                 .tag(AppTab.settings)
@@ -214,9 +214,9 @@ struct RootView: View {
                                queue: QueueViewModel,
                                library: LibraryViewModel) -> some View {
         switch selectedTab {
-        case .library:  NavigationStack { LibraryView(vm: library, settings: settings) }
+        case .library:  NavigationStack { LibraryView(vm: library) }
         case .queue:    NavigationStack { QueueView(vm: queue) }
-        case .settings: NavigationStack { SettingsView(vm: settings, djVoice: djVoice, musicProvider: musicProvider) }
+        case .settings: NavigationStack { SettingsView(vm: settings, djVoice: djVoice) }
         }
     }
 }
