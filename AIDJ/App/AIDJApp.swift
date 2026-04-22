@@ -18,11 +18,21 @@ struct AIDJApp: App {
     var body: some Scene {
         WindowGroup {
             RootView(settings: settings, djVoice: djVoice, musicProvider: musicProvider)
+                .onOpenURL { url in
+                    guard url.scheme == "aidj" else { return }
+                    // Route Spotify PKCE redirects (macOS only — iOS gets
+                    // the URL through ASWebAuthenticationSession instead).
+                    musicProvider.spotify.handleAuthCallback(url)
+                }
         }
 #if os(macOS)
         Settings {
             SettingsView(vm: settings, djVoice: djVoice, musicProvider: musicProvider)
                 .frame(minWidth: 520, minHeight: 520)
+                .onOpenURL { url in
+                    guard url.scheme == "aidj" else { return }
+                    musicProvider.spotify.handleAuthCallback(url)
+                }
         }
 #endif
     }

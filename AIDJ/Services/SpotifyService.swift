@@ -50,6 +50,16 @@ final class SpotifyService: MusicProviderService {
         artworkCache.removeAll()
     }
 
+#if os(macOS)
+    /// Receives `aidj://` redirects forwarded by `AIDJApp.onOpenURL` and
+    /// hands them to the auth coordinator to resume the in-flight PKCE flow.
+    /// macOS-only — iOS routes the redirect through `ASWebAuthenticationSession`
+    /// directly, bypassing this path.
+    func handleAuthCallback(_ url: URL) {
+        auth.handleAuthCallback(url)
+    }
+#endif
+
     // MARK: - Playback (Phase 2a throws; Phase 2b fills in)
 
     func start(track: Track) async throws { throw SpotifyServiceError.notSupportedYet }

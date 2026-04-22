@@ -49,6 +49,7 @@ enum SpotifyAuthError: Error, Equatable {
     case tokenExchangeFailed(String)
     case noRefreshToken
     case notAuthenticated
+    case alreadyAuthenticating
 }
 
 /// Lock-protected store for the `ASPresentationAnchor` that
@@ -95,6 +96,10 @@ final class SpotifyAuthCoordinator: NSObject {
     /// closure's locals; if ARC releases it early under strict Swift 6
     /// semantics, the session tears down before the callback fires.
     private var activeSession: ASWebAuthenticationSession?
+    /// Pending continuation for the macOS `NSWorkspace.open` / `.onOpenURL`
+    /// auth path. Resumed from `handleAuthCallback(_:)` when macOS routes the
+    /// `aidj://` redirect back to the app. nil when no auth flow is in flight.
+    private var pendingCallback: CheckedContinuation<URL, Error>?
 
     var isAuthenticated: Bool { tokens != nil }
 
@@ -118,23 +123,55 @@ final class SpotifyAuthCoordinator: NSObject {
 
     // MARK: - Public API
 
-    /// Opens the Spotify consent screen via `ASWebAuthenticationSession`, waits
-    /// for the callback, and exchanges the returned auth code for tokens.
-    /// Persists to Keychain on success.
+    /// Opens the Spotify consent screen, waits for the redirect, and exchanges
+    /// the returned auth code for tokens. Persists to Keychain on success.
+    ///
+    /// - On iOS: uses `ASWebAuthenticationSession`, the recommended API.
+    /// - On macOS: uses `NSWorkspace.open(url)` + the app's own URL scheme
+    ///   handler (`.onOpenURL` in `AIDJApp`), routed through `handleAuthCallback(_:)`.
+    ///   macOS 26's `ASWebAuthenticationSession` crashed with a libdispatch
+    ///   queue assertion inside Apple's framework after `session.start()`
+    ///   returned successfully; the Safari + URL-scheme path avoids that
+    ///   framework code path entirely.
     func beginAuthFlow() async throws -> SpotifyTokens {
         Log.spotify.info("beginAuthFlow: start")
         let pkce = Self.generatePKCEPair()
         let state = Self.randomState()
         let authURL = try buildAuthorizeURL(pkce: pkce, state: state)
-        Log.spotify.info("beginAuthFlow: authURL built, capturing anchor")
+        Log.spotify.info("beginAuthFlow: authURL built")
 
-        // Capture the current key window now, on MainActor — the callback
-        // that reads it back (`presentationAnchor(for:)`) is nonisolated.
+#if os(macOS)
+        let callback = try await awaitMacOSCallback(authURL: authURL)
+#else
+        let callback = try await awaitIOSCallback(authURL: authURL)
+#endif
+
+        Log.spotify.info("beginAuthFlow: continuation resumed, parsing callback")
+        let params = Self.queryItems(from: callback)
+        guard params["state"] == state else {
+            Log.spotify.error("beginAuthFlow: state mismatch")
+            throw SpotifyAuthError.stateMismatch
+        }
+        guard let code = params["code"] else {
+            Log.spotify.error("beginAuthFlow: missing code in callback")
+            throw SpotifyAuthError.missingCode
+        }
+        Log.spotify.info("beginAuthFlow: got auth code, exchanging for tokens")
+
+        let newTokens = try await exchangeCode(code, verifier: pkce.verifier)
+        Log.spotify.info("beginAuthFlow: tokens received, persisting")
+        persist(newTokens)
+        Log.spotify.info("beginAuthFlow: done")
+        return newTokens
+    }
+
+#if os(iOS)
+    private func awaitIOSCallback(authURL: URL) async throws -> URL {
         anchorBox.set(Self.currentAnchor())
         defer { anchorBox.set(nil) }
-        Log.spotify.info("beginAuthFlow: anchor captured, starting session")
+        Log.spotify.info("beginAuthFlow: anchor captured, starting ASWebAuthenticationSession")
 
-        let callback = try await withCheckedThrowingContinuation { (cont: CheckedContinuation<URL, Error>) in
+        return try await withCheckedThrowingContinuation { (cont: CheckedContinuation<URL, Error>) in
             let session = ASWebAuthenticationSession(
                 url: authURL,
                 callbackURLScheme: Self.callbackScheme(from: redirectURI)
@@ -155,30 +192,45 @@ final class SpotifyAuthCoordinator: NSObject {
             session.presentationContextProvider = self
             session.prefersEphemeralWebBrowserSession = false
             activeSession = session
-            Log.spotify.info("beginAuthFlow: calling session.start()")
             let started = session.start()
             Log.spotify.info("beginAuthFlow: session.start() returned \(started)")
         }
-        Log.spotify.info("beginAuthFlow: continuation resumed, parsing callback")
-
-        activeSession = nil
-        let params = Self.queryItems(from: callback)
-        guard params["state"] == state else {
-            Log.spotify.error("beginAuthFlow: state mismatch")
-            throw SpotifyAuthError.stateMismatch
-        }
-        guard let code = params["code"] else {
-            Log.spotify.error("beginAuthFlow: missing code in callback")
-            throw SpotifyAuthError.missingCode
-        }
-        Log.spotify.info("beginAuthFlow: got auth code, exchanging for tokens")
-
-        let newTokens = try await exchangeCode(code, verifier: pkce.verifier)
-        Log.spotify.info("beginAuthFlow: tokens received, persisting")
-        persist(newTokens)
-        Log.spotify.info("beginAuthFlow: done")
-        return newTokens
     }
+#endif
+
+#if os(macOS)
+    private func awaitMacOSCallback(authURL: URL) async throws -> URL {
+        Log.spotify.info("beginAuthFlow: opening authURL via NSWorkspace")
+        return try await withCheckedThrowingContinuation { (cont: CheckedContinuation<URL, Error>) in
+            if let previous = pendingCallback {
+                // A previous auth attempt is still pending — cancel it so the
+                // new flow replaces it cleanly rather than leaking the
+                // continuation.
+                previous.resume(throwing: SpotifyAuthError.cancelledByUser)
+            }
+            pendingCallback = cont
+            let opened = NSWorkspace.shared.open(authURL)
+            Log.spotify.info("beginAuthFlow: NSWorkspace.open returned \(opened)")
+            if !opened {
+                pendingCallback = nil
+                cont.resume(throwing: SpotifyAuthError.invalidRedirect)
+            }
+        }
+    }
+
+    /// Invoked by `AIDJApp`'s `.onOpenURL` when macOS routes an `aidj://`
+    /// redirect to our app. Resumes the in-flight `beginAuthFlow`
+    /// continuation with the delivered URL. No-op when no flow is in flight.
+    func handleAuthCallback(_ url: URL) {
+        Log.spotify.info("handleAuthCallback: received \(url.absoluteString, privacy: .public)")
+        guard let cont = pendingCallback else {
+            Log.spotify.info("handleAuthCallback: no pending auth flow — ignoring")
+            return
+        }
+        pendingCallback = nil
+        cont.resume(returning: url)
+    }
+#endif
 
     /// Current key window, grabbed on MainActor. Called synchronously before
     /// `session.start()` so the value is stable by the time

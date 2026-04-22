@@ -27,6 +27,13 @@ protocol MusicProviderService: AnyObject, Sendable {
     /// (Spotify). MusicKit ignores this — Apple Music authorization is
     /// OS-managed and can only be revoked through Settings.
     func signOut() async
+
+    /// Hook for providers that observe app-level URL events (e.g. Spotify's
+    /// macOS PKCE redirect flow via `.onOpenURL` in `AIDJApp`). Default
+    /// implementation is a no-op so MusicKit and non-web-auth providers
+    /// don't have to care.
+    func handleAuthCallback(_ url: URL)
+
     func start(track: Track) async throws
     func pause() async throws
     func resume() async throws
@@ -76,4 +83,10 @@ protocol MusicProviderService: AnyObject, Sendable {
     /// `AsyncImage`. Callers pair this with an optional fallback URL for items
     /// that are known but not yet cached.
     func artwork(for trackId: String) -> ProviderArtwork?
+}
+
+extension MusicProviderService {
+    /// Default no-op for providers that don't need app-level URL events.
+    /// `SpotifyService` overrides this on macOS to drive its PKCE redirect.
+    func handleAuthCallback(_ url: URL) {}
 }
