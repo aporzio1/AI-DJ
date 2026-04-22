@@ -245,6 +245,7 @@ actor SpotifyAPIClient {
     private func decode<T: Decodable>(_ data: Data, status: Int, as type: T.Type) throws -> T {
         guard (200..<300).contains(status) else {
             let body = String(data: data, encoding: .utf8) ?? "<unreadable>"
+            Log.spotify.error("HTTP \(status) response: \(body, privacy: .public)")
             throw SpotifyAPIError.httpError(status: status, body: body)
         }
         do {

@@ -343,6 +343,11 @@ final class SpotifyAuthCoordinator: NSObject {
         }
         let payload = try JSONDecoder().decode(SpotifyTokenResponse.self, from: data)
         let expiresAt = Date().addingTimeInterval(TimeInterval(payload.expiresIn))
+        // Log the granted scopes so we can see if Spotify quietly dropped
+        // any of what we asked for during consent. Missing scopes like
+        // playlist-read-private show up here as absent from the scope
+        // string, which explains 403s on otherwise-accessible endpoints.
+        Log.spotify.info("token exchange: granted scopes=\(payload.scope ?? "<none>", privacy: .public) expiresIn=\(payload.expiresIn)")
         // Spotify sometimes omits `refresh_token` on refresh responses — the
         // existing one stays valid. If we never had one and none came back,
         // that's an auth error.
