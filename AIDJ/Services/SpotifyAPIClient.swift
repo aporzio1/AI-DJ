@@ -246,12 +246,29 @@ actor SpotifyAPIClient {
         guard (200..<300).contains(status) else {
             let body = String(data: data, encoding: .utf8) ?? "<unreadable>"
             Log.spotify.error("HTTP \(status) response: \(body, privacy: .public)")
+            // Fire-and-forget diagnostic: when Spotify returns 403 we want to
+            // know which user the token actually resolves to server-side.
+            // Mismatch between the dashboard's "Users and Access" entry and
+            // the token's user_id is the usual cause of opaque 403s on
+            // user-owned playlists under Development Mode.
+            if status == 403 {
+                Task { [weak self] in await self?.logAuthenticatedUser() }
+            }
             throw SpotifyAPIError.httpError(status: status, body: body)
         }
         do {
             return try JSONDecoder().decode(type, from: data)
         } catch {
             throw SpotifyAPIError.malformedResponse
+        }
+    }
+
+    private func logAuthenticatedUser() async {
+        do {
+            let me = try await self.me()
+            Log.spotify.info("diagnostic /me: id=\(me.id, privacy: .public) email=\(me.email ?? "<nil>", privacy: .public)")
+        } catch {
+            Log.spotify.error("diagnostic /me failed: \(String(describing: error), privacy: .public)")
         }
     }
 }
