@@ -30,10 +30,15 @@ struct SpotifyImage: Decodable, Sendable, Equatable {
     let width: Int?
 }
 
+struct SpotifyPlaylistOwner: Decodable, Sendable, Equatable {
+    let id: String
+}
+
 struct SpotifyPlaylist: Decodable, Sendable, Equatable {
     let id: String
     let name: String
     let images: [SpotifyImage]?
+    let owner: SpotifyPlaylistOwner?
 }
 
 struct SpotifyArtist: Decodable, Sendable, Equatable {
@@ -80,6 +85,35 @@ enum SpotifyAPIError: Error, Equatable {
     /// once — likely the refresh token was revoked. Callers surface this as
     /// `ProviderAuthStatus.needsReauth` and prompt the user to reconnect.
     case needsReauth
+}
+
+extension SpotifyAPIError: LocalizedError {
+    var errorDescription: String? {
+        switch self {
+        case .httpError(let status, _):
+            switch status {
+            case 403:
+                // Spotify's Development Mode + Nov-2024 algorithmic-content
+                // restrictions return 403 on playlists/{id}/tracks for
+                // Spotify-owned personalized playlists (Discover Weekly,
+                // Your Top Songs, Daily Mixes, Release Radar). User-owned
+                // playlists work fine.
+                return "Spotify blocked this one. Personalized playlists like Discover Weekly or Your Top Songs aren't accessible to third-party apps — try a playlist you created yourself."
+            case 404:
+                return "Spotify couldn't find that playlist (maybe deleted or made private)."
+            case 429:
+                return "Spotify rate limit hit. Wait a minute and try again."
+            case 500...599:
+                return "Spotify had a server error (\(status)). Try again in a moment."
+            default:
+                return "Spotify returned HTTP \(status)."
+            }
+        case .malformedResponse:
+            return "Spotify returned an unexpected response format."
+        case .needsReauth:
+            return "Spotify session expired. Reconnect in Settings → Music Services."
+        }
+    }
 }
 
 // MARK: - Client

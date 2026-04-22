@@ -177,7 +177,17 @@ final class SpotifyService: NSObject, MusicProviderService {
     func playlists() async throws -> [PlaylistInfo] {
         guard auth.tokens != nil else { return [] }
         let page = try await api.myPlaylists()
-        return page.items.map { item in
+        // Drop Spotify-owned algorithmic playlists (Discover Weekly,
+        // Your Top Songs, Daily Mixes, Release Radar). Spotify's
+        // Development Mode + Nov-2024 restrictions reject
+        // /playlists/{id}/tracks for these with 403, so surfacing them
+        // in the UI just produces an error when the user taps one.
+        let userOwned = page.items.filter { $0.owner?.id != "spotify" }
+        let dropped = page.items.count - userOwned.count
+        if dropped > 0 {
+            Log.spotify.info("playlists: filtered out \(dropped) Spotify-owned playlists (algorithmic, inaccessible under Dev Mode)")
+        }
+        return userOwned.map { item in
             let url = item.images?.first?.url
             if let url { artworkCache[item.id] = url }
             return PlaylistInfo(id: item.id, name: item.name, artworkURL: url)
