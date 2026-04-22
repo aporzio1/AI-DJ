@@ -185,12 +185,18 @@ final class SpotifyService: NSObject, MusicProviderService {
     }
 
     func songs(inPlaylistWith id: String) async throws -> [Track] {
-        guard auth.tokens != nil else { return [] }
+        guard auth.tokens != nil else {
+            Log.spotify.info("songs(inPlaylistWith: \(id, privacy: .public)): no tokens, returning []")
+            return []
+        }
+        Log.spotify.info("songs(inPlaylistWith: \(id, privacy: .public)): fetching /playlists/{id}/tracks")
         let page = try await api.tracks(inPlaylist: id)
-        return page.items.compactMap { item in
+        let tracks = page.items.compactMap { item -> Track? in
             guard let s = item.track else { return nil }
             return cacheAndMap(s)
         }
+        Log.spotify.info("songs(inPlaylistWith:): page.items=\(page.items.count) mapped tracks=\(tracks.count)")
+        return tracks
     }
 
     func songs(inAlbumWith id: String) async throws -> [Track] {

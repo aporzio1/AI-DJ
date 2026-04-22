@@ -206,10 +206,15 @@ final class LibraryViewModel {
     func selectPlaylist(_ playlist: PlaylistInfo) async {
         selectedPlaylist = playlist
         isLoading = true
+        errorMessage = nil
         do {
+            Log.app.info("selectPlaylist: fetching songs for '\(playlist.name, privacy: .public)' id=\(playlist.id, privacy: .public) on \(String(describing: self.activeProvider), privacy: .public)")
             songs = try await musicService.songs(inPlaylistWith: playlist.id)
+            Log.app.info("selectPlaylist: fetched \(self.songs.count) songs")
         } catch {
+            Log.app.error("selectPlaylist: fetch failed: \(String(describing: error), privacy: .public)")
             errorMessage = error.localizedDescription
+            songs = []
         }
         isLoading = false
     }
@@ -222,7 +227,14 @@ final class LibraryViewModel {
         guard guardPlaybackSupported() else { return }
         Log.app.info("playPlaylist '\(playlist.name, privacy: .public)' on \(String(describing: self.activeProvider), privacy: .public)")
         await selectPlaylist(playlist)
+        Log.app.info("playPlaylist: selectPlaylist returned \(self.songs.count) songs, errorMessage=\(self.errorMessage ?? "nil", privacy: .public)")
         let items = songs.map { PlayableItem.track($0) }
+        guard !items.isEmpty else {
+            let msg = errorMessage ?? "Playlist returned no tracks. If this is Spotify, try a different playlist or reconnect."
+            playbackAlertMessage = msg
+            Log.app.error("playPlaylist: empty queue — aborting. \(msg, privacy: .public)")
+            return
+        }
         await coordinator.replaceQueue(items)
         if let producer {
             await producer.primeOpeningIntro()
@@ -234,7 +246,12 @@ final class LibraryViewModel {
         guard guardPlaybackSupported() else { return }
         Log.app.info("shufflePlaylist '\(playlist.name, privacy: .public)' on \(String(describing: self.activeProvider), privacy: .public)")
         await selectPlaylist(playlist)
+        Log.app.info("shufflePlaylist: selectPlaylist returned \(self.songs.count) songs")
         let items = songs.shuffled().map { PlayableItem.track($0) }
+        guard !items.isEmpty else {
+            playbackAlertMessage = errorMessage ?? "Playlist returned no tracks."
+            return
+        }
         await coordinator.replaceQueue(items)
         if let producer {
             await producer.primeOpeningIntro()
