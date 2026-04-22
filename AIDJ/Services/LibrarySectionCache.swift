@@ -27,32 +27,39 @@ enum LibrarySectionCache {
         case recentlyPlayed
         case recommendations
 
-        fileprivate var defaultsKey: String {
+        fileprivate var baseKey: String {
             switch self {
-            case .recentlyPlayed:  "library.recentlyPlayed.v1"
-            case .recommendations: "library.recommendations.v1"
+            case .recentlyPlayed:  "library.recentlyPlayed.v2"
+            case .recommendations: "library.recommendations.v2"
             }
+        }
+
+        /// v2 key namespaces the cache by provider. v1 keys (pre-2b) were
+        /// shared across providers, which caused Apple Music's cached rows
+        /// to bleed into the Spotify tab after Phase 2a shipped the picker.
+        fileprivate func defaultsKey(for providerID: Track.MusicProviderID) -> String {
+            "\(baseKey).\(providerID.rawValue)"
         }
     }
 
     /// Default TTL per the PM's 30-minute call.
     static let ttl: TimeInterval = 30 * 60
 
-    static func load(_ section: Section) -> Entry? {
-        guard let data = UserDefaults.standard.data(forKey: section.defaultsKey),
+    static func load(_ section: Section, provider: Track.MusicProviderID) -> Entry? {
+        guard let data = UserDefaults.standard.data(forKey: section.defaultsKey(for: provider)),
               let entry = try? JSONDecoder().decode(Entry.self, from: data) else {
             return nil
         }
         return entry
     }
 
-    static func save(_ items: [LibraryItem], for section: Section) {
+    static func save(_ items: [LibraryItem], for section: Section, provider: Track.MusicProviderID) {
         let entry = Entry(fetchedAt: Date(), items: items)
         guard let data = try? JSONEncoder().encode(entry) else { return }
-        UserDefaults.standard.set(data, forKey: section.defaultsKey)
+        UserDefaults.standard.set(data, forKey: section.defaultsKey(for: provider))
     }
 
-    static func clear(_ section: Section) {
-        UserDefaults.standard.removeObject(forKey: section.defaultsKey)
+    static func clear(_ section: Section, provider: Track.MusicProviderID) {
+        UserDefaults.standard.removeObject(forKey: section.defaultsKey(for: provider))
     }
 }

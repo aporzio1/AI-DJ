@@ -108,7 +108,8 @@ final class LibraryViewModel {
     /// Empty results are also never SAVED to the cache, so a one-off
     /// failure doesn't poison future launches.
     func loadRecentlyPlayed(forceRefresh: Bool = false) async {
-        let cached = LibrarySectionCache.load(.recentlyPlayed)
+        let provider = activeProvider
+        let cached = LibrarySectionCache.load(.recentlyPlayed, provider: provider)
         if let cached {
             recentlyPlayed = cached.items
         }
@@ -119,16 +120,14 @@ final class LibraryViewModel {
         if let items = try? await musicService.recentlyPlayed() {
             recentlyPlayed = items
             if !items.isEmpty {
-                LibrarySectionCache.save(items, for: .recentlyPlayed)
+                LibrarySectionCache.save(items, for: .recentlyPlayed, provider: provider)
             }
         }
-        // Silent-stale on failure: leave cached items in place, log nothing
-        // user-visible. ContentUnavailableView path only triggers when BOTH
-        // cache is empty AND the fetch failed.
     }
 
     func loadRecommendations(forceRefresh: Bool = false) async {
-        let cached = LibrarySectionCache.load(.recommendations)
+        let provider = activeProvider
+        let cached = LibrarySectionCache.load(.recommendations, provider: provider)
         if let cached {
             recommendations = cached.items
         }
@@ -139,7 +138,7 @@ final class LibraryViewModel {
         if let items = try? await musicService.recommendations() {
             recommendations = items
             if !items.isEmpty {
-                LibrarySectionCache.save(items, for: .recommendations)
+                LibrarySectionCache.save(items, for: .recommendations, provider: provider)
             }
         }
     }
@@ -156,6 +155,7 @@ final class LibraryViewModel {
     /// stations aren't wired yet (would need ApplicationMusicPlayer.Queue
     /// station support).
     func playLibraryItem(_ item: LibraryItem) async {
+        Log.app.info("playLibraryItem: tap received for \(String(describing: item), privacy: .public)")
         switch item {
         case .track(let t):
             await playSong(t)
@@ -220,33 +220,50 @@ final class LibraryViewModel {
 
     func playPlaylist(_ playlist: PlaylistInfo) async {
         guard guardPlaybackSupported() else { return }
+        Log.app.info("playPlaylist '\(playlist.name, privacy: .public)' on \(String(describing: self.activeProvider), privacy: .public)")
         await selectPlaylist(playlist)
         let items = songs.map { PlayableItem.track($0) }
         await coordinator.replaceQueue(items)
         if let producer {
             await producer.primeOpeningIntro()
         }
-        try? await coordinator.play()
+        await invokePlay()
     }
 
     func shufflePlaylist(_ playlist: PlaylistInfo) async {
         guard guardPlaybackSupported() else { return }
+        Log.app.info("shufflePlaylist '\(playlist.name, privacy: .public)' on \(String(describing: self.activeProvider), privacy: .public)")
         await selectPlaylist(playlist)
         let items = songs.shuffled().map { PlayableItem.track($0) }
         await coordinator.replaceQueue(items)
         if let producer {
             await producer.primeOpeningIntro()
         }
-        try? await coordinator.play()
+        await invokePlay()
     }
 
     func playSong(_ track: AIDJ.Track) async {
         guard guardPlaybackSupported() else { return }
+        Log.app.info("playSong '\(track.title, privacy: .public)' provider=\(String(describing: track.providerID), privacy: .public)")
         await coordinator.replaceQueue([.track(track)])
         if let producer {
             await producer.primeOpeningIntro()
         }
-        try? await coordinator.play()
+        await invokePlay()
+    }
+
+    /// Central play-kickoff that logs the attempt and surfaces errors to the
+    /// UI via playbackAlertMessage instead of silently swallowing them. The
+    /// Phase 1 try? pattern masked real failures during Phase 2b smoke —
+    /// tapping play just did nothing with no user feedback.
+    private func invokePlay() async {
+        do {
+            try await coordinator.play()
+            Log.app.info("invokePlay: coordinator.play() returned")
+        } catch {
+            Log.app.error("invokePlay: coordinator.play() threw \(String(describing: error), privacy: .public)")
+            playbackAlertMessage = "Couldn't start playback: \(error.localizedDescription)"
+        }
     }
 
     // MARK: Search
