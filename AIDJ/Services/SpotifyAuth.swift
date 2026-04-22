@@ -1,6 +1,9 @@
 import Foundation
 import CryptoKit
 import AuthenticationServices
+#if os(iOS)
+@preconcurrency import SpotifyiOS
+#endif
 
 /// Spotify OAuth constants. Client ID is intentionally not a secret — D2 locks
 /// a single public Client ID shipped in the binary, per hobby-app scope. The
@@ -103,6 +106,20 @@ final class SpotifyAuthCoordinator: NSObject {
     /// auth path. Resumed from `handleAuthCallback(_:)` when macOS routes the
     /// `aidj://` redirect back to the app. nil when no auth flow is in flight.
     private var pendingCallback: CheckedContinuation<URL, Error>?
+#if os(iOS)
+    /// SPTSessionManager drives iOS auth via the Spotify app itself. This is
+    /// required for SPTAppRemote to succeed — the Spotify app only accepts
+    /// the local IPC connection from apps it has authorized via its own auth
+    /// flow. Manual PKCE via ASWebAuthenticationSession yields a valid Web
+    /// API token but never completes the app-to-app handshake.
+    private lazy var iosSessionManager: SPTSessionManager = {
+        let config = SPTConfiguration(clientID: clientID, redirectURL: URL(string: redirectURI)!)
+        return SPTSessionManager(configuration: config, delegate: self)
+    }()
+    /// Pending continuation for the iOS SPTSessionManager flow. Resumed from
+    /// the delegate callbacks (didInitiate / didFailWith).
+    private var pendingIOSSession: CheckedContinuation<SpotifyTokens, Error>?
+#endif
 
     var isAuthenticated: Bool { tokens != nil }
 
@@ -143,17 +160,14 @@ final class SpotifyAuthCoordinator: NSObject {
     ///   framework code path entirely.
     func beginAuthFlow() async throws -> SpotifyTokens {
         Log.spotify.info("beginAuthFlow: start")
+#if os(iOS)
+        return try await awaitIOSSessionManager()
+#elseif os(macOS)
         let pkce = Self.generatePKCEPair()
         let state = Self.randomState()
         let authURL = try buildAuthorizeURL(pkce: pkce, state: state)
         Log.spotify.info("beginAuthFlow: authURL built")
-
-#if os(macOS)
         let callback = try await awaitMacOSCallback(authURL: authURL)
-#else
-        let callback = try await awaitIOSCallback(authURL: authURL)
-#endif
-
         Log.spotify.info("beginAuthFlow: continuation resumed, parsing callback")
         let params = Self.queryItems(from: callback)
         guard params["state"] == state else {
@@ -165,44 +179,56 @@ final class SpotifyAuthCoordinator: NSObject {
             throw SpotifyAuthError.missingCode
         }
         Log.spotify.info("beginAuthFlow: got auth code, exchanging for tokens")
-
         let newTokens = try await exchangeCode(code, verifier: pkce.verifier)
         Log.spotify.info("beginAuthFlow: tokens received, persisting")
         persist(newTokens)
         Log.spotify.info("beginAuthFlow: done")
         return newTokens
+#else
+        throw SpotifyAuthError.notAuthenticated
+#endif
     }
 
 #if os(iOS)
-    private func awaitIOSCallback(authURL: URL) async throws -> URL {
-        anchorBox.set(Self.currentAnchor())
-        defer { anchorBox.set(nil) }
-        Log.spotify.info("beginAuthFlow: anchor captured, starting ASWebAuthenticationSession")
+    /// Scope bitmask matching `SpotifyAuth.scopes`. Passed to
+    /// `SPTSessionManager.initiateSession(with:options:campaign:)`.
+    /// SpotifyiOS 5.0.1 drops both the `SPT` prefix and `Scope` suffix
+    /// from the Swift-bridged names.
+    private static let iosScopes: SPTScope = [
+        .userReadPrivate,
+        .userReadEmail,
+        .playlistReadPrivate,
+        .playlistReadCollaborative,
+        .userLibraryRead,
+        .streaming,
+        .appRemoteControl,
+    ]
 
-        return try await withCheckedThrowingContinuation { (cont: CheckedContinuation<URL, Error>) in
-            let session = ASWebAuthenticationSession(
-                url: authURL,
-                callbackURLScheme: Self.callbackScheme(from: redirectURI)
-            ) { url, error in
-                Log.spotify.info("beginAuthFlow: session completion fired (hasURL=\(url != nil), hasError=\(error != nil))")
-                if let nsError = error as NSError?,
-                   nsError.domain == ASWebAuthenticationSessionErrorDomain,
-                   nsError.code == ASWebAuthenticationSessionError.canceledLogin.rawValue {
-                    cont.resume(throwing: SpotifyAuthError.cancelledByUser)
-                } else if let error {
-                    cont.resume(throwing: error)
-                } else if let url {
-                    cont.resume(returning: url)
-                } else {
-                    cont.resume(throwing: SpotifyAuthError.invalidRedirect)
-                }
+    private func awaitIOSSessionManager() async throws -> SpotifyTokens {
+        Log.spotify.info("beginAuthFlow: initiating SPTSessionManager session (opens Spotify app or falls back to web)")
+        return try await withCheckedThrowingContinuation { (cont: CheckedContinuation<SpotifyTokens, Error>) in
+            if pendingIOSSession != nil {
+                cont.resume(throwing: SpotifyAuthError.alreadyAuthenticating)
+                return
             }
-            session.presentationContextProvider = self
-            session.prefersEphemeralWebBrowserSession = false
-            activeSession = session
-            let started = session.start()
-            Log.spotify.info("beginAuthFlow: session.start() returned \(started)")
+            pendingIOSSession = cont
+            iosSessionManager.initiateSession(with: Self.iosScopes, options: .default, campaign: nil)
         }
+    }
+
+    /// Converts an `SPTScope` bitmask into the space-separated string the
+    /// rest of the app logs/persists. Only the scopes we request are
+    /// decoded; any other flags Spotify might add are ignored.
+    private static func scopeString(from scope: SPTScope) -> String {
+        var parts: [String] = []
+        if scope.contains(.userReadPrivate) { parts.append("user-read-private") }
+        if scope.contains(.userReadEmail) { parts.append("user-read-email") }
+        if scope.contains(.playlistReadPrivate) { parts.append("playlist-read-private") }
+        if scope.contains(.playlistReadCollaborative) { parts.append("playlist-read-collaborative") }
+        if scope.contains(.userLibraryRead) { parts.append("user-library-read") }
+        if scope.contains(.streaming) { parts.append("streaming") }
+        if scope.contains(.appRemoteControl) { parts.append("app-remote-control") }
+        return parts.joined(separator: " ")
     }
 #endif
 
@@ -230,13 +256,23 @@ final class SpotifyAuthCoordinator: NSObject {
     /// redirect to our app. Resumes the in-flight `beginAuthFlow`
     /// continuation with the delivered URL. No-op when no flow is in flight.
     func handleAuthCallback(_ url: URL) {
-        Log.spotify.info("handleAuthCallback: received \(url.absoluteString, privacy: .public)")
+        Log.spotify.info("handleAuthCallback (macOS): received \(url.absoluteString, privacy: .public)")
         guard let cont = pendingCallback else {
             Log.spotify.info("handleAuthCallback: no pending auth flow — ignoring")
             return
         }
         pendingCallback = nil
         cont.resume(returning: url)
+    }
+#endif
+
+#if os(iOS)
+    /// Invoked by `AIDJApp`'s `.onOpenURL` on iOS. Forwards the redirect URL
+    /// to `SPTSessionManager`, which handles the token exchange internally
+    /// and fires the delegate callbacks that resume `pendingIOSSession`.
+    func handleAuthCallback(_ url: URL) {
+        Log.spotify.info("handleAuthCallback (iOS): forwarding \(url.absoluteString, privacy: .public) to SPTSessionManager")
+        _ = iosSessionManager.application(UIApplication.shared, open: url, options: [:])
     }
 #endif
 
@@ -500,6 +536,51 @@ extension SpotifyAuthCoordinator: ASWebAuthenticationPresentationContextProvidin
         anchorBox.get() ?? ASPresentationAnchor()
     }
 }
+
+// MARK: - SPTSessionManagerDelegate (iOS)
+
+#if os(iOS)
+extension SpotifyAuthCoordinator: SPTSessionManagerDelegate {
+    nonisolated func sessionManager(manager: SPTSessionManager, didInitiate session: SPTSession) {
+        Task { @MainActor in
+            let scopeStr = Self.scopeString(from: session.scope)
+            Log.spotify.info("SPTSessionManager didInitiate: scopes=\(scopeStr, privacy: .public) expires=\(session.expirationDate, privacy: .public)")
+            let newTokens = SpotifyTokens(
+                accessToken: session.accessToken,
+                refreshToken: session.refreshToken,
+                expiresAt: session.expirationDate,
+                scope: scopeStr
+            )
+            persist(newTokens)
+            pendingIOSSession?.resume(returning: newTokens)
+            pendingIOSSession = nil
+        }
+    }
+
+    nonisolated func sessionManager(manager: SPTSessionManager, didFailWith error: Error) {
+        let description = error.localizedDescription
+        Task { @MainActor in
+            Log.spotify.error("SPTSessionManager didFailWith: \(description, privacy: .public)")
+            pendingIOSSession?.resume(throwing: error)
+            pendingIOSSession = nil
+        }
+    }
+
+    nonisolated func sessionManager(manager: SPTSessionManager, didRenew session: SPTSession) {
+        Task { @MainActor in
+            let scopeStr = Self.scopeString(from: session.scope)
+            Log.spotify.info("SPTSessionManager didRenew: scopes=\(scopeStr, privacy: .public)")
+            let refreshed = SpotifyTokens(
+                accessToken: session.accessToken,
+                refreshToken: session.refreshToken,
+                expiresAt: session.expirationDate,
+                scope: scopeStr
+            )
+            persist(refreshed)
+        }
+    }
+}
+#endif
 
 // MARK: - Wire format
 

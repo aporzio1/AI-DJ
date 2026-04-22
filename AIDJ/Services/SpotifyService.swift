@@ -99,15 +99,13 @@ final class SpotifyService: NSObject, MusicProviderService {
 #endif
     }
 
-#if os(macOS)
     /// Receives `aidj://` redirects forwarded by `AIDJApp.onOpenURL` and
-    /// hands them to the auth coordinator to resume the in-flight PKCE flow.
-    /// macOS-only — iOS routes the redirect through `ASWebAuthenticationSession`
-    /// directly, bypassing this path.
+    /// hands them to the auth coordinator.
+    /// - iOS (Phase 2b.3+): forwards to `SPTSessionManager.application(_:open:options:)`.
+    /// - macOS: resumes the `NSWorkspace`-driven continuation.
     func handleAuthCallback(_ url: URL) {
         auth.handleAuthCallback(url)
     }
-#endif
 
     /// Probes the Spotify `/me` endpoint to confirm the stored access /
     /// refresh tokens are still valid. Called from `SettingsView.onAppear`
