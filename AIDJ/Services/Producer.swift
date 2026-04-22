@@ -33,9 +33,16 @@ actor Producer {
     private var hasGivenIntro = false
 
     /// Rolling list of headline URLs we've handed to the DJ recently, so we
-    /// don't inject the same "Anonymous credentials: …" item six segments
-    /// in a row. Oldest-first; cap at 10.
+    /// don't inject the same headline repeatedly. Oldest-first; capped at
+    /// `Self.recentHeadlineCap`. Persisted to UserDefaults so the dedup
+    /// survives across app launches — prior in-memory-only behavior reset
+    /// on every cold start and the DJ kept narrating yesterday's top story.
+    /// Device-local by design (D9): recently-heard state is inherently
+    /// per-device, and syncing would add a conflict surface for zero UX gain.
     private var recentHeadlineURLs: [String] = []
+
+    private static let recentHeadlineCap = 200
+    private static let recentHeadlineDefaultsKey = "producer.recentHeadlineURLs.v1"
 
     init(
         coordinator: PlaybackCoordinator,
@@ -55,6 +62,15 @@ actor Producer {
         self.persona = persona
         self.listenerName = listenerName
         self.config = config
+        self.recentHeadlineURLs = Self.loadRecentHeadlineURLs()
+    }
+
+    private static func loadRecentHeadlineURLs() -> [String] {
+        UserDefaults.standard.stringArray(forKey: recentHeadlineDefaultsKey) ?? []
+    }
+
+    private static func persistRecentHeadlineURLs(_ urls: [String]) {
+        UserDefaults.standard.set(urls, forKey: recentHeadlineDefaultsKey)
     }
 
     // MARK: Lifecycle
@@ -134,9 +150,10 @@ actor Producer {
         let key = headline.url.absoluteString
         recentHeadlineURLs.removeAll { $0 == key }
         recentHeadlineURLs.append(key)
-        if recentHeadlineURLs.count > 10 {
-            recentHeadlineURLs.removeFirst(recentHeadlineURLs.count - 10)
+        if recentHeadlineURLs.count > Self.recentHeadlineCap {
+            recentHeadlineURLs.removeFirst(recentHeadlineURLs.count - Self.recentHeadlineCap)
         }
+        Self.persistRecentHeadlineURLs(recentHeadlineURLs)
     }
 
     /// Generate a replacement for the currently-playing DJ segment. Uses the same
