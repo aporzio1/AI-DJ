@@ -51,6 +51,7 @@ targets:
       properties:
         CFBundleDisplayName: Patter
         NSAppleMusicUsageDescription: "Patter needs access to your Apple Music library to play music."
+        ITSAppUsesNonExemptEncryption: false
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
