@@ -113,11 +113,11 @@ struct LibraryView: View {
             NavigationLink {
                 PlaylistDetailView(playlist: playlist, vm: vm)
             } label: {
-                LibraryCardView(item: item)
+                LibraryCardView(item: item, artwork: vm.artwork(for: item))
             }
             .buttonStyle(.plain)
         case .track, .album, .station:
-            LibraryCardView(item: item)
+            LibraryCardView(item: item, artwork: vm.artwork(for: item))
                 .onTapGesture {
                     Task { await vm.playLibraryItem(item) }
                 }

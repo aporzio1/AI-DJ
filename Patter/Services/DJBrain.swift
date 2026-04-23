@@ -23,7 +23,7 @@ func appleIntelligenceUnavailabilityReason() -> String? {
 
 @Generable
 struct DJScriptResponse {
-    @Guide(description: "A radio DJ monologue: 2 to 4 complete sentences, 30-70 words. Reference the music, the time of day, or the vibe. Always a complete thought — never a fragment.")
+    @Guide(description: "Only the spoken radio DJ break. 2 to 4 complete sentences, 30-70 words. No labels, notes, URLs, lists, or repeated facts.")
     let script: String
 }
 
@@ -46,16 +46,38 @@ final class DJBrain: DJBrainProtocol {
         var instructions = """
         \(context.persona.styleDescriptor)
 
-        You are a real human radio DJ on the mic between songs. Sound like a person talking, not writing —
-        casual contractions, natural rhythm, one or two offhand observations. Always 2 to 4 complete
-        sentences, 30-70 words. Vary WHAT you talk about between segments, not the length.
+        You are a real human radio DJ on the mic between songs. Write only the words spoken aloud.
+        Sound like a person talking into the next record: casual contractions, natural rhythm, one
+        quick thought, then a clean handoff. Always 2 to 4 complete sentences, 30-70 words.
+
+        Traditional DJ shape:
+        - If there was a previous song, acknowledge it once in plain language.
+        - If there is news, make it one quick aside unless a summary gives real context.
+        - End by naming the upcoming song once.
+        - Do not repeat the same song, artist, listener name, or clock time.
 
         Hard rules:
+        - Output the spoken break only. Never read or echo prompt labels like SEGMENT, NEXT SONG,
+          NEWS TOPIC, NEWS SUMMARY, Just played, Listener name, or Current time.
+        - Match the segment timing exactly. If this is an opening intro, the upcoming song has NOT played yet:
+          talk about it as coming up / first / about to play, and never say "I just played" or "we just heard".
+          If this is between songs, only "just played" can refer to tracks listed as recently played below,
+          never to the upcoming song.
+        - Mention the clock time only occasionally. Most announcements should skip the time entirely.
+          If you use it, say it once and never repeat it.
+        - The news headline is NOT a song, track, artist, album, playlist, or anything that can be "up next".
+          "Coming up", "up next", "next", "about to play", and "enjoy the song" may refer ONLY to the song
+          in the NEXT SONG field.
+        - Never say a news story, news update, article, headline, or topic is "coming up", "up next",
+          "after the break", or something to "stay tuned" for. If news is provided, you are talking
+          about it now, then returning to the next song.
         - Sound conversational. AVOID flowery or review-style phrasing like "melancholic beauty",
           "ethereal melody", "timeless elegance", "sonic landscape", "enjoy the journey". Those read as AI,
           not a human on the radio. Plain, direct words instead.
         - Never produce one-liners or fragments.
         - Never say "Here's a script" or "Let me introduce" — just go.
+        - Do not make a checklist or sequence of short metadata sentences. This should sound like
+          one natural radio break, not a readout.
         - Song titles like "7\" Mix" or "(Remastered)" are not part of your script; read the song naturally.
         - No emojis, emoticons, or decorative symbols — your output is spoken aloud by a text-to-speech engine.
         - SPELL OUT INITIALISMS with spaces between letters: "GPT" → "G P T", "AI" → "A I",
@@ -75,13 +97,16 @@ final class DJBrain: DJBrainProtocol {
             instructions += """
 
 
-            A news headline and (usually) a short context blurb are provided below. You MUST weave them
+            A news topic and (usually) a short context blurb are provided below. You MUST weave them
             into the script — paraphrase naturally, NEVER recite the headline or blurb verbatim. Do not
-            ignore them; the listener has explicitly opted in to hear news.
+            ignore them; the listener has explicitly opted in to hear news. The news topic is only a
+            quick aside right now, not a later tease and not the next item in the music queue.
 
-            Give the listener 2–3 sentences of actual context on the story — what happened, who's
-            involved, why it matters — before bridging back to the track coming up. For this news
-            segment, override the usual length guidance: aim for 4–5 sentences, 60–100 words.
+            If a NEWS SUMMARY field is present, give the listener 1–2 sentences of actual context on
+            the story — what happened, who's involved, why it matters — then bridge back by naming
+            the NEXT SONG. If only a NEWS TOPIC is present, mention it briefly in one sentence and
+            do not invent article details. For news segments with a summary, override the usual length
+            guidance: aim for 4–5 sentences, 60–100 words.
             """
         }
         let session = LanguageModelSession(instructions: instructions)
@@ -91,7 +116,14 @@ final class DJBrain: DJBrainProtocol {
         let script = response.content.script.trimmingCharacters(in: .whitespacesAndNewlines)
         Log.brain.info("generated in \(String(describing: elapsed), privacy: .public): \(script, privacy: .public)")
         let clean = stripEmoji(script).trimmingCharacters(in: .whitespacesAndNewlines)
-        return truncateAtSentenceBoundary(clean, maxChars: 500)
+        var sanitized = sanitizePromptLeakage(clean)
+        sanitized = removeRepeatedTimeMentions(sanitized, currentTimeString: context.currentTimeString)
+        sanitized = removeDuplicateSongCallouts(sanitized, context: context)
+        if sanitized.isEmpty {
+            sanitized = "Up next, \(cleanTitle(context.upcomingTrack.title)) by \(context.upcomingTrack.artist)."
+        }
+        let guarded = enforceSongNewsBoundary(sanitized, context: context)
+        return truncateAtSentenceBoundary(guarded, maxChars: 500)
     }
 
     private func stripEmoji(_ text: String) -> String {
@@ -102,15 +134,23 @@ final class DJBrain: DJBrainProtocol {
 
     private func buildPrompt(context: DJContext) -> String {
         var parts: [String] = []
-        parts.append("Introduce '\(cleanTitle(context.upcomingTrack.title))' by \(context.upcomingTrack.artist).")
-        parts.append("Current time: \(context.currentTimeString) (\(context.timeOfDay.rawValue)). If you mention the time, use exactly this value.")
+        let upcoming = "'\(cleanTitle(context.upcomingTrack.title))' by \(context.upcomingTrack.artist)"
+        switch context.placement {
+        case .opening:
+            parts.append("SEGMENT: Opening intro before any music has played.")
+            parts.append("NEXT SONG: \(upcoming). Refer to this song only as coming up, up first, or about to play. Do not say it just played.")
+        case .betweenSongs:
+            parts.append("SEGMENT: Between-song break.")
+            parts.append("NEXT SONG: \(upcoming). Refer to this song only as coming up, next, or about to play. Do not say it just played.")
+        }
+        parts.append("Current time: \(context.currentTimeString) (\(context.timeOfDay.rawValue)). Mention the time only if it adds variety; if you mention it, use exactly this value.")
 
         if let name = context.listenerName, !name.isEmpty {
             parts.append("Listener name: \(name). Address them by name occasionally, not every time.")
         }
 
         if !context.recentTracks.isEmpty {
-            let recent = context.recentTracks.prefix(3)
+            let recent = context.recentTracks.suffix(3)
                 .map { "\(cleanTitle($0.title)) by \($0.artist)" }
                 .joined(separator: ", ")
             parts.append("Just played: \(recent).")
@@ -128,16 +168,16 @@ final class DJBrain: DJBrainProtocol {
         if let headline = context.newsHeadline {
             // Producer already gated on NewsFrequency probability before
             // fetching — if a headline is here, the user asked for news on
-            // this segment. Pass the cleaned title + the feed's summary /
-            // description field (HTML-stripped, truncated); system
-            // instructions demand paraphrasing over verbatim recital.
-            parts.append("News headline to reference: \(cleanHeadline(headline.title))")
-            let context = stripHTML(headline.summary)
-            if !context.isEmpty {
-                let truncated = context.count > 500
-                    ? String(context.prefix(500)) + "…"
-                    : context
-                parts.append("Headline context (paraphrase, never read verbatim): \(truncated)")
+            // this segment. Pass the cleaned title plus only usable summary
+            // text. HN RSS descriptions are often just "Article URL",
+            // "Comments URL", points, and comment count; those are prompt
+            // metadata, not speakable news context.
+            parts.append("NEWS TOPIC, NOT A SONG: \(cleanHeadline(headline.title))")
+            if let newsContext = usableNewsContext(from: headline.summary) {
+                let truncated = newsContext.count > 500
+                    ? String(newsContext.prefix(500)) + "…"
+                    : newsContext
+                parts.append("NEWS SUMMARY: \(truncated)")
             }
         }
 
@@ -184,6 +224,21 @@ final class DJBrain: DJBrainProtocol {
         return result.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    func usableNewsContext(from summary: String) -> String? {
+        var result = stripHTML(summary)
+        result = result.replacingOccurrences(of: #"https?://\S+"#, with: "", options: .regularExpression)
+        result = result.replacingOccurrences(of: #"\bArticle URL:\s*"#, with: "", options: [.regularExpression, .caseInsensitive])
+        result = result.replacingOccurrences(of: #"\bComments URL:\s*"#, with: "", options: [.regularExpression, .caseInsensitive])
+        result = result.replacingOccurrences(of: #"\bPoints:\s*\d+\b"#, with: "", options: [.regularExpression, .caseInsensitive])
+        result = result.replacingOccurrences(of: #"#\s*Comments:\s*\d+\b"#, with: "", options: [.regularExpression, .caseInsensitive])
+        result = result.replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+        result = result.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        let words = result.split(whereSeparator: { !$0.isLetter })
+        guard words.count >= 6 else { return nil }
+        return result
+    }
+
     /// Strip awkward prefixes so the DJ doesn't read "Show HN: …" aloud.
     private func cleanHeadline(_ title: String) -> String {
         var cleaned = title
@@ -194,6 +249,131 @@ final class DJBrain: DJBrainProtocol {
             }
         }
         return cleaned.trimmingCharacters(in: .whitespaces)
+    }
+
+    func enforceSongNewsBoundary(_ script: String, context: DJContext) -> String {
+        guard let headline = context.newsHeadline else { return script }
+
+        let headlineNeedle = normalizedForBoundaryCheck(cleanHeadline(headline.title))
+        let nextPhrases = ["coming up", "up next", "about to play", "next song", "enjoy the song", "after the break", "stay tuned"]
+        let newsTerms = ["news", "story", "article", "headline", "topic", "update"]
+        let sentences = splitSentences(script)
+        let cleanedSentences = sentences.compactMap { sentence -> String? in
+            let normalized = normalizedForBoundaryCheck(sentence)
+            let mentionsHeadline = !headlineNeedle.isEmpty && normalized.contains(headlineNeedle)
+            let mentionsNews = newsTerms.contains { normalized.contains($0) }
+            let usesNextLanguage = nextPhrases.contains { normalized.contains($0) }
+            if (mentionsHeadline || mentionsNews) && usesNextLanguage {
+                return nil
+            }
+            return sentence
+        }
+
+        var guarded = cleanedSentences.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+        if guarded.isEmpty {
+            guarded = "A quick story caught my eye before the next track."
+        }
+
+        let normalizedGuarded = normalizedForBoundaryCheck(guarded)
+        let songTitle = normalizedForBoundaryCheck(cleanTitle(context.upcomingTrack.title))
+        let artist = normalizedForBoundaryCheck(context.upcomingTrack.artist)
+        if (!songTitle.isEmpty && !normalizedGuarded.contains(songTitle)) || (!artist.isEmpty && !normalizedGuarded.contains(artist)) {
+            guarded += " Up next, \(cleanTitle(context.upcomingTrack.title)) by \(context.upcomingTrack.artist)."
+        }
+        return guarded
+    }
+
+    func sanitizePromptLeakage(_ script: String) -> String {
+        let promptLabels = [
+            "NEWS TOPIC",
+            "NEWS CONTEXT",
+            "NEWS SUMMARY",
+            "NEXT SONG",
+            "SEGMENT:",
+            "Current time:",
+            "Listener name:",
+            "Just played:",
+            "Recently liked:",
+            "Recently skipped",
+            "Article URL:",
+            "Comments URL:",
+            "Points:",
+            "# Comments:",
+        ]
+
+        var cleaned = script
+        if let firstLeak = promptLabels
+            .compactMap({ cleaned.range(of: $0, options: [.caseInsensitive])?.lowerBound })
+            .min()
+        {
+            cleaned = String(cleaned[..<firstLeak])
+        }
+
+        cleaned = cleaned.replacingOccurrences(of: #"https?://\S+"#, with: "", options: .regularExpression)
+        cleaned = cleaned.replacingOccurrences(
+            of: #"\b[a-z0-9.-]+\s*\.\s*(com|org|net|io|dev|edu|gov)\S*"#,
+            with: "",
+            options: [.regularExpression, .caseInsensitive]
+        )
+        cleaned = cleaned.replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+        return cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func normalizedForBoundaryCheck(_ text: String) -> String {
+        text.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+            .lowercased()
+            .replacingOccurrences(of: "[^a-z0-9 ]+", with: " ", options: .regularExpression)
+            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func removeRepeatedTimeMentions(_ script: String, currentTimeString: String) -> String {
+        guard !currentTimeString.isEmpty else { return script }
+        var hasKeptTime = false
+        let cleaned = splitSentences(script).compactMap { sentence -> String? in
+            guard sentence.localizedCaseInsensitiveContains(currentTimeString) else { return sentence }
+            if !hasKeptTime {
+                hasKeptTime = true
+                return sentence
+            }
+
+            let withoutTime = sentence
+                .replacingOccurrences(of: currentTimeString, with: "", options: [.caseInsensitive])
+                .replacingOccurrences(of: #"^\s*[,.;:!-]+\s*"#, with: "", options: .regularExpression)
+                .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+                .trimmingCharacters(in: CharacterSet.whitespacesAndNewlines.union(.punctuationCharacters))
+
+            return withoutTime.isEmpty ? nil : withoutTime + "."
+        }
+        return cleaned.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func removeDuplicateSongCallouts(_ script: String, context: DJContext) -> String {
+        let songTitle = normalizedForBoundaryCheck(cleanTitle(context.upcomingTrack.title))
+        let artist = normalizedForBoundaryCheck(context.upcomingTrack.artist)
+        guard !songTitle.isEmpty else { return script }
+
+        var hasSongCallout = false
+        let cleaned = splitSentences(script).compactMap { sentence -> String? in
+            let normalized = normalizedForBoundaryCheck(sentence)
+            let mentionsSong = normalized.contains(songTitle)
+            let mentionsArtist = artist.isEmpty || normalized.contains(artist)
+            guard mentionsSong && mentionsArtist else { return sentence }
+
+            if hasSongCallout {
+                return nil
+            }
+            hasSongCallout = true
+            return sentence
+        }
+        return cleaned.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func splitSentences(_ text: String) -> [String] {
+        text.split(whereSeparator: { ".!?".contains($0) })
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .map { $0 + "." }
     }
 
     private func truncateAtSentenceBoundary(_ text: String, maxChars: Int) -> String {

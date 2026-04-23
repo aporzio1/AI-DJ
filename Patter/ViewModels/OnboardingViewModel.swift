@@ -9,7 +9,8 @@ final class OnboardingViewModel {
         case checking
         case ready
         case preferences       // gates + checks passed, user hasn't finished the first-launch wizard yet
-        case needsMusicKitAuth
+        case needsMusicKitAuth      // .notDetermined — request() will show the system prompt
+        case musicKitAuthDenied     // .denied / .restricted — request() is a no-op; user must re-enable in Settings
         case needsAppleIntelligence(reason: String)
     }
 
@@ -40,8 +41,17 @@ final class OnboardingViewModel {
 
         let authStatus = musicService.authorizationStatus
         Log.onboarding.info("MusicKit auth status: \(String(describing: authStatus), privacy: .public)")
-        if authStatus != .authorized {
+        switch authStatus {
+        case .authorized:
+            break
+        case .unknown, .needsReauth:
             status = .needsMusicKitAuth
+            return
+        case .notAuthorized:
+            // Once iOS records a denial, MusicAuthorization.request() returns
+            // immediately without re-prompting. The only way back is for the
+            // user to flip the permission in Settings.
+            status = .musicKitAuthDenied
             return
         }
 

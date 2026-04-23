@@ -7,6 +7,12 @@ final class MusicKitService: MusicProviderService {
     private let player = ApplicationMusicPlayer.shared
     private var observationTask: Task<Void, Never>?
     private var artworkCache: [String: Artwork] = [:]
+    /// Personal-mix tracks (`pl.pm-…`) and similar relationship-scoped songs
+    /// have IDs that don't resolve via library or catalog lookup — they only
+    /// play when the original `Song` object is queued directly. Caching by
+    /// `song.id.rawValue` lets `start(track:)` short-circuit the round-trip
+    /// for any track we already saw via a fetcher.
+    private var songCache: [String: Song] = [:]
 
     let providerID: Patter.Track.MusicProviderID = .appleMusic
 
@@ -26,7 +32,11 @@ final class MusicKitService: MusicProviderService {
 
     func start(track: Track) async throws {
         Log.musicKit.info("start(track: '\(track.title, privacy: .public)')")
-        let song = try await resolveSong(id: track.id)
+        let song = if let cached = songCache[track.id] {
+            cached
+        } else {
+            try await resolveSong(id: track.id)
+        }
         player.queue = ApplicationMusicPlayer.Queue(for: [song])
         try await player.play()
         Log.musicKit.debug("player.play() returned, playbackTime=\(self.player.playbackTime) status=\(String(describing: self.player.state.playbackStatus), privacy: .public)")
@@ -86,7 +96,7 @@ final class MusicKitService: MusicProviderService {
 
     var currentTrack: Track? {
         guard case .song(let song) = player.queue.currentEntry?.item else { return nil }
-        cacheArtwork(for: song)
+        cache(song: song)
         return Track(song: song)
     }
 
@@ -95,10 +105,16 @@ final class MusicKitService: MusicProviderService {
         return nil
     }
 
-    private func cacheArtwork(for song: Song) {
+    private func cache(song: Song) {
         if let art = song.artwork {
             artworkCache[song.id.rawValue] = art
         }
+        songCache[song.id.rawValue] = song
+    }
+
+    private func cacheArtwork(_ artwork: Artwork?, id: MusicItemID) {
+        guard let artwork else { return }
+        artworkCache[id.rawValue] = artwork
     }
 
     var playbackStatus: MusicPlaybackStatus {
@@ -116,7 +132,8 @@ final class MusicKitService: MusicProviderService {
         request.limit = 100
         let response = try await request.response()
         return response.items.map {
-            PlaylistInfo(
+            cacheArtwork($0.artwork, id: $0.id)
+            return PlaylistInfo(
                 id: $0.id.rawValue,
                 name: $0.name,
                 artworkURL: $0.artwork?.url(width: 200, height: 200)
@@ -130,7 +147,7 @@ final class MusicKitService: MusicProviderService {
         request.limit = limit
         let response = try await request.response()
         let songs = Array(response.songs)
-        for song in songs { cacheArtwork(for: song) }
+        for song in songs { cache(song: song) }
         return songs.map(Track.init(song:))
     }
 
@@ -149,13 +166,17 @@ final class MusicKitService: MusicProviderService {
         if skipped > 0 {
             Log.musicKit.info("songs(inPlaylist): skipped \(skipped) unplayable tracks of \(allSongs.count)")
         }
-        for song in playable { cacheArtwork(for: song) }
+        for song in playable { cache(song: song) }
         return playable.map(Track.init(song:))
     }
 
     func isPlayable(trackId: String) async -> Bool {
+        if let cached = songCache[trackId] {
+            return cached.playParameters != nil
+        }
         do {
             let song = try await resolveSong(id: trackId)
+            cache(song: song)
             return song.playParameters != nil
         } catch {
             return false
@@ -172,7 +193,7 @@ final class MusicKitService: MusicProviderService {
         request.limit = 20
         let response = try await request.response()
         let songs = Array(response.items)
-        for song in songs { cacheArtwork(for: song) }
+        for song in songs { cache(song: song) }
         return songs.map { LibraryItem.track(Track(song: $0)) }
     }
 
@@ -194,6 +215,7 @@ final class MusicKitService: MusicProviderService {
             for playlist in rec.playlists {
                 let id = playlist.id.rawValue
                 guard seen.insert(id).inserted else { continue }
+                cacheArtwork(playlist.artwork, id: playlist.id)
                 items.append(LibraryItem.playlist(PlaylistInfo(
                     id: id,
                     name: playlist.name,
@@ -205,6 +227,7 @@ final class MusicKitService: MusicProviderService {
             for album in rec.albums {
                 let id = album.id.rawValue
                 guard seen.insert(id).inserted else { continue }
+                cacheArtwork(album.artwork, id: album.id)
                 items.append(LibraryItem.album(AlbumInfo(
                     id: id,
                     title: album.title,
@@ -217,6 +240,7 @@ final class MusicKitService: MusicProviderService {
             for station in rec.stations {
                 let id = station.id.rawValue
                 guard seen.insert(id).inserted else { continue }
+                cacheArtwork(station.artwork, id: station.id)
                 items.append(LibraryItem.station(StationInfo(
                     id: id,
                     name: station.name,
@@ -264,7 +288,7 @@ final class MusicKitService: MusicProviderService {
                 if case .song(let s) = track { return s }
                 return nil
             }
-            for song in songs { cacheArtwork(for: song) }
+            for song in songs { cache(song: song) }
             return songs.map(Track.init(song:))
         }
         let catalogRequest = MusicCatalogResourceRequest<Album>(
@@ -277,7 +301,7 @@ final class MusicKitService: MusicProviderService {
             if case .song(let s) = track { return s }
             return nil
         }
-        for song in songs { cacheArtwork(for: song) }
+        for song in songs { cache(song: song) }
         return songs.map(Track.init(song:))
     }
 

@@ -2,6 +2,7 @@ import Foundation
 
 /// Input context for DJ script generation.
 struct DJContext: Sendable {
+    let placement: Placement
     let persona: DJPersona
     let upcomingTrack: Track
     let recentTracks: [Track]     // last N played, oldest-first
@@ -10,6 +11,11 @@ struct DJContext: Sendable {
     let newsHeadline: NewsHeadline?
     let listenerName: String?
     let feedback: FeedbackSummary?
+
+    enum Placement: String, Sendable {
+        case opening
+        case betweenSongs
+    }
 
     enum TimeOfDay: String, Sendable {
         case morning, afternoon, evening, lateNight

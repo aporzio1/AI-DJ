@@ -30,6 +30,7 @@ struct RootView: View {
     @State private var showingNowPlaying = false
 
     var body: some View {
+        @Bindable var settings = settings
         Group {
             if isReady, let nowPlaying = nowPlayingVM, let queue = queueVM, let library = libraryVM {
                 mainContent(nowPlaying: nowPlaying, queue: queue, library: library)
@@ -95,9 +96,15 @@ struct RootView: View {
                 onboardingVM = OnboardingViewModel(musicService: musicProvider.appleMusic)
             }
         }
+        .alert("Kokoro voice paused", isPresented: $settings.showKokoroDowngradeNotice) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Patter switched to Device Voices. iOS 26 has a system-level bug that crashes the on-device Kokoro model on launch. You can re-enable Kokoro under Settings → DJ Voice once a future iOS update resolves it.")
+        }
     }
 
     private func handleReady() {
+        guard !isReady else { return }
         Log.app.info("handleReady — wiring coordinator + producer (listener=\(settings.listenerName, privacy: .public))")
         let c = PlaybackCoordinator(router: musicProvider, audioGraph: audioGraph)
         rssFetcher.updateFeeds(settings.feedURLs)

@@ -65,6 +65,18 @@ enum LibraryItem: Identifiable, Codable, Sendable, Hashable {
         }
     }
 
+    /// Raw provider ID used for transient provider-specific caches, such as
+    /// MusicKit.Artwork. Unlike `id`, this intentionally omits the enum case
+    /// prefix because provider services cache by their native item IDs.
+    var providerItemID: String {
+        switch self {
+        case .track(let t):    t.id
+        case .playlist(let p): p.id
+        case .album(let a):    a.id
+        case .station(let s):  s.id
+        }
+    }
+
     /// SF Symbol name used by the card when no artwork resolves.
     var placeholderSystemImage: String {
         switch self {

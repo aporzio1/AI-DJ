@@ -71,9 +71,11 @@ final class FakeDJBrain: DJBrainProtocol, @unchecked Sendable {
     var nextScript = "Up next, great stuff."
     var generateCallCount = 0
     var shouldThrow = false
+    var lastContext: DJContext?
 
     func generateScript(for context: DJContext) async throws -> String {
         generateCallCount += 1
+        lastContext = context
         if shouldThrow { throw FakeError.intentional }
         return nextScript
     }

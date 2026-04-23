@@ -39,6 +39,26 @@ struct ProducerTests {
             Issue.record("Expected djSegment at index 1, got \(queue[1])")
         }
         #expect(brain.generateCallCount == 1)
+        #expect(brain.lastContext?.placement == .betweenSongs)
+    }
+
+    @Test func primeOpeningIntroUsesOpeningContext() async {
+        let (producer, coordinator, brain, _, _) = makeStack()
+        let t1 = Patter.Track.stub(id: "t1", title: "Opening Song")
+        await coordinator.replaceQueue([.track(t1)])
+
+        await producer.primeOpeningIntro()
+
+        let queue = await coordinator.queue
+        #expect(queue.count == 2)
+        if case .djSegment = queue[0] {
+            // OK
+        } else {
+            Issue.record("Expected opening djSegment at index 0, got \(queue[0])")
+        }
+        #expect(brain.generateCallCount == 1)
+        #expect(brain.lastContext?.placement == .opening)
+        #expect(brain.lastContext?.recentTracks.isEmpty == true)
     }
 
     @Test func brainFailureFallsBackToCannedScript() async {

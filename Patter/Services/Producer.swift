@@ -168,7 +168,7 @@ actor Producer {
             return nil
         }
         Log.producer.info("regenerating segment for '\(upcoming.title, privacy: .public)'")
-        return await generateSegment(upcomingTrack: upcoming)
+        return await generateSegment(upcomingTrack: upcoming, placement: .betweenSongs)
     }
 
     func primeOpeningIntro() async {
@@ -179,7 +179,7 @@ actor Producer {
         let queue = await coordinator.queue
         guard let firstTrack = queue.first, case .track(let upcoming) = firstTrack else { return }
         Log.producer.info("Priming opening intro for '\(upcoming.title, privacy: .public)'")
-        guard let segment = await generateSegment(upcomingTrack: upcoming) else { return }
+        guard let segment = await generateSegment(upcomingTrack: upcoming, placement: .opening) else { return }
         await coordinator.prependAndSelect(.djSegment(segment))
         hasGivenIntro = true
         tracksSinceLastSegment = 0
@@ -276,10 +276,10 @@ actor Producer {
             Log.producer.debug("Skipping DJ for this transition (tracksSinceLast=\(self.tracksSinceLastSegment))")
             return nil
         }
-        return await generateSegment(upcomingTrack: upcomingTrack)
+        return await generateSegment(upcomingTrack: upcomingTrack, placement: .betweenSongs)
     }
 
-    private func generateSegment(upcomingTrack: Patter.Track) async -> DJSegment? {
+    private func generateSegment(upcomingTrack: Patter.Track, placement: DJContext.Placement) async -> DJSegment? {
         let headline: NewsHeadline? = await fetchTopHeadlineIfEnabled()
 
         let feedbackSummary: FeedbackSummary?
@@ -291,6 +291,7 @@ actor Producer {
         }
 
         let context = DJContext(
+            placement: placement,
             persona: persona,
             upcomingTrack: upcomingTrack,
             recentTracks: recentTracks,

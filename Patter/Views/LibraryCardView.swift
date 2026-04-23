@@ -57,7 +57,7 @@ struct ProviderArtworkView: View {
         case .url(let url):
             asyncImage(url: url)
         case .none:
-            if let url = fallbackURL {
+            if let url = fallbackURL, url.isHTTPArtworkURL {
                 asyncImage(url: url)
             } else {
                 placeholder
@@ -90,5 +90,12 @@ struct ProviderArtworkView: View {
                 .foregroundStyle(.secondary)
         }
         .frame(width: size, height: size)
+    }
+}
+
+private extension URL {
+    var isHTTPArtworkURL: Bool {
+        guard let scheme = scheme?.lowercased() else { return false }
+        return scheme == "http" || scheme == "https"
     }
 }

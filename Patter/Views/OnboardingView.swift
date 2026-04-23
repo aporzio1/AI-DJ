@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct OnboardingView: View {
+    @Environment(\.scenePhase) private var scenePhase
     @State private var vm: OnboardingViewModel
     @Bindable var settings: SettingsViewModel
     let onReady: () -> Void
@@ -31,6 +32,15 @@ struct OnboardingView: View {
                 ) {
                     Task { await vm.requestMusicAccess() }
                 }
+            case .musicKitAuthDenied:
+                blockedView(
+                    icon: "music.note",
+                    title: "Apple Music Access Required",
+                    message: "Apple Music access is currently turned off. Open Settings → Privacy & Security → Media & Apple Music → Patter, then return here.",
+                    actionTitle: "Open Settings"
+                ) {
+                    openAppSettings()
+                }
             case .needsAppleIntelligence(let reason):
                 blockedView(
                     icon: "brain",
@@ -38,21 +48,29 @@ struct OnboardingView: View {
                     message: reason,
                     actionTitle: "Open Settings"
                 ) {
-#if os(iOS)
-                    if let url = URL(string: UIApplication.openSettingsURLString) {
-                        UIApplication.shared.open(url)
-                    }
-#endif
+                    openAppSettings()
                 }
             }
         }
         .task { await vm.checkStatus() }
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active else { return }
+            Task { await vm.checkStatus() }
+        }
         .onChange(of: vm.isReady) { _, ready in
             if ready {
                 Log.onboarding.info("isReady fired → calling onReady()")
                 onReady()
             }
         }
+    }
+
+    private func openAppSettings() {
+#if os(iOS)
+        if let url = URL(string: UIApplication.openSettingsURLString) {
+            UIApplication.shared.open(url)
+        }
+#endif
     }
 
     private func blockedView(icon: String, title: String, message: String, actionTitle: String, action: @escaping () -> Void) -> some View {

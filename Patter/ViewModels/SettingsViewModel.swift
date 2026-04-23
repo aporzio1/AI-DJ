@@ -20,6 +20,12 @@ final class SettingsViewModel {
     var openAIAPIKey: String = ""   // mirrored in Keychain; this is the in-memory copy for the SecureField
     var kokoroVoice: String = KokoroVoice.defaultVoice.rawValue
 
+    /// Set when init() force-flips a persisted `.kokoro` selection to `.system`
+    /// on iOS 26 to dodge the libBNNS+SME2 conv-transpose-1D segfault (K6).
+    /// RootView observes this and shows a one-time alert; SwiftUI clears it
+    /// back to false on dismissal.
+    var showKokoroDowngradeNotice: Bool = false
+
     private static let feedsKey = "rssFeedURLs"
     private static let djEnabledKey = "djEnabled"
     private static let djFrequencyKey = "djFrequency"
@@ -35,6 +41,7 @@ final class SettingsViewModel {
     private static let customPersonasKey = "djCustomPersonas"
     private static let activePersonaIDKey = "djActivePersonaID"
     private static let iCloudSyncEnabledKey = "iCloudSyncEnabled"   // device-local, NOT synced
+    private static let kokoroDowngradedFromIOS26Key = "kokoroAutoDowngradedFromIOS26"  // device-local sentinel; one-shot
 
     /// Keys that participate in iCloud sync. Kept deliberately narrow:
     /// feed URLs, preferences, and persona library — but NOT the
@@ -69,6 +76,7 @@ final class SettingsViewModel {
             // down before we hand the VM to RootView.
             loadFromUserDefaults()
         }
+        applyIOS26KokoroDowngradeIfNeeded()
         // The SettingsViewModel is owned by PatterApp for the whole process
         // lifetime, so we deliberately don't track + remove the observer on
         // deinit — Swift 6 nonisolated-deinit rules around @Observable make
@@ -204,6 +212,30 @@ final class SettingsViewModel {
         if allPersonas.first(where: { $0.id == activePersonaID }) == nil {
             activePersonaID = DJPersona.default.id
         }
+    }
+
+    /// On iOS 26.x, FluidAudio's Kokoro CoreML model triggers a hard segfault
+    /// inside libBNNS.dylib's SME2 1D-conv-transpose kernel during model load
+    /// (tracker K6, FB radar pending). The crash is in Apple framework code so
+    /// the in-app `try/catch` fallback in DJVoiceRouter can't catch it — the
+    /// process is dead before the fallback runs. So if the persisted provider
+    /// is `.kokoro` on iOS 26, force-flip it to `.system` once and surface a
+    /// notice. The sentinel is per-device and one-shot: if the user re-enables
+    /// Kokoro afterwards we respect their choice and don't fight them.
+    private func applyIOS26KokoroDowngradeIfNeeded() {
+        #if os(iOS)
+        let alreadyDowngraded = UserDefaults.standard.bool(forKey: Self.kokoroDowngradedFromIOS26Key)
+        guard !alreadyDowngraded,
+              ttsProvider == .kokoro,
+              ProcessInfo.processInfo.operatingSystemVersion.majorVersion == 26
+        else { return }
+
+        Log.app.warning("Auto-downgrading TTS provider .kokoro → .system on iOS 26 (tracker K6)")
+        ttsProvider = .system
+        UserDefaults.standard.set(true, forKey: Self.kokoroDowngradedFromIOS26Key)
+        UserDefaults.standard.set(ttsProvider.rawValue, forKey: Self.ttsProviderKey)
+        showKokoroDowngradeNotice = true
+        #endif
     }
 
     // MARK: Persona

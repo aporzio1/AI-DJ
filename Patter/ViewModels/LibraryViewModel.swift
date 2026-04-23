@@ -70,7 +70,8 @@ final class LibraryViewModel {
         }
         let isStale = cached.map { !$0.isFresh(ttl: LibrarySectionCache.ttl) } ?? true
         let isEmpty = cached?.items.isEmpty ?? true
-        guard forceRefresh || isStale || isEmpty else { return }
+        let needsArtworkRefresh = cached?.items.contains(where: \.needsProviderArtworkRefresh) ?? false
+        guard forceRefresh || isStale || isEmpty || needsArtworkRefresh else { return }
 
         if let items = try? await musicService.recentlyPlayed() {
             recentlyPlayed = items
@@ -87,7 +88,8 @@ final class LibraryViewModel {
         }
         let isStale = cached.map { !$0.isFresh(ttl: LibrarySectionCache.ttl) } ?? true
         let isEmpty = cached?.items.isEmpty ?? true
-        guard forceRefresh || isStale || isEmpty else { return }
+        let needsArtworkRefresh = cached?.items.contains(where: \.needsProviderArtworkRefresh) ?? false
+        guard forceRefresh || isStale || isEmpty || needsArtworkRefresh else { return }
 
         if let items = try? await musicService.recommendations() {
             recommendations = items
@@ -102,6 +104,10 @@ final class LibraryViewModel {
         async let rp: Void = loadRecentlyPlayed(forceRefresh: true)
         async let rec: Void = loadRecommendations(forceRefresh: true)
         _ = await (rp, rec)
+    }
+
+    func artwork(for item: LibraryItem) -> ProviderArtwork? {
+        musicService.artwork(for: item.providerItemID)
     }
 
     /// Handles a tap on a Library card. Tracks play directly; playlists get
@@ -265,5 +271,13 @@ final class LibraryViewModel {
     func clearSearch() {
         searchResults = []
         isSearching = false
+    }
+}
+
+private extension LibraryItem {
+    var needsProviderArtworkRefresh: Bool {
+        guard let url = fallbackArtworkURL else { return false }
+        guard let scheme = url.scheme?.lowercased() else { return false }
+        return scheme == "musickit"
     }
 }
