@@ -493,7 +493,7 @@ struct SettingsView: View {
         .alert("Onboarding Reset", isPresented: $showingResetOnboardingDone) {
             Button("OK", role: .cancel) {}
         } message: {
-            Text("Quit and reopen AI DJ to see the first-launch wizard.")
+            Text("Quit and reopen Patter to see the first-launch wizard.")
         }
     }
 

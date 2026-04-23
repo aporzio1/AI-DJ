@@ -1,37 +1,37 @@
 import Foundation
 import MusicKit
-@testable import AIDJ
+@testable import Patter
 
 // MARK: - FakeMusicService
 
 @MainActor
 final class FakeMusicService: MusicProviderService {
-    var providerID: AIDJ.Track.MusicProviderID = .appleMusic
+    var providerID: Patter.Track.MusicProviderID = .appleMusic
     var authorizationStatus: ProviderAuthStatus = .authorized
 
-    var startedTracks: [AIDJ.Track] = []
+    var startedTracks: [Patter.Track] = []
     var pauseCallCount = 0
     var resumeCallCount = 0
     var stopCallCount = 0
 
     var currentPlaybackTime: TimeInterval = 0
     var currentTrackDuration: TimeInterval? = nil
-    var currentTrack: AIDJ.Track? = nil
+    var currentTrack: Patter.Track? = nil
     var playbackStatus: MusicPlaybackStatus = .stopped
 
     func requestAuthorization() async -> ProviderAuthStatus { .authorized }
     func signOut() async { authorizationStatus = .notAuthorized }
-    func start(track: AIDJ.Track) async throws { startedTracks.append(track); currentTrack = track }
+    func start(track: Patter.Track) async throws { startedTracks.append(track); currentTrack = track }
     func pause() async throws { pauseCallCount += 1 }
     func resume() async throws { resumeCallCount += 1 }
     func stop() async throws { stopCallCount += 1 }
     func seek(to time: TimeInterval) async throws { currentPlaybackTime = time }
     func playlists() async throws -> [PlaylistInfo] { [] }
-    func songs(inPlaylistWith id: String) async throws -> [AIDJ.Track] { [] }
-    func songs(inAlbumWith id: String) async throws -> [AIDJ.Track] { [] }
+    func songs(inPlaylistWith id: String) async throws -> [Patter.Track] { [] }
+    func songs(inAlbumWith id: String) async throws -> [Patter.Track] { [] }
     func startStation(id: String) async throws {}
     func skipToNext() async throws {}
-    func searchCatalogSongs(query: String, limit: Int) async throws -> [AIDJ.Track] { [] }
+    func searchCatalogSongs(query: String, limit: Int) async throws -> [Patter.Track] { [] }
     func isPlayable(trackId: String) async -> Bool { true }
     func artwork(for trackId: String) -> ProviderArtwork? { nil }
 
@@ -118,9 +118,9 @@ enum FakeError: Error {
     case intentional
 }
 
-extension AIDJ.Track {
-    static func stub(id: String = UUID().uuidString, title: String = "Track", duration: TimeInterval = 180) -> AIDJ.Track {
-        AIDJ.Track(id: id, title: title, artist: "Artist", album: "Album", artworkURL: nil, duration: duration, providerID: .appleMusic)
+extension Patter.Track {
+    static func stub(id: String = UUID().uuidString, title: String = "Track", duration: TimeInterval = 180) -> Patter.Track {
+        Patter.Track(id: id, title: title, artist: "Artist", album: "Album", artworkURL: nil, duration: duration, providerID: .appleMusic)
     }
 }
 

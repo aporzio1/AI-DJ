@@ -1,6 +1,6 @@
 import Testing
 import Foundation
-@testable import AIDJ
+@testable import Patter
 
 @Suite("Producer")
 @MainActor
@@ -20,8 +20,8 @@ struct ProducerTests {
 
     @Test func primeSegmentInsertsAfterCurrentTrack() async {
         let (producer, coordinator, brain, _, _) = makeStack()
-        let t1 = AIDJ.Track.stub(id: "t1", duration: 0.1)
-        let t2 = AIDJ.Track.stub(id: "t2")
+        let t1 = Patter.Track.stub(id: "t1", duration: 0.1)
+        let t2 = Patter.Track.stub(id: "t2")
         await coordinator.replaceQueue([.track(t1), .track(t2)])
         await producer.start()
 
@@ -44,8 +44,8 @@ struct ProducerTests {
     @Test func brainFailureFallsBackToCannedScript() async {
         let (producer, coordinator, brain, voice, _) = makeStack()
         brain.shouldThrow = true
-        let t1 = AIDJ.Track.stub(id: "t1")
-        let t2 = AIDJ.Track.stub(id: "t2", title: "My Song")
+        let t1 = Patter.Track.stub(id: "t1")
+        let t2 = Patter.Track.stub(id: "t2", title: "My Song")
         await coordinator.replaceQueue([.track(t1), .track(t2)])
 
         let event = WillAdvanceEvent(currentTrack: t1, nextTrackIndex: 1)
@@ -61,8 +61,8 @@ struct ProducerTests {
     @Test func voiceFailureSkipsSegmentEntirely() async {
         let (producer, coordinator, _, voice, _) = makeStack()
         voice.shouldThrow = true
-        let t1 = AIDJ.Track.stub(id: "t1")
-        let t2 = AIDJ.Track.stub(id: "t2")
+        let t1 = Patter.Track.stub(id: "t1")
+        let t2 = Patter.Track.stub(id: "t2")
         await coordinator.replaceQueue([.track(t1), .track(t2)])
 
         let event = WillAdvanceEvent(currentTrack: t1, nextTrackIndex: 1)
@@ -75,7 +75,7 @@ struct ProducerTests {
 
     @Test func noSegmentPrimedForNonTrackNextItem() async {
         let (producer, coordinator, brain, _, _) = makeStack()
-        let t1 = AIDJ.Track.stub(id: "t1")
+        let t1 = Patter.Track.stub(id: "t1")
         let seg = DJSegment.stub()
         await coordinator.replaceQueue([.track(t1), .djSegment(seg)])
 

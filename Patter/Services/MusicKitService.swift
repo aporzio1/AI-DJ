@@ -8,7 +8,7 @@ final class MusicKitService: MusicProviderService {
     private var observationTask: Task<Void, Never>?
     private var artworkCache: [String: Artwork] = [:]
 
-    let providerID: AIDJ.Track.MusicProviderID = .appleMusic
+    let providerID: Patter.Track.MusicProviderID = .appleMusic
 
     var authorizationStatus: ProviderAuthStatus {
         ProviderAuthStatus(MusicAuthorization.currentStatus)
@@ -313,10 +313,10 @@ private extension Track {
 }
 
 private extension MusicKit.Track {
-    var asTrack: AIDJ.Track? {
+    var asTrack: Patter.Track? {
         switch self {
         case .song(let song):
-            return AIDJ.Track(song: song)
+            return Patter.Track(song: song)
         default:
             return nil
         }

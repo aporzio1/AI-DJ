@@ -4,7 +4,7 @@ import Security
 /// Thin wrapper over Security framework's Keychain for generic passwords.
 /// Used for API keys (OpenAI) and other secrets that should never be in UserDefaults or source.
 enum Keychain {
-    private static let service = Bundle.main.bundleIdentifier ?? "com.andrewporzio.aidj"
+    private static let service = Bundle.main.bundleIdentifier ?? "com.andrewporzio.patter"
 
     static func set(_ value: String, forKey key: String) {
         let data = Data(value.utf8)

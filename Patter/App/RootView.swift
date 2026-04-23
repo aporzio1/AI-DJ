@@ -3,7 +3,7 @@ import SwiftUI
 @MainActor
 struct RootView: View {
 
-    // Owned by AIDJApp so the macOS Settings scene shares the same instances.
+    // Owned by PatterApp so the macOS Settings scene shares the same instances.
     let settings: SettingsViewModel
     let djVoice: DJVoiceRouter
     let musicProvider: MusicProviderRouter
@@ -183,7 +183,7 @@ struct RootView: View {
                 Label("Queue",    systemImage: "list.bullet").tag(AppTab.queue)
                 Label("Settings", systemImage: "gear").tag(AppTab.settings)
             }
-            .navigationTitle("AI DJ")
+            .navigationTitle("Patter")
         } detail: {
             VStack(spacing: 0) {
                 detailContent(nowPlaying: nowPlaying, queue: queue, library: library)

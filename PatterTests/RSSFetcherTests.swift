@@ -1,6 +1,6 @@
 import Testing
 import Foundation
-@testable import AIDJ
+@testable import Patter
 
 @Suite("RSSFetcher parser")
 struct RSSFetcherTests {

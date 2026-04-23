@@ -1,4 +1,4 @@
-name: AI DJ
+name: Patter
 options:
   bundleIdPrefix: com.andrewporzio
   createIntermediateGroups: true
@@ -17,20 +17,20 @@ settings:
     LOCALIZED_STRING_MACRO_NAMES: "NSLocalizedString CFCopyLocalizedString"
 
 targets:
-  AIDJ:
+  Patter:
     type: application
     supportedDestinations: [iOS, macOS]
     deploymentTarget:
       iOS: "26.0"
       macOS: "26.0"
     sources:
-      - path: AIDJ
+      - path: Patter
     dependencies:
       - package: FluidAudio
         product: FluidAudio
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.andrewporzio.aidj
+        PRODUCT_BUNDLE_IDENTIFIER: com.andrewporzio.patter
         SWIFT_VERSION: "6.0"
         MARKETING_VERSION: "1.0"
         CURRENT_PROJECT_VERSION: "1"
@@ -42,15 +42,15 @@ targets:
         ENABLE_MODULE_VERIFIER: YES
         DEAD_CODE_STRIPPING: YES
     entitlements:
-      path: AIDJ/Resources/AIDJ.entitlements
+      path: Patter/Resources/Patter.entitlements
       properties:
         com.apple.security.network.client: true
         com.apple.developer.ubiquity-kvstore-identifier: $(TeamIdentifierPrefix)$(CFBundleIdentifier)
     info:
-      path: AIDJ/Resources/Info.plist
+      path: Patter/Resources/Info.plist
       properties:
-        CFBundleDisplayName: AI DJ
-        NSAppleMusicUsageDescription: "AI DJ needs access to your Apple Music library to play music."
+        CFBundleDisplayName: Patter
+        NSAppleMusicUsageDescription: "Patter needs access to your Apple Music library to play music."
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
@@ -62,27 +62,27 @@ targets:
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
 
-  AIDJTests:
+  PatterTests:
     type: bundle.unit-test
     platform: macOS
     sources:
-      - path: AIDJTests
+      - path: PatterTests
     dependencies:
-      - target: AIDJ
+      - target: Patter
     settings:
       base:
         SWIFT_VERSION: "6.0"
-        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/AIDJ.app/Contents/MacOS/AIDJ"
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Patter.app/Contents/MacOS/Patter"
         BUNDLE_LOADER: "$(TEST_HOST)"
         DEAD_CODE_STRIPPING: YES
         ENABLE_USER_SCRIPT_SANDBOXING: YES
         GENERATE_INFOPLIST_FILE: YES
 
 schemes:
-  AIDJ:
+  Patter:
     build:
       targets:
-        AIDJ: all
+        Patter: all
     test:
       targets:
-        - AIDJTests
+        - PatterTests

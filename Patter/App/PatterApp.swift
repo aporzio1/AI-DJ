@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct AIDJApp: App {
+struct PatterApp: App {
     // Hoisted out of RootView so the macOS Settings scene can share the
     // same instances — otherwise Cmd+, would open a Settings window backed
     // by a different SettingsViewModel / DJVoiceRouter / MusicProviderRouter

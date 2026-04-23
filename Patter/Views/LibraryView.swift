@@ -200,7 +200,7 @@ struct LibraryView: View {
         .padding(.vertical, 4)
     }
 
-    private func songRow(_ track: AIDJ.Track) -> some View {
+    private func songRow(_ track: Patter.Track) -> some View {
         HStack(spacing: 12) {
             Image(systemName: "music.note")
                 .font(.title3)

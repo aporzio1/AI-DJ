@@ -69,7 +69,7 @@ final class SettingsViewModel {
             // down before we hand the VM to RootView.
             loadFromUserDefaults()
         }
-        // The SettingsViewModel is owned by AIDJApp for the whole process
+        // The SettingsViewModel is owned by PatterApp for the whole process
         // lifetime, so we deliberately don't track + remove the observer on
         // deinit — Swift 6 nonisolated-deinit rules around @Observable make
         // that awkward and there's no real churn to clean up.

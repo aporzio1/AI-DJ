@@ -27,7 +27,7 @@ actor Producer {
     private var config: Config = .default
     private var voiceOverride: String?
 
-    private var recentTracks: [AIDJ.Track] = []
+    private var recentTracks: [Patter.Track] = []
     private var monitorTask: Task<Void, Never>?
     private var tracksSinceLastSegment = 0
     private var hasGivenIntro = false
@@ -225,7 +225,7 @@ actor Producer {
 
     /// Scans the queue from `startIndex` forward, removing unplayable tracks, and returns
     /// the first playable track (or nil if none in the next 10 positions).
-    private func findNextPlayableTrack(from startIndex: Int) async -> AIDJ.Track? {
+    private func findNextPlayableTrack(from startIndex: Int) async -> Patter.Track? {
         let maxLookahead = 10
         var attempts = 0
         while attempts < maxLookahead {
@@ -247,7 +247,7 @@ actor Producer {
         return nil
     }
 
-    private func coordinatorIsTrackPlayable(_ track: AIDJ.Track) async -> Bool {
+    private func coordinatorIsTrackPlayable(_ track: Patter.Track) async -> Bool {
         await coordinator.isPlayable(track)
     }
 
@@ -271,7 +271,7 @@ actor Producer {
         return false
     }
 
-    private func primeSegment(upcomingTrack: AIDJ.Track) async -> DJSegment? {
+    private func primeSegment(upcomingTrack: Patter.Track) async -> DJSegment? {
         guard shouldGenerate() else {
             Log.producer.debug("Skipping DJ for this transition (tracksSinceLast=\(self.tracksSinceLastSegment))")
             return nil
@@ -279,7 +279,7 @@ actor Producer {
         return await generateSegment(upcomingTrack: upcomingTrack)
     }
 
-    private func generateSegment(upcomingTrack: AIDJ.Track) async -> DJSegment? {
+    private func generateSegment(upcomingTrack: Patter.Track) async -> DJSegment? {
         let headline: NewsHeadline? = await fetchTopHeadlineIfEnabled()
 
         let feedbackSummary: FeedbackSummary?

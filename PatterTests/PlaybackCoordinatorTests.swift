@@ -1,6 +1,6 @@
 import Testing
 import Foundation
-@testable import AIDJ
+@testable import Patter
 
 @Suite("PlaybackCoordinator")
 @MainActor
@@ -22,7 +22,7 @@ struct PlaybackCoordinatorTests {
 
     @Test func replaceQueueSetsItems() async {
         let (coordinator, _, _) = makeCoordinator()
-        let tracks = [AIDJ.Track.stub(), AIDJ.Track.stub()]
+        let tracks = [Patter.Track.stub(), Patter.Track.stub()]
         await coordinator.replaceQueue(tracks.map { .track($0) })
         let queue = await coordinator.queue
         #expect(queue.count == 2)
@@ -32,9 +32,9 @@ struct PlaybackCoordinatorTests {
 
     @Test func insertAfterCurrentAddsAtCorrectPosition() async {
         let (coordinator, _, _) = makeCoordinator()
-        let a = AIDJ.Track.stub(id: "a")
-        let b = AIDJ.Track.stub(id: "b")
-        let c = AIDJ.Track.stub(id: "c")
+        let a = Patter.Track.stub(id: "a")
+        let b = Patter.Track.stub(id: "b")
+        let c = Patter.Track.stub(id: "c")
         await coordinator.replaceQueue([.track(a), .track(b)])
         await coordinator.insertAfterCurrent(.track(c))
         let queue = await coordinator.queue
@@ -48,7 +48,7 @@ struct PlaybackCoordinatorTests {
 
     @Test func removeItemShiftsIndex() async {
         let (coordinator, _, _) = makeCoordinator()
-        let items = [AIDJ.Track.stub(), AIDJ.Track.stub(), AIDJ.Track.stub()]
+        let items = [Patter.Track.stub(), Patter.Track.stub(), Patter.Track.stub()]
         await coordinator.replaceQueue(items.map { .track($0) })
         await coordinator.removeItem(at: 0)
         let queue = await coordinator.queue
@@ -59,7 +59,7 @@ struct PlaybackCoordinatorTests {
 
     @Test func skipAdvancesIndex() async {
         let (coordinator, _, _) = makeCoordinator()
-        let items = [AIDJ.Track.stub(duration: 0), AIDJ.Track.stub(duration: 0)]
+        let items = [Patter.Track.stub(duration: 0), Patter.Track.stub(duration: 0)]
         await coordinator.replaceQueue(items.map { .track($0) })
         try? await coordinator.skip()
         let index = await coordinator.currentIndex
@@ -68,11 +68,11 @@ struct PlaybackCoordinatorTests {
 
     @Test func pauseCallsMusicServiceStop() async throws {
         let (coordinator, music, _) = makeCoordinator()
-        await coordinator.replaceQueue([.track(AIDJ.Track.stub(duration: 60))])
+        await coordinator.replaceQueue([.track(Patter.Track.stub(duration: 60))])
         // replaceQueue stops whatever's currently playing first — that's one
         // stop() on the fake. We then invoke start/stop directly to exercise
         // the fake's call counter for a second increment.
-        try await music.start(track: AIDJ.Track.stub())
+        try await music.start(track: Patter.Track.stub())
         try await music.stop()
         #expect(music.stopCallCount == 2)
     }
@@ -95,7 +95,7 @@ struct PlaybackCoordinatorTests {
         // stuck in .paused even though MusicKit had resumed. The mirror
         // in NowPlayingViewModel then kept showing the "play" button.
         let (coordinator, _, _) = makeCoordinator()
-        let track = AIDJ.Track.stub(duration: 60)
+        let track = Patter.Track.stub(duration: 60)
         await coordinator.replaceQueue([.track(track)])
 
         let playTask = Task { try? await coordinator.play() }
@@ -118,8 +118,8 @@ struct PlaybackCoordinatorTests {
         // stopping the audio graph. If a DJ segment was mid-sentence, the
         // player node kept speaking over the new track.
         let (coordinator, _, audio) = makeCoordinator()
-        let t1 = AIDJ.Track.stub(id: "t1", duration: 60)
-        let t2 = AIDJ.Track.stub(id: "t2", duration: 60)
+        let t1 = Patter.Track.stub(id: "t1", duration: 60)
+        let t2 = Patter.Track.stub(id: "t2", duration: 60)
         await coordinator.replaceQueue([.track(t1), .track(t2)])
         let before = audio.stopCallCount
         try await coordinator.skip()
@@ -129,8 +129,8 @@ struct PlaybackCoordinatorTests {
     @Test func previousStopsAudioGraph() async throws {
         // Same invariant as skip() — symmetrical fix.
         let (coordinator, _, audio) = makeCoordinator()
-        let t1 = AIDJ.Track.stub(id: "t1", duration: 60)
-        let t2 = AIDJ.Track.stub(id: "t2", duration: 60)
+        let t1 = Patter.Track.stub(id: "t1", duration: 60)
+        let t2 = Patter.Track.stub(id: "t2", duration: 60)
         await coordinator.replaceQueue([.track(t1), .track(t2)])
         // advance so previous() has somewhere to go
         try await coordinator.skip()

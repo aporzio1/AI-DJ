@@ -92,7 +92,7 @@ struct PlaylistDetailView: View {
         }
     }
 
-    private func songRow(_ track: AIDJ.Track, index: Int) -> some View {
+    private func songRow(_ track: Patter.Track, index: Int) -> some View {
         HStack(spacing: 12) {
             Text("\(index)")
                 .font(.footnote.monospacedDigit())

@@ -5,7 +5,7 @@ import Foundation
 final class LibraryViewModel {
 
     private(set) var playlists: [PlaylistInfo] = []
-    private(set) var songs: [AIDJ.Track] = []
+    private(set) var songs: [Patter.Track] = []
     private(set) var selectedPlaylist: PlaylistInfo?
     private(set) var recentlyPlayed: [LibraryItem] = []
     private(set) var recommendations: [LibraryItem] = []
@@ -13,7 +13,7 @@ final class LibraryViewModel {
     private(set) var errorMessage: String?
 
     // Search state
-    private(set) var searchResults: [AIDJ.Track] = []
+    private(set) var searchResults: [Patter.Track] = []
     private(set) var isSearching = false
 
     private let router: MusicProviderRouter
@@ -171,7 +171,7 @@ final class LibraryViewModel {
         isLoading = false
     }
 
-    func addToQueue(_ track: AIDJ.Track) async {
+    func addToQueue(_ track: Patter.Track) async {
         await coordinator.enqueue(.track(track))
     }
 
@@ -209,7 +209,7 @@ final class LibraryViewModel {
         await invokePlay()
     }
 
-    func playSong(_ track: AIDJ.Track) async {
+    func playSong(_ track: Patter.Track) async {
         Log.app.info("playSong '\(track.title, privacy: .public)'")
         await coordinator.replaceQueue([.track(track)])
         if let producer {

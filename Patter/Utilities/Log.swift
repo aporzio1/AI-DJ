@@ -1,10 +1,10 @@
 import Foundation
 import os
 
-/// Central logger registry. Filter by subsystem `com.andrewporzio.aidj` in Console.app
+/// Central logger registry. Filter by subsystem `com.andrewporzio.patter` in Console.app
 /// or Xcode Debug → Logging, and further by category below.
 enum Log {
-    private static let subsystem = "com.andrewporzio.aidj"
+    private static let subsystem = "com.andrewporzio.patter"
 
     static let app         = Logger(subsystem: subsystem, category: "App")
     static let onboarding  = Logger(subsystem: subsystem, category: "Onboarding")

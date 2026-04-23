@@ -1,8 +1,8 @@
-# AI DJ — Project Tracker
+# Patter — Project Tracker
 
 **Owner:** Andrew P
-**PM Agent:** `aidj-pm` (see `.claude/agents/aidj-pm.md`)
-**Last updated:** 2026-04-22 — **Spotify integration withdrawn per K21; Apple Music is the sole provider.** Commit `ca23170` ripped out 2,141 lines of Spotify code (auth coordinator, API client, service, 18 tests, SPM package, URL scheme) after K21 research confirmed no first-party iOS path exists for a third-party app to stream Spotify audio standalone. The `MusicProviderRouter` / `MusicProviderService` abstraction stays — it's free-tier scaffolding for a future provider with a real streaming SDK. 25 tests pass; green on macOS + iOS. Process lesson captured as K22: primary-source vendor research before any SDK integration, not after 11 integration + 20+ chase commits.
+**PM Agent:** `patter-pm` (see `.claude/agents/patter-pm.md`)
+**Last updated:** 2026-04-23 — **App renamed from "AI DJ" → "Patter".** Bundle ID `com.andrewporzio.aidj` → `com.andrewporzio.patter`, module `AIDJ` → `Patter`, scheme + folders + display name + Info.plist + log subsystem + Keychain fallback all updated; old `AI DJ.xcodeproj` deleted, regenerated as `Patter.xcodeproj`. PM agent file renamed to `patter-pm.md`. 25 tests still pass on macOS; iOS Simulator build green. **Note:** N1.3 (article-link button) is still paused mid-implementation — see §3, the rename did not progress that task. Yesterday's context: N1.1 + N1.2 shipped; Spotify integration withdrawn per K21 with `ca23170`.
 
 ---
 
@@ -11,6 +11,7 @@
 - **Platforms:** iOS 26 / macOS 26, Apple Silicon only
 - **Stack:** Swift 6.0 strict concurrency, SwiftUI, MusicKit, AVFoundation, Foundation Models
 - **Version:** 1.0 (CFBundleVersion 1)
+- **App name:** Patter (renamed from "AI DJ" on 2026-04-23). Bundle ID `com.andrewporzio.patter`. Module name `Patter`. Source folders `Patter/` + `PatterTests/`. Top-level CloudDocs working dir is still `AI DJ/` (not yet renamed — leave for a clean session to avoid disrupting active Claude Code state and the auto-memory path). Spec doc filenames retain the original `ai-dj` codename (historical record).
 - **Core capability:** Plays Apple Music content (playlists, albums, stations) with an AI DJ narrating between tracks; can pull RSS news headlines for commentary
 - **TTS providers (pluggable via `DJVoiceRouter`):** Device Voices (AVSpeechSynthesizer), OpenAI cloud TTS, Kokoro on-device (FluidAudio CoreML) with launch-time warm-up
 - **Music providers:** Apple Music only. `Track.MusicProviderID` is a single-case enum (`.appleMusic`). `MusicProviderRouter` remains as a single-provider wrapper (`init(appleMusic:)`) so a future provider with an actual streaming SDK can slot in without re-threading the coordinator + VM call sites. `MusicProviderService` protocol, `ProviderAuthStatus`, `ProviderArtwork`, `PlayableItem` provider-namespaced IDs, and `LibrarySectionCache` provider-scoped keys all retained intentionally.
@@ -27,6 +28,9 @@
 ## 2. Shipped
 
 Reverse-chronological. Commit hashes are 7-char.
+
+### 2026-04-23
+- **App rename: "AI DJ" → "Patter".** Researched 6 candidate names against App Store collisions, trademark exposure, domain availability; "Patter" won on concept fit (it's the radio-DJ term for between-song chatter — the app's signature feature) and clean availability (zero music apps in the App Store, no `.app`/`.fm` squatters, no obvious TM heat in software/music). Folder rename: `AIDJ/` → `Patter/`, `AIDJTests/` → `PatterTests/`, `AIDJ.entitlements` → `Patter.entitlements`, `AIDJApp.swift` → `PatterApp.swift`, `aidj-pm.md` → `patter-pm.md`. Code edits: module qualifier `AIDJ.Track` → `Patter.Track` across 11 files; `@testable import AIDJ` → `@testable import Patter` across 5 test files; `@main struct AIDJApp` → `PatterApp`; comment refs to `AIDJApp` updated. Identifier edits: bundle ID `com.andrewporzio.aidj` → `com.andrewporzio.patter`; Log subsystem + Keychain service-id fallback aligned. UI strings: `CFBundleDisplayName`, `NSAppleMusicUsageDescription`, `NavigationStack` title, onboarding gate copy, settings reset-confirmation copy. project.yml fully rewritten (target name, scheme name, sources path, entitlements path, info path, TEST_HOST). `xcodegen generate` produced `Patter.xcodeproj`; old `AI DJ.xcodeproj` removed. `OpenAIDJVoice` deliberately preserved (it's "OpenAI" + "DJVoice", not "AIDJ"). 25 tests pass on macOS, iOS Simulator builds green. Process: GitHub repo rename + Apple Developer Portal + App Store Connect setup are user actions (see §3).
 
 ### 2026-04-22
 - `ca23170` — **Spotify integration dropped; Apple Music only (Option B).** 2,141 lines deleted, 61 added. Removed `SpotifyAuth.swift`, `SpotifyAPIClient.swift`, `SpotifyService.swift`, `SpotifyAPIClientTests.swift`, `SpotifyAuthCoordinatorTests.swift`; removed SpotifyiOS SPM package, `aidj://` URL scheme, `LSApplicationQueriesSchemes` from `project.yml`. `Track.MusicProviderID` now single-case (`.appleMusic`); `MusicProviderRouter` is `init(appleMusic:)`-only; `MusicProviderService` protocol dropped `handleAuthCallback(_:)` and `validateAuthorization()`. Settings "Music Services" reduced to status line; Library lost segmented picker. Router abstraction + provider-neutral types retained as future scaffolding. 25 tests pass, green on macOS + iOS. Rationale locked in K21.
@@ -125,7 +129,55 @@ Reverse-chronological. Commit hashes are 7-char.
 
 ## 3. In Progress
 
-*(Nothing active. Next work TBD from backlog.)*
+### Andrew-side actions to push Patter to TestFlight (2026-04-23)
+
+The code-side rename is complete and committed. Andrew has these manual/portal steps remaining:
+
+1. **Apple Developer Portal** — register the new App ID `com.andrewporzio.patter` with the iCloud capability enabled (the local build used `-allowProvisioningUpdates` to fetch a profile, but the iCloud container may need to be created/named for the new bundle ID). https://developer.apple.com/account/resources/identifiers/list
+2. **App Store Connect** — create a new app record for `com.andrewporzio.patter`, name "Patter", primary language English. The old "AI DJ" record (if one exists) becomes orphaned and can be deleted later. https://appstoreconnect.apple.com/
+3. **Archive + upload** — in Xcode, Product → Archive (iOS device destination), then Window → Organizer → Distribute App → App Store Connect. First archive will trigger any remaining provisioning prompts.
+4. **Domain registration (optional but cheap)** — `patter.app` and `patter.fm` were both unconfigured during research; grab `patter.app` for ~$15/yr to lock the brand before someone else notices.
+5. **USPTO TESS check (optional, before any TM filing)** — manual search at `tmsearch.uspto.gov` for "Patter" in Class 9 (software) and Class 41 (entertainment). Patter LLC exists in lifestyle (rewards/dog-walking) — different class, low conflict risk, but worth eyeballing.
+6. **Top-level dir rename (later)** — current working dir is still `~/Library/Mobile Documents/com~apple~CloudDocs/Xcode/AI DJ/`. Renaming to `…/Xcode/Patter/` is a separate mini-task — best done in a clean session because it disrupts Claude Code's active project path and the auto-memory directory path.
+7. **GitHub repo rename** — `aporzio1/ai-dj` → `aporzio1/patter`. One click via `gh repo rename patter` (Claude can run this with Andrew's confirmation; not done in the rename commit because rename = destructive on shared state).
+
+### N1.3 — Surface news article link in NowPlayingView *(paused 2026-04-22, mid-implementation, nothing edited yet)*
+
+**Status:** Scoped by PM, context gathered, zero files changed. Paused by user request before any edits.
+
+**Prior commits in the N1 arc (already shipped):**
+- N1.1 ✅ Persist RSS headline dedup across launches (task #19).
+- N1.2 ✅ Richer news briefing — pass RSS `summary` into the DJ prompt + widen word budget to 60–100 for news segments (task #20, see `DJBrain.swift` `stripHTML` + extended news-branch system instructions).
+
+**What N1.3 needs to do:** When a DJ news segment is currently playing, show a "Read article" button on the Now Playing card that opens the headline URL. No MiniPlayerBar affordance (per D11).
+
+**Exact change list (≈30 LOC across 4 files):**
+
+1. `AIDJ/Models/DJSegment.swift` — add `let sourceHeadline: NewsHeadline?` field. `NewsHeadline` is already `Codable & Sendable` so the `DJSegment: Codable, Sendable` conformance still synthesizes.
+2. `AIDJ/Services/Producer.swift:316-323` — inside `generateSegment`'s `return DJSegment(...)`, add `sourceHeadline: headline` (the `headline` local is already in scope from line 283).
+3. `AIDJ/Views/NowPlayingView.swift` — add a "Read article" `Button` (SF Symbol `safari` or `link`, `.buttonStyle(.bordered)`) rendered below `djBanner` (or as a sibling within `body`) when:
+   ```swift
+   if case .djSegment(let s) = vm.currentItem,
+      s.kind == .news,
+      let headline = s.sourceHeadline {
+       // Button opens headline.url via Environment(\.openURL)
+   }
+   ```
+   Use `@Environment(\.openURL) private var openURL` at the top of the view. Accessibility label: "Read article in browser". Min 44×44 tap target per HIG.
+4. Test constructor updates — three DJSegment construction sites need `sourceHeadline: nil` added:
+   - `AIDJTests/Fakes.swift:129`
+   - `AIDJTests/ModelsTests.swift:24` (djSegmentCodableRoundTrip)
+   - `AIDJTests/ModelsTests.swift:81` (playableItemSegmentIdentity)
+   - `AIDJTests/PlaybackCoordinatorTests.swift:83` (djSegmentPlaysViaAudioGraph)
+
+**Validation after edits:**
+- `xcodegen generate` not needed — no `project.yml` changes.
+- `xcodebuild test -scheme AIDJ -destination 'platform=macOS'` — current baseline is 25 tests passing; new code path is additive.
+- Manual smoke on macOS: wait for a news segment, confirm "Read article" button appears during `.news` DJ playback and disappears when the segment ends.
+
+**Then:** commit + push to `aporzio1/ai-dj` (on `main`, per user preference), mark task #21 completed, move N1 to §2 Shipped with today's date.
+
+**Resume prompt to drop in:** "Continue N1.3 — finish the edits listed under §3 of the tracker."
 
 ---
 
@@ -137,7 +189,7 @@ Rough priority, top-down.
 |---|------|---------|------|
 | 1 | **iPhone Phase 1 smoke** | Confirm pure Apple Music playback works cleanly on physical iPhone (iOS 26) — user never smoked Phase 1 on iPhone in isolation before Spotify work began. Covers: onboarding, tab bar, MiniPlayerBar transport, Library landing sections, playlist / album / station tap-to-play, DJ segments between tracks, news commentary, persona switching. Est. small. | — |
 | 2 | **Album & station detail views** | Station playback works via tap-to-play; album playback not yet verified end-to-end. Dedicated album-detail (track list, shuffle) and station-detail (now-playing only) views. No longer gated on multi-provider work — router abstraction is already in place. Est. medium. | — |
-| 3 | **K7 — rotate RSS headlines across segments** | `RSSFetcher.fetchHeadlines().first` always picks the top headline, so DJ repeats the same story across several segments from the same feed. Options: (a) rotate through top N, (b) remember last-used URLs and skip recently-used. Est. small. | — |
+| 3 | **N1 — Richer DJ news feature (rotation + briefing + link)** | Supersedes K7. Three asks rolled into one scoped item: (a) cross-session dedup of headlines (persist last-N used URLs so DJ never repeats a story across app restarts), (b) richer 2–3-sentence briefing using the RSS `summary` field instead of a one-line mention, (c) surface the article URL in the Now Playing card + MiniPlayerBar while a news segment plays (tap opens in browser). Plumbing: `DJSegment` gains an optional `sourceHeadline: NewsHeadline?`; view layer reads it via the existing `NowPlayingViewModel.currentItem`. No coordinator changes. Split into 3 commits. Est. medium. | docs/superpowers/plans/ (TBD if Andrew wants a plan doc) |
 | 4 | **K5 — remove dead `DJPersona.voicePreset`** | Persona carries a `voicePreset` but `SettingsViewModel.effectiveVoiceIdentifier` ignores it when the user has picked a voice. Kept as seed-default for built-ins only. Either fully integrate or fully remove. Est. small. | — |
 | 5 | **K17 — investigate `AttributeGraph: cycle detected`** | Console warnings first seen during Spotify work. With `.onOpenURL` + Spotify `.onChange` observers gone, re-run a clean log pass on iPhone and macOS. May be resolved incidentally by `ca23170`; verify before filing further. Est. small. | — |
 | 6 | **Kokoro iOS 26 CoreML compile hang** | Unresolved from earlier. CoreML model compile on iOS 26 hangs. Matters only if user enables DJ with Kokoro voice on iPhone. Investigation paths: (a) file FluidAudio upstream issue with exact trace, (b) try different Kokoro model variant, (c) default iOS new installs to System Voice or OpenAI rather than Kokoro, (d) gate Kokoro behind a "Download model" button on iOS only. Est. medium–large depending on path. | — |
@@ -149,7 +201,12 @@ Rough priority, top-down.
 
 ## 5. Open Decisions
 
-*(None active.)*
+| # | Decision | Options | Current recommendation |
+|---|----------|---------|------------------------|
+| D9 | N1 seen-headline persistence scope | (a) device-local `UserDefaults` only, (b) `CloudSyncService` iCloud-synced across devices | **(a) device-local.** Listening history is per-device behavior; syncing it means a story the DJ talked about on iPhone gets silently skipped on Mac, which the user would experience as "the news never mentions thing X." Re-hearing a story on a second device is the less-surprising default. Revisit if the user asks. |
+| D10 | N1 seen-window retention | (a) permanent (once said, never re-said), (b) time-windowed (e.g. 14 days), (c) capped list (e.g. last 200 URLs) | **(c) capped list of 200 URLs, FIFO.** Permanent grows without bound; time-windowed requires per-URL timestamp storage and still lets a story resurface if the user takes a week off. A 200-URL FIFO naturally rolls old stories out as feed content churns, is one `[String]` in UserDefaults, and at ~100 chars/URL is ~20 KB — trivial. |
+| D11 | N1 link surfacing location | (a) Now Playing card only (article button visible when DJ news segment is current), (b) Now Playing + MiniPlayerBar compact affordance, (c) persistent "Recent headlines" list in a new tab/sheet | **(a) for commit 3, keep (c) out of scope.** The DJ segment only plays for ~20–30 s — a prominent "Read article" button on the Now Playing card during that window is enough. A persistent history list is a separate feature and should be its own backlog item if the user wants it. MiniPlayerBar is already dense; avoid adding another control. |
+| D12 | N1 briefing length impact on TTS budget | (a) keep segment length flat by shortening non-news banter, (b) let news segments run longer (~30 s vs current ~20 s), (c) add a new `DJFrequency`-like knob | **(b) let news segments run longer.** Current prompt caps 30–70 words; a news brief with context wants ~60–100 words. That's a `DJScriptResponse` guide tweak + a second prompt instruction for news, not a new knob. Kokoro renders ~130 wpm so the delta is 5–10 seconds — acceptable for a news beat. Do NOT add a knob; one more frequency slider bloats Settings. |
 
 ### Locked Decisions
 
@@ -176,7 +233,7 @@ Rough priority, top-down.
 | K4 | App-bundle Spotify Client ID would leak | moot | Closed by Spotify withdrawal (`ca23170`). |
 | K5 | `DJPersona.voicePreset` is dead weight | low | See Backlog #4. |
 | K6 | `.help(...)` used as iOS accessibility hint | low | `.help` is macOS-only; iOS VoiceOver needs `.accessibilityLabel`. Grep `.help(` periodically. |
-| K7 | `RSSFetcher.fetchHeadlines().first` always picks top | low | See Backlog #3. |
+| K7 | `RSSFetcher.fetchHeadlines().first` always picks top | **superseded 2026-04-21 by N1** | In-memory rotation landed (see `Producer.recentHeadlineURLs`, cap 10) but does not survive app restart, and the broader "richer commentary + user-visible link" ask extends past pure rotation. Tracked as Backlog #3 (N1). |
 | K8 | `voiceIdentifier` is device-local, but iCloud-synced | low | AVSpeech voice identifiers are per-device-install. Silent fallback to persona preset on missing. |
 | K9 | FluidAudio exposes no download-progress callback | low | See Backlog #8. |
 | K10 | `xcodegen generate` was stripping entitlements | resolved | Fixed in `dd6ff07`. New entitlements must be declared in `project.yml` to survive regen. |

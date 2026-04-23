@@ -26,7 +26,7 @@ struct OnboardingView: View {
                 blockedView(
                     icon: "music.note",
                     title: "Apple Music Access Required",
-                    message: "AI DJ needs access to your Apple Music library to play music.",
+                    message: "Patter needs access to your Apple Music library to play music.",
                     actionTitle: "Grant Access"
                 ) {
                     Task { await vm.requestMusicAccess() }
