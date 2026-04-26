@@ -22,6 +22,8 @@
 	<string>142</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.music</string>
 	<key>NSAppleMusicUsageDescription</key>
 	<string>Patter needs access to your Apple Music library to play music.</string>
 	<key>UILaunchScreen</key>

@@ -15,6 +15,8 @@ settings:
     ENABLE_USER_SCRIPT_SANDBOXING: YES
     LOCALIZED_STRING_SWIFTUI_SUPPORT: YES
     LOCALIZED_STRING_MACRO_NAMES: "NSLocalizedString CFCopyLocalizedString"
+    IPHONEOS_DEPLOYMENT_TARGET: "26.0"
+    MACOSX_DEPLOYMENT_TARGET: "26.0"
 
 targets:
   Patter:
@@ -67,12 +69,14 @@ targets:
     entitlements:
       path: Patter/Resources/Patter.entitlements
       properties:
+        com.apple.security.app-sandbox: true
         com.apple.security.network.client: true
         com.apple.developer.ubiquity-kvstore-identifier: $(TeamIdentifierPrefix)$(CFBundleIdentifier)
     info:
       path: Patter/Resources/Info.plist
       properties:
         CFBundleDisplayName: Patter
+        LSApplicationCategoryType: public.app-category.music
         NSAppleMusicUsageDescription: "Patter needs access to your Apple Music library to play music."
         ITSAppUsesNonExemptEncryption: false
         UILaunchScreen: {}
