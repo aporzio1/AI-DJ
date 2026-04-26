@@ -215,7 +215,7 @@ struct SettingsView: View {
     @ViewBuilder
     private var systemVoiceRows: some View {
         Picker("Voice", selection: $vm.voiceIdentifier) {
-            Text("System Default").tag("")
+            Text("Best Available Device Voice").tag("")
             ForEach(availableVoices) { voice in
                 Text(voice.displayName).tag(voice.id)
             }

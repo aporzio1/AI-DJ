@@ -112,7 +112,7 @@ actor Producer {
     }
 
     private var currentVoiceIdentifier: String {
-        if let v = voiceOverride, !v.isEmpty { return v }
+        if let v = voiceOverride { return v }
         return persona.voicePreset
     }
 

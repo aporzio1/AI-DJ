@@ -137,7 +137,7 @@ struct PreferencesWizardView: View {
         switch settings.ttsProvider {
         case .system:
             Picker("Voice", selection: $settings.voiceIdentifier) {
-                Text("System Default").tag("")
+                Text("Best Available Device Voice").tag("")
                 ForEach(installedEnglishVoices, id: \.identifier) { voice in
                     Text("\(voice.name) — \(qualityLabel(for: voice))").tag(voice.identifier)
                 }

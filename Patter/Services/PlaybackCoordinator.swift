@@ -339,10 +339,13 @@ actor PlaybackCoordinator {
             }
 
             // Fire willAdvance with a wide lead time so segment generation
-            // (which can take 10+ seconds for cloud TTS like OpenAI) has room
-            // to finish before the track ends. The advance timer still pins
-            // the actual handoff to the track's real end.
-            if !emittedWillAdvance, duration > 0, remaining <= 20.0, remaining > 0 {
+            // (Foundation Models text + cloud TTS round-trip — combined this
+            // can run 10–15s on slow generations) has room to finish before
+            // the track ends. Without enough headroom, Producer drops the
+            // rendered segment because the upcoming track has already become
+            // the current track. The advance timer still pins the actual
+            // handoff to the track's real end.
+            if !emittedWillAdvance, duration > 0, remaining <= 35.0, remaining > 0 {
                 if repeatMode == .one {
                     Log.coordinator.info("T-\(remaining, format: .fixed(precision: 1))s — repeat.one, skipping willAdvance emit (gen=\(myGen))")
                 } else {

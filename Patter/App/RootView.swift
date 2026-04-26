@@ -158,7 +158,7 @@ struct RootView: View {
         case .openAI:  id = settings.openAIVoice
         case .kokoro:  id = settings.kokoroVoice
         }
-        Task { await p.updateVoice(id.isEmpty ? nil : id) }
+        Task { await p.updateVoice(id) }
     }
 
     private func producerConfig() -> Producer.Config {
