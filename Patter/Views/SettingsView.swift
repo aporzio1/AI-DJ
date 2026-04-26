@@ -438,8 +438,25 @@ struct SettingsView: View {
             .padding(.leading, 4)
         }
 #else
-        Text("Install higher-quality voices in the Settings app: Accessibility → Spoken Content → Voices → English → download any Premium voice.")
+        if hasPremiumEnglishVoice {
+            Text("Pick the highest-quality option above. Premium voices sound the most natural; Enhanced are second-best. Add more from Settings → Accessibility → Spoken Content → Voices.")
+        } else {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Premium voices sound much more natural than the Compact defaults. To download one:")
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("1. Open the **Settings** app")
+                    Text("2. Go to **Accessibility → Spoken Content → Voices**")
+                    Text("3. Tap **English**, pick any voice marked **Premium** (Ava, Zoe, Evan…)")
+                    Text("4. Wait for the download, return here, and pick it from the list above")
+                }
+                .padding(.leading, 4)
+            }
+        }
 #endif
+    }
+
+    private var hasPremiumEnglishVoice: Bool {
+        availableVoices.contains { $0.quality == .premium }
     }
 
 #if os(macOS)

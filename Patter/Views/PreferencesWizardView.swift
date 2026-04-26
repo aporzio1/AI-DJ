@@ -143,6 +143,11 @@ struct PreferencesWizardView: View {
                 }
             }
             .labelsHidden()
+#if os(iOS)
+            if !hasPremiumEnglishVoice {
+                voiceUpgradeHint
+            }
+#endif
         case .openAI:
             Picker("Voice", selection: $settings.openAIVoice) {
                 ForEach(OpenAITTSVoice.allCases) { voice in
@@ -172,6 +177,33 @@ struct PreferencesWizardView: View {
                 return lhs.name < rhs.name
             }
     }
+
+    private var hasPremiumEnglishVoice: Bool {
+        installedEnglishVoices.contains { $0.quality == .premium }
+    }
+
+#if os(iOS)
+    private var voiceUpgradeHint: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label("Make Patter sound better", systemImage: "sparkles")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.tint)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Premium voices sound dramatically more natural than the Compact defaults. To download one:")
+                Text("1. Open the **Settings** app")
+                Text("2. Go to **Accessibility → Spoken Content → Voices**")
+                Text("3. Tap **English**, pick any voice marked **Premium** (Ava, Zoe, Evan…)")
+                Text("4. Wait for the download, return here, and pick it from the list above")
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.accentColor.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+        .accessibilityElement(children: .combine)
+    }
+#endif
 
     private func qualityLabel(for voice: AVSpeechSynthesisVoice) -> String {
         switch voice.quality {
