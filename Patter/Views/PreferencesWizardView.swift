@@ -214,7 +214,7 @@ struct PreferencesWizardView: View {
             Text("Suggested feeds")
                 .font(.subheadline.weight(.semibold))
                 .padding(.top, 12)
-            ForEach(Self.suggestedFeeds) { feed in
+            ForEach(SuggestedRSSFeeds.all) { feed in
                 suggestedFeedRow(feed)
             }
             Text("Add or remove feeds any time in Settings.")
@@ -225,7 +225,7 @@ struct PreferencesWizardView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func suggestedFeedRow(_ feed: SuggestedFeed) -> some View {
+    private func suggestedFeedRow(_ feed: SuggestedRSSFeed) -> some View {
         let isAdded = settings.feedURLStrings.contains(feed.url)
         return HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
@@ -335,32 +335,4 @@ struct PreferencesWizardView: View {
         }
     }
 
-    // MARK: - Suggested feeds data
-
-    private struct SuggestedFeed: Identifiable {
-        let id = UUID()
-        let name: String
-        let url: String
-    }
-
-    private static let suggestedFeeds: [SuggestedFeed] = [
-        .init(name: "NPR Top Stories", url: "https://feeds.npr.org/1001/rss.xml"),
-        .init(name: "Hacker News", url: "https://hnrss.org/newest"),
-        .init(name: "BBC Top Stories", url: "https://feeds.bbci.co.uk/news/rss.xml"),
-        .init(name: "BBC World News", url: "https://feeds.bbci.co.uk/news/world/rss.xml"),
-        .init(name: "BBC Technology", url: "https://feeds.bbci.co.uk/news/technology/rss.xml"),
-        .init(name: "BBC Business", url: "https://feeds.bbci.co.uk/news/business/rss.xml"),
-        .init(name: "CBS Top Stories", url: "https://www.cbsnews.com/latest/rss/main"),
-        .init(name: "CBS World", url: "https://www.cbsnews.com/latest/rss/world"),
-        .init(name: "CBS Technology", url: "https://www.cbsnews.com/latest/rss/technology"),
-        .init(name: "The Guardian", url: "https://www.theguardian.com/rss"),
-        .init(name: "Guardian World", url: "https://www.theguardian.com/world/rss"),
-        .init(name: "Guardian Technology", url: "https://www.theguardian.com/technology/rss"),
-        .init(name: "WIRED Top Stories", url: "https://www.wired.com/feed/rss"),
-        .init(name: "WIRED AI", url: "https://www.wired.com/feed/tag/ai/latest/rss"),
-        .init(name: "WIRED Security", url: "https://www.wired.com/feed/category/security/latest/rss"),
-        .init(name: "TechCrunch", url: "https://techcrunch.com/feed/"),
-        .init(name: "BleepingComputer", url: "https://www.bleepingcomputer.com/feed/"),
-        .init(name: "Le Monde World", url: "https://www.lemonde.fr/en/international/rss_full.xml")
-    ]
 }

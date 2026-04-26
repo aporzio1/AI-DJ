@@ -78,6 +78,7 @@ struct SettingsView: View {
             newsSection
             if vm.djEnabled && vm.newsEnabled {
                 feedsSection
+                suggestedFeedsSection
 #if os(macOS)
                 opmlSection
 #endif
@@ -544,6 +545,50 @@ struct SettingsView: View {
         } footer: {
             Text("Feeds are fetched periodically and the most recent headlines are offered to the DJ.")
         }
+    }
+
+    private var suggestedFeedsSection: some View {
+        Section {
+            ForEach(SuggestedRSSFeeds.all) { feed in
+                suggestedFeedRow(feed)
+            }
+        } header: {
+            Text("Suggested Feeds")
+        } footer: {
+            Text("Tap to add a curated feed. Tap again to remove.")
+        }
+    }
+
+    private func suggestedFeedRow(_ feed: SuggestedRSSFeed) -> some View {
+        let isAdded = vm.feedURLStrings.contains(feed.url)
+        return HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(feed.name).font(.body)
+                Text(feed.url)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+            Spacer(minLength: 8)
+            Button {
+                if isAdded {
+                    vm.feedURLStrings.removeAll { $0 == feed.url }
+                    vm.save()
+                } else {
+                    vm.addFeed(urlString: feed.url)
+                }
+            } label: {
+                Image(systemName: isAdded ? "checkmark.circle.fill" : "plus.circle")
+                    .font(.title3)
+                    .foregroundStyle(isAdded ? Color.accentColor : .secondary)
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(isAdded ? "Remove \(feed.name)" : "Add \(feed.name)")
+        }
+        .padding(.vertical, 4)
     }
 
     private func feedRow(_ urlString: String) -> some View {
