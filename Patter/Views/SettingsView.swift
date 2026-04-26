@@ -416,7 +416,7 @@ struct SettingsView: View {
         case .system:
             systemVoiceFooter
         case .openAI:
-            Text("Runs in the cloud. Requires an OpenAI API key. Costs roughly ¢0.6 per DJ segment on the Standard model; HD is double. Paste your key above — it's stored in the macOS Keychain, not in UserDefaults or logs.")
+            Text("Runs in the cloud. Requires an OpenAI API key. Costs roughly ¢0.6 per DJ segment on the Standard model; HD is double. Paste your key above — it's stored in the Keychain (synced across your devices via iCloud Keychain), never in UserDefaults or logs.")
         case .kokoro:
             Text("Runs fully on-device on the Apple Neural Engine — no API key, no network at render time. The first DJ segment downloads a ~300 MB model; after that everything stays local. American English only.")
         }
