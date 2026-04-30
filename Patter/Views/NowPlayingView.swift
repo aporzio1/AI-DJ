@@ -3,6 +3,7 @@ import SwiftUI
 struct NowPlayingView: View {
     @State private var vm: NowPlayingViewModel
     @State private var scrubTime: Double?
+    @Environment(\.openURL) private var openURL
 
     init(vm: NowPlayingViewModel) {
         self._vm = State(initialValue: vm)
@@ -14,6 +15,18 @@ struct NowPlayingView: View {
             infoView
             if vm.isDJSpeaking {
                 djBanner
+            }
+            if case .djSegment(let s) = vm.currentItem,
+               s.kind == .news,
+               let headline = s.sourceHeadline {
+                Button {
+                    openURL(headline.url)
+                } label: {
+                    Label("Read article", systemImage: "safari")
+                }
+                .buttonStyle(.bordered)
+                .accessibilityLabel("Read article in browser")
+                .frame(minWidth: 44, minHeight: 44)
             }
             progressSlider
             transportControls

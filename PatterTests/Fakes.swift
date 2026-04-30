@@ -128,6 +128,6 @@ extension Patter.Track {
 
 extension DJSegment {
     static func stub(duration: TimeInterval = 3.0) -> DJSegment {
-        DJSegment(id: UUID(), kind: .banter, script: "Banter.", audioFileURL: URL(filePath: "/tmp/seg.caf"), duration: duration, overlapStart: nil)
+        DJSegment(id: UUID(), kind: .banter, script: "Banter.", audioFileURL: URL(filePath: "/tmp/seg.caf"), duration: duration, overlapStart: nil, sourceHeadline: nil)
     }
 }

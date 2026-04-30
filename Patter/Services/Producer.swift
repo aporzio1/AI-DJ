@@ -320,7 +320,8 @@ actor Producer {
                 script: script,
                 audioFileURL: audioURL,
                 duration: estimateDuration(script: script),
-                overlapStart: nil
+                overlapStart: nil,
+                sourceHeadline: headline
             )
         } catch {
             Log.producer.error("DJVoice failed: \(error, privacy: .public) — skipping segment")

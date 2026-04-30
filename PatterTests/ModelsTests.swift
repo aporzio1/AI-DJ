@@ -27,7 +27,8 @@ struct ModelsTests {
             script: "Up next, something absolutely fire.",
             audioFileURL: URL(filePath: "/tmp/test.caf"),
             duration: 4.2,
-            overlapStart: nil
+            overlapStart: nil,
+            sourceHeadline: nil
         )
         let data = try JSONEncoder().encode(segment)
         let decoded = try JSONDecoder().decode(DJSegment.self, from: data)
@@ -84,7 +85,8 @@ struct ModelsTests {
             script: "Hello",
             audioFileURL: URL(filePath: "/tmp/hello.caf"),
             duration: 2.0,
-            overlapStart: nil
+            overlapStart: nil,
+            sourceHeadline: nil
         )
         let item = PlayableItem.djSegment(segment)
         #expect(item.id == "segment-\(segmentID)")

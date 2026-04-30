@@ -80,7 +80,7 @@ struct PlaybackCoordinatorTests {
     @Test func djSegmentPlaysViaAudioGraph() async throws {
         let (coordinator, _, audio) = makeCoordinator()
         let segURL = URL(filePath: "/tmp/test.caf")
-        let segment = DJSegment(id: UUID(), kind: .banter, script: "Hey!", audioFileURL: segURL, duration: 0, overlapStart: nil)
+        let segment = DJSegment(id: UUID(), kind: .banter, script: "Hey!", audioFileURL: segURL, duration: 0, overlapStart: nil, sourceHeadline: nil)
         await coordinator.replaceQueue([.djSegment(segment)])
         try await coordinator.play()
         #expect(audio.playedURLs.contains(segURL))
