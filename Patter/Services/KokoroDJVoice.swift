@@ -46,6 +46,10 @@ private final class ManagerBox: @unchecked Sendable {
     let manager: KokoroTtsManager
     init(_ manager: KokoroTtsManager) { self.manager = manager }
 
+    func initialize() async throws {
+        try await manager.initialize()
+    }
+
     func synthesize(text: String, voice: String?, outputURL: URL) async throws {
         try await manager.synthesizeToFile(
             text: text,
@@ -79,11 +83,11 @@ private actor KokoroSynthesizer {
         // retry path on the next render attempt. 120 s is a very generous
         // upper bound for a legitimate compile.
         do {
-            let m = KokoroTtsManager()
+            let pending = ManagerBox(KokoroTtsManager())
             try await withTimeout(seconds: 120) {
-                try await m.initialize()
+                try await pending.initialize()
             }
-            box = ManagerBox(m)
+            box = pending
         } catch {
             throw KokoroDJVoiceError.initializationFailed(underlying: error)
         }
