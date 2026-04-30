@@ -29,6 +29,8 @@ struct RootView: View {
     @State private var selectedTab: AppTab = .library
     @State private var showingNowPlaying = false
 
+    @Environment(\.scenePhase) private var scenePhase
+
     var body: some View {
         @Bindable var settings = settings
         Group {
@@ -101,6 +103,13 @@ struct RootView: View {
         } message: {
             Text("Patter switched to Device Voices. iOS 26 has a system-level bug that crashes the on-device Kokoro model on launch. You can re-enable Kokoro under Settings → DJ Voice once a future iOS update resolves it.")
         }
+#if os(iOS)
+        .onChange(of: scenePhase) { _, newPhase in
+            if newPhase == .active {
+                audioGraph.reactivate()
+            }
+        }
+#endif
     }
 
     private func handleReady() {

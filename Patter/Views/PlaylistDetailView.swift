@@ -43,16 +43,22 @@ struct PlaylistDetailView: View {
                     Button {
                         Task { await vm.playPlaylist(playlist) }
                     } label: {
-                        Label("Play", systemImage: "play.fill")
-                            .frame(maxWidth: .infinity, minHeight: 44)
+                        HStack(spacing: 6) {
+                            Image(systemName: "play.fill")
+                            Text("Play")
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 44)
                     }
                     .buttonStyle(.borderedProminent)
 
                     Button {
                         Task { await vm.shufflePlaylist(playlist) }
                     } label: {
-                        Label("Shuffle", systemImage: "shuffle")
-                            .frame(maxWidth: .infinity, minHeight: 44)
+                        HStack(spacing: 6) {
+                            Image(systemName: "shuffle")
+                            Text("Shuffle")
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 44)
                     }
                     .buttonStyle(.bordered)
                 }

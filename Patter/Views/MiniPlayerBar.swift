@@ -137,7 +137,7 @@ struct MiniPlayerBar: View {
 
     private var shuffleButton: some View {
         Button {
-            vm.shuffleUpcoming()
+            vm.toggleShuffle()
         } label: {
             Image(systemName: "shuffle")
                 .font(.footnote.weight(.semibold))
@@ -145,8 +145,8 @@ struct MiniPlayerBar: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .foregroundStyle(.secondary)
-        .accessibilityLabel("Shuffle upcoming")
+        .foregroundStyle(vm.shuffleEnabled ? Color.accentColor : .secondary)
+        .accessibilityLabel(vm.shuffleEnabled ? "Shuffle on" : "Shuffle off")
     }
 
     private var repeatButton: some View {

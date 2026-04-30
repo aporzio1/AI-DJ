@@ -23,6 +23,7 @@ actor PlaybackCoordinator {
     private(set) var currentIndex: Int = 0
     private(set) var state: CoordinatorState = .idle
     private(set) var repeatMode: RepeatMode = .off
+    private(set) var shuffleEnabled: Bool = false
     /// Localized description of the most recent track-playback failure.
     /// Reset by `replaceQueue`. Surfaced to the caller (LibraryViewModel
     /// via `invokePlay`) so silent per-track try/catch skips don't leave
@@ -73,7 +74,7 @@ actor PlaybackCoordinator {
         playbackGeneration += 1
         try? await router.stop()
         audioGraph.stop()
-        queue = items
+        queue = shuffleEnabled ? items.shuffled() : items
         currentIndex = 0
         state = .idle
         externalPlaybackActive = false
@@ -220,14 +221,18 @@ actor PlaybackCoordinator {
 
     // MARK: Shuffle + Repeat
 
-    /// Shuffles everything after the currently-playing item. History stays in
-    /// place; the current item stays where it is so playback doesn't restart.
-    func shuffleUpcoming() {
-        guard currentIndex + 1 < queue.count else { return }
-        let head = Array(queue.prefix(currentIndex + 1))
-        let tail = Array(queue.suffix(from: currentIndex + 1)).shuffled()
-        queue = head + tail
-        Log.coordinator.info("shuffleUpcoming: reshuffled \(tail.count) items after currentIndex=\(self.currentIndex)")
+    /// Toggle shuffle mode. When turned on mid-playback, the upcoming tail is
+    /// reshuffled in place so the change is immediately audible. Future
+    /// `replaceQueue` calls also shuffle while the mode is on. Turning off
+    /// leaves the queue order untouched.
+    func setShuffleEnabled(_ enabled: Bool) {
+        shuffleEnabled = enabled
+        Log.coordinator.info("shuffleEnabled → \(enabled)")
+        if enabled, currentIndex + 1 < queue.count {
+            let head = Array(queue.prefix(currentIndex + 1))
+            let tail = Array(queue.suffix(from: currentIndex + 1)).shuffled()
+            queue = head + tail
+        }
     }
 
     func setRepeatMode(_ mode: RepeatMode) {

@@ -12,11 +12,26 @@ actor AudioGraph: AudioGraphProtocol {
         engine.attach(playerNode)
         engine.connect(playerNode, to: engine.mainMixerNode, format: nil)
 #if os(iOS)
-        let session = AVAudioSession.sharedInstance()
-        try? session.setCategory(.playback, options: [.duckOthers])
-        try? session.setActive(true)
+        configureSession()
 #endif
     }
+
+#if os(iOS)
+    /// `.playback` with no `.duckOthers` — Apple Music is paused (not mixing)
+    /// when the DJ speaks, so ducking would only attenuate our own output via
+    /// the system audio mix on foreground/background transitions. Idempotent;
+    /// safe to call again on scene-active to recover from a session that was
+    /// deactivated while backgrounded.
+    nonisolated func reactivate() {
+        configureSession()
+    }
+
+    private nonisolated func configureSession() {
+        let session = AVAudioSession.sharedInstance()
+        try? session.setCategory(.playback, mode: .default, options: [])
+        try? session.setActive(true)
+    }
+#endif
 
     func play(url: URL) async throws {
         let file = try AVAudioFile(forReading: url)

@@ -98,7 +98,7 @@ struct PreferencesWizardView: View {
             Text("Voice Provider")
                 .font(.subheadline.weight(.semibold))
             Picker("Provider", selection: $settings.ttsProvider) {
-                ForEach(TTSProvider.allCases) { provider in
+                ForEach(availableTTSProviders) { provider in
                     Text(provider.displayName).tag(provider)
                 }
             }
@@ -191,7 +191,7 @@ struct PreferencesWizardView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Premium voices sound dramatically more natural than the Compact defaults. To download one:")
                 Text("1. Open the **Settings** app")
-                Text("2. Go to **Accessibility → Spoken Content → Voices**")
+                Text("2. Go to **Accessibility → Spoken Content → Voices** (or **Accessibility → VoiceOver → Speech** if Spoken Content is hidden)")
                 Text("3. Tap **English**, pick any voice marked **Premium** (Ava, Zoe, Evan…)")
                 Text("4. Wait for the download, return here, and pick it from the list above")
             }
@@ -367,4 +367,13 @@ struct PreferencesWizardView: View {
         }
     }
 
+    /// Hides Kokoro on iOS 26 — see K6/K24/K26 in the tracker.
+    private var availableTTSProviders: [TTSProvider] {
+#if os(iOS)
+        if ProcessInfo.processInfo.operatingSystemVersion.majorVersion == 26 {
+            return TTSProvider.allCases.filter { $0 != .kokoro }
+        }
+#endif
+        return TTSProvider.allCases
+    }
 }

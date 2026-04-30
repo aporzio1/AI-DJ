@@ -11,6 +11,7 @@ final class NowPlayingViewModel {
     private(set) var duration: TimeInterval = 0
     private(set) var currentArtwork: ProviderArtwork?
     private(set) var repeatMode: RepeatMode = .off
+    private(set) var shuffleEnabled: Bool = false
     private(set) var currentFeedback: TrackFeedback.Rating? = nil
 
     /// URL to use when `currentArtwork` is nil — e.g. the track is known from
@@ -25,6 +26,7 @@ final class NowPlayingViewModel {
     private(set) var isRegenerating = false
 
     private static let repeatModeKey = "nowPlayingRepeatMode"
+    private static let shuffleEnabledKey = "nowPlayingShuffleEnabled"
 
     private let coordinator: PlaybackCoordinator
     private let router: MusicProviderRouter
@@ -47,6 +49,11 @@ final class NowPlayingViewModel {
            let mode = RepeatMode(rawValue: raw) {
             self.repeatMode = mode
             Task { await coordinator.setRepeatMode(mode) }
+        }
+        if UserDefaults.standard.object(forKey: Self.shuffleEnabledKey) != nil {
+            let enabled = UserDefaults.standard.bool(forKey: Self.shuffleEnabledKey)
+            self.shuffleEnabled = enabled
+            Task { await coordinator.setShuffleEnabled(enabled) }
         }
     }
 
@@ -126,8 +133,11 @@ final class NowPlayingViewModel {
         Task { try? await coordinator.seek(to: time) }
     }
 
-    func shuffleUpcoming() {
-        Task { await coordinator.shuffleUpcoming() }
+    func toggleShuffle() {
+        let next = !shuffleEnabled
+        shuffleEnabled = next
+        UserDefaults.standard.set(next, forKey: Self.shuffleEnabledKey)
+        Task { await coordinator.setShuffleEnabled(next) }
     }
 
     func cycleRepeatMode() {

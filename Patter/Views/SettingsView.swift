@@ -193,7 +193,7 @@ struct SettingsView: View {
     private var voiceSection: some View {
         Section {
             Picker("Provider", selection: $vm.ttsProvider) {
-                ForEach(TTSProvider.allCases) { provider in
+                ForEach(availableTTSProviders) { provider in
                     Text(provider.displayName).tag(provider)
                 }
             }
@@ -439,13 +439,13 @@ struct SettingsView: View {
         }
 #else
         if hasPremiumEnglishVoice {
-            Text("Pick the highest-quality option above. Premium voices sound the most natural; Enhanced are second-best. Add more from Settings → Accessibility → Spoken Content → Voices.")
+            Text("Pick the highest-quality option above. Premium voices sound the most natural; Enhanced are second-best. Add more from Settings → Accessibility → Spoken Content → Voices (or Accessibility → VoiceOver → Speech).")
         } else {
             VStack(alignment: .leading, spacing: 8) {
                 Text("Premium voices sound much more natural than the Compact defaults. To download one:")
                 VStack(alignment: .leading, spacing: 4) {
                     Text("1. Open the **Settings** app")
-                    Text("2. Go to **Accessibility → Spoken Content → Voices**")
+                    Text("2. Go to **Accessibility → Spoken Content → Voices** (or **Accessibility → VoiceOver → Speech** if Spoken Content is hidden)")
                     Text("3. Tap **English**, pick any voice marked **Premium** (Ava, Zoe, Evan…)")
                     Text("4. Wait for the download, return here, and pick it from the list above")
                 }
@@ -457,6 +457,19 @@ struct SettingsView: View {
 
     private var hasPremiumEnglishVoice: Bool {
         availableVoices.contains { $0.quality == .premium }
+    }
+
+    /// On iOS 26 the Kokoro option is hidden — FluidAudio's CoreML model
+    /// segfaults inside libBNNS during load and there's no in-app catch
+    /// (see K6/K24/K26). Existing iOS-26 users with `.kokoro` selected get
+    /// auto-downgraded once at launch via `applyIOS26KokoroDowngradeIfNeeded`.
+    private var availableTTSProviders: [TTSProvider] {
+#if os(iOS)
+        if ProcessInfo.processInfo.operatingSystemVersion.majorVersion == 26 {
+            return TTSProvider.allCases.filter { $0 != .kokoro }
+        }
+#endif
+        return TTSProvider.allCases
     }
 
 #if os(macOS)
