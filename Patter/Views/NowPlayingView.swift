@@ -163,7 +163,9 @@ struct NowPlayingView: View {
             .buttonStyle(.borderless)
             .disabled(vm.isRegenerating)
             .accessibilityLabel("Regenerate DJ take")
+#if os(macOS)
             .help("Generate a different DJ take for this transition")
+#endif
         }
     }
 
