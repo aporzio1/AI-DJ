@@ -38,8 +38,27 @@ actor PlaybackCoordinator {
     private(set) var externalPlaybackActive: Bool = false
 
     // Incremented every time a new playback starts. In-flight loops check this to detect
-    // when they've been superseded and should exit without advancing.
-    private var playbackGeneration: Int = 0
+    // when they've been superseded and should exit without advancing. Bumped at every
+    // play-initiation site (replaceQueue / startStation / skip / previous / playTrack /
+    // playSegment / swapCurrentSegment / resume-from-pause). The monitor loop
+    // `monitorTrackUntilEnd` does NOT self-bump — it captures the value its caller
+    // already set, so two concurrent monitors started by separate initiation sites
+    // observe distinct generations and the older one exits cleanly. K33 / K15 invariant.
+    /// `private(set)` so the test target can observe bumps through `@testable import`.
+    private(set) var playbackGeneration: Int = 0
+
+    /// Increments `playbackGeneration` and returns the new value. Used by play-
+    /// initiation sites that drive `monitorTrackUntilEnd` (playTrack / resume-from-
+    /// pause / playSegment) so the monitor captures the bumped value rather than
+    /// self-bumping on entry. Transport-interruption sites (replaceQueue /
+    /// startStation / skip / previous / swapCurrentSegment) keep their inline
+    /// `playbackGeneration += 1` to express the explicit "kill any in-flight loops"
+    /// intent at the call site.
+    @discardableResult
+    private func startNewGeneration() -> Int {
+        playbackGeneration += 1
+        return playbackGeneration
+    }
 
     // MARK: Advance notifications (Producer subscribes here)
 
@@ -161,6 +180,10 @@ actor PlaybackCoordinator {
            case .track(let track) = queue[currentIndex] {
             let resumePoint = await router.currentPlaybackTime
             Log.coordinator.info("play() — resuming '\(track.title, privacy: .public)' at \(resumePoint)s")
+            // Bump generation BEFORE entering the monitor so any in-flight monitor
+            // from the prior play() (cold-start) or a stale resume sees a different
+            // gen and exits cleanly. K33: the monitor no longer self-bumps.
+            startNewGeneration()
             // Flip state BEFORE entering the monitor. monitorTrackUntilEnd
             // exits immediately if state != .playing, so missing this
             // assignment left the coordinator stuck in .paused even though
@@ -309,6 +332,9 @@ actor PlaybackCoordinator {
     }
 
     private func playTrack(_ track: Track) async throws {
+        // Bump generation BEFORE start+monitor so any in-flight monitor from a
+        // prior playTrack call exits when it observes the gen change. K33.
+        startNewGeneration()
         state = .playing
         Log.coordinator.info("playTrack '\(track.title, privacy: .public)' duration=\(track.duration)s")
         try await router.start(track: track)
@@ -318,9 +344,11 @@ actor PlaybackCoordinator {
     /// Polls MusicKit while a track is playing, emits willAdvance near the
     /// end, and advances when the track actually finishes. Shared between
     /// the cold-start path (playTrack → start + monitor) and the
-    /// resume-from-pause path (play → resume + monitor).
+    /// resume-from-pause path (play → resume + monitor). Captures whatever
+    /// `playbackGeneration` value its caller already set (K33) — does NOT
+    /// self-bump, so two concurrent monitors started by separate initiation
+    /// sites observe distinct generations and the older one exits cleanly.
     private func monitorTrackUntilEnd(track: Track) async throws {
-        playbackGeneration += 1
         let myGen = playbackGeneration
 
         var emittedWillAdvance = false
@@ -396,8 +424,7 @@ actor PlaybackCoordinator {
     }
 
     private func playSegment(_ segment: DJSegment) async throws {
-        playbackGeneration += 1
-        let myGen = playbackGeneration
+        let myGen = startNewGeneration()
         state = .playing
         Log.coordinator.info("playSegment kind=\(String(describing: segment.kind), privacy: .public) script=\"\(segment.script, privacy: .public)\" (gen=\(myGen))")
         try? await router.pause()

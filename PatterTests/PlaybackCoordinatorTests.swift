@@ -138,4 +138,25 @@ struct PlaybackCoordinatorTests {
         try await coordinator.previous()
         #expect(audio.stopCallCount > before, "previous must stop the audio graph to kill any in-flight DJ segment")
     }
+
+    // MARK: - K33 regression: every play-initiation site bumps generation
+    // exactly once, and the monitor no longer self-bumps a second time.
+
+    @Test func playbackGenerationContract() async throws {
+        // K33: replaceQueue bumps once, skip bumps once, etc. The monitor loop
+        // does NOT self-bump on entry — its caller (playTrack / resume / playSegment)
+        // bumps before invoking it. So a single user-driven play action should
+        // produce exactly one bump, not two.
+        let (coordinator, _, _) = makeCoordinator()
+        let gen0 = await coordinator.playbackGeneration
+
+        await coordinator.replaceQueue([.track(Patter.Track.stub(duration: 60)),
+                                         .track(Patter.Track.stub(duration: 60))])
+        let genAfterReplace = await coordinator.playbackGeneration
+        #expect(genAfterReplace == gen0 + 1, "replaceQueue bumps once")
+
+        try await coordinator.skip()
+        let genAfterSkip = await coordinator.playbackGeneration
+        #expect(genAfterSkip == genAfterReplace + 1, "skip bumps once")
+    }
 }
