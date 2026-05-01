@@ -3,6 +3,17 @@ import AVFoundation
 
 actor AudioGraph: AudioGraphProtocol {
 
+    /// `nonisolated(unsafe)` is justified for `engine` and `playerNode` because:
+    /// (1) `AVAudioPlayerNode` accepts control calls (play/stop/scheduleBuffer)
+    /// from any thread per Apple's CoreAudio docs;
+    /// (2) `stop()` must be callable from a `nonisolated` context (the
+    /// `withTaskCancellationHandler.onCancel` closure at line ~81 is sync, not
+    /// async, so it cannot await actor reentry to a fully-isolated property);
+    /// (3) we only mutate `playerNode` via the actor-isolated `play()` method or
+    /// the explicit `nonisolated stop()` Task, so reads/writes don't race in
+    /// practice. The annotation suppresses Swift 6's data-race checker for
+    /// these two properties; every future AudioGraph touch must re-validate
+    /// the above three preconditions still hold (K34, last reviewed 2026-05-01).
     nonisolated(unsafe) private let engine = AVAudioEngine()
     nonisolated(unsafe) private let playerNode = AVAudioPlayerNode()
     private var pendingContinuation: CheckedContinuation<Void, Never>?
@@ -85,6 +96,21 @@ actor AudioGraph: AudioGraphProtocol {
     /// Nonisolated so callers at any QoS don't block on CoreAudio teardown.
     /// The actual stop is deferred to a utility-priority Task so the caller
     /// returns immediately (audio stops within a few ms on the background).
+    ///
+    /// **K34 — residual race window, accepted not fixed.** `stop()` is sync
+    /// and cannot atomically capture `pendingContinuation` before spawning
+    /// the Task. If the Task is delayed by scheduler jitter and a fresh
+    /// `play()` lands on the actor in between, the deferred Task will read
+    /// the *new* `pendingContinuation` and resume it early — the audible
+    /// consequence is at most a too-early resume of the new play (~50ms of
+    /// audio skipped), not data corruption. Actor-serialized read+nil in
+    /// `resumePending()` ensures no continuation is resumed twice. The race
+    /// requires user-tap-pause + something-triggers-new-play to land in the
+    /// same actor turn, which doesn't naturally occur in the user flow.
+    /// A real fix requires either making `stop()` async (large blast radius —
+    /// `withTaskCancellationHandler.onCancel` is sync) or moving to per-
+    /// `play()` UUID-keyed continuation slots (AudioGraph contract redesign).
+    /// Revisit if observed in production logs.
     nonisolated func stop() {
         Task(priority: .utility) { [self] in
             self.playerNode.stop()
@@ -92,6 +118,9 @@ actor AudioGraph: AudioGraphProtocol {
         }
     }
 
+    /// Atomic read+nil of `pendingContinuation` on the actor — guarantees
+    /// no continuation is resumed twice. Pairs with the K34 race-window
+    /// disclaimer above.
     private func resumePending() {
         if let c = pendingContinuation {
             pendingContinuation = nil
