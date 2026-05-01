@@ -3,7 +3,12 @@ import Foundation
 struct DJPersona: Identifiable, Codable, Sendable, Equatable {
     let id: UUID
     let name: String
-    let voicePreset: String       // AVSpeechSynthesisVoice identifier
+    /// AVSpeechSynthesisVoice identifier used as the fallback voice when the
+    /// user hasn't picked one in Settings (i.e. `SettingsViewModel.voiceIdentifier`
+    /// is empty). Also used by `Producer.currentVoiceIdentifier` during the
+    /// brief window before `RootView` pushes the first `updateVoice` call.
+    /// Don't remove without replacing both fallback paths.
+    let voicePreset: String
     let styleDescriptor: String   // Injected into LLM prompt as persona guidance
 }
 

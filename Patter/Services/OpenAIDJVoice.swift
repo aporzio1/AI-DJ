@@ -72,6 +72,9 @@ final class OpenAIDJVoice: DJVoiceProtocol, @unchecked Sendable {
             throw OpenAIDJVoiceError.missingAPIKey
         }
 
+        // Verified against OpenAI Audio API docs 2026-04-30. Endpoint, model
+        // names (`tts-1`/`tts-1-hd`), voice names, and `response_format` keys
+        // per https://platform.openai.com/docs/api-reference/audio/createSpeech
         var request = URLRequest(url: URL(string: "https://api.openai.com/v1/audio/speech")!)
         request.httpMethod = "POST"
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")

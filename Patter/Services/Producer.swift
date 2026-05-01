@@ -223,8 +223,11 @@ actor Producer {
         await coordinator.insertAfterCurrent(.djSegment(segment))
     }
 
-    /// Scans the queue from `startIndex` forward, removing unplayable tracks, and returns
-    /// the first playable track (or nil if none in the next 10 positions).
+    /// Scans the queue at `startIndex`, removing unplayable tracks one at a time,
+    /// and returns the first playable track found. `startIndex` is fixed across
+    /// iterations on purpose — `coordinator.removeItem(at: startIndex)` slides
+    /// the next item into that slot, so re-reading `queue[startIndex]` walks
+    /// forward naturally. Bails after 10 consecutive unplayable tracks.
     private func findNextPlayableTrack(from startIndex: Int) async -> Patter.Track? {
         let maxLookahead = 10
         var attempts = 0
