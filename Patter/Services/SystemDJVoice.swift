@@ -4,16 +4,31 @@ import AVFoundation
 /// Renders DJ scripts using the OS-provided AVSpeechSynthesizer.
 final class SystemDJVoice: DJVoiceProtocol, @unchecked Sendable {
 
-    /// One synthesizer reused across every render. Per K35: constructing a fresh
-    /// `AVSpeechSynthesizer` triggers an Audio Unit IPC handshake on first use,
-    /// and that handshake transiently disrupts the shared `AVAudioSession` —
-    /// which on iOS pre-empts `ApplicationMusicPlayer`, freezing the currently-
-    /// playing track for several seconds at end-of-track when Producer kicks off
-    /// the next-up DJ render. Reusing a warm synth across calls means subsequent
-    /// renders skip the handshake, leaving MusicKit's playback undisturbed.
+    /// One synthesizer reused across every render. Per K35:
+    /// (1) Constructing a fresh `AVSpeechSynthesizer` triggers an Audio Unit IPC
+    /// handshake on first use — reusing a warm synth skips that on subsequent calls.
+    /// (2) Setting `usesApplicationAudioSession = false` detaches the synth's
+    /// internal AU pipeline from the shared `AVAudioSession`. The first warm-synth
+    /// fix (commit `9779040`) skipped the handshake but the per-render AU
+    /// activations (`mBuffers[0].mDataByteSize (0)` warnings) still kicked the
+    /// shared session, freezing `ApplicationMusicPlayer`'s playback for ~10s at
+    /// every track-end transition. With a private session, those AU activations
+    /// happen in a sandbox that doesn't pre-empt MusicKit. We use
+    /// `write(_:toBufferCallback:)` to render PCM in-memory — no audible playback
+    /// is lost from session detachment, and `SpeechRenderer.handleBuffer` already
+    /// reads the buffer's actual format dynamically so any sample-rate/channel
+    /// shift the private session might pick is handled.
     /// Producer awaits each `renderToFile` before starting the next, so concurrent
     /// access to this synth doesn't happen in normal operation.
-    private let synthesizer = AVSpeechSynthesizer()
+    private let synthesizer: AVSpeechSynthesizer = {
+        let synth = AVSpeechSynthesizer()
+#if os(iOS)
+        // iOS-only: detach synth's internal audio session from the shared one
+        // so per-render AU activations don't pre-empt MusicKit (K35).
+        synth.usesApplicationAudioSession = false
+#endif
+        return synth
+    }()
 
     func renderToFile(script: String, voiceIdentifier: String) async throws -> URL {
         let voice = Self.voice(for: voiceIdentifier)
