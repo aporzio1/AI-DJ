@@ -210,11 +210,12 @@ actor Producer {
 
         // Verify the upcoming track is still at the slot after current before inserting.
         // If the coordinator advanced past it during generation, drop the segment.
-        let refreshedQueue = await coordinator.queue
-        let currentIdx = await coordinator.currentIndex
-        let expectedIdx = currentIdx + 1
-        guard refreshedQueue.indices.contains(expectedIdx),
-              case .track(let stillThere) = refreshedQueue[expectedIdx],
+        // Read both fields in a single actor turn — separate awaits could race
+        // against an `advance()` and leave currentIdx one step ahead of the queue.
+        let snapshot = await coordinator.queueSnapshot()
+        let expectedIdx = snapshot.currentIndex + 1
+        guard snapshot.queue.indices.contains(expectedIdx),
+              case .track(let stillThere) = snapshot.queue[expectedIdx],
               stillThere.id == upcomingTrack.id else {
             Log.producer.info("Upcoming track moved/gone — dropping segment")
             return

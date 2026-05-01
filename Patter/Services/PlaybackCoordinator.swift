@@ -132,6 +132,14 @@ actor PlaybackCoordinator {
         }
     }
 
+    /// Atomic read of `queue` and `currentIndex` in a single actor turn.
+    /// Callers that need both should use this — two separate `await` reads
+    /// can race against an in-flight `advance()` between them, leaving the
+    /// pair inconsistent (currentIndex one ahead of the queue snapshot).
+    func queueSnapshot() -> (queue: [PlayableItem], currentIndex: Int) {
+        (queue, currentIndex)
+    }
+
     // MARK: Transport
 
     func play() async throws {
@@ -193,6 +201,10 @@ actor PlaybackCoordinator {
         // audio-graph player node playing the segment over the new track.
         playbackGeneration += 1
         audioGraph.stop()
+        // Also silence MusicKit. Without this, the previous track keeps playing
+        // for the ~50–200ms it takes playCurrentItem → playTrack → router.start
+        // to replace the MusicKit queue with the new track.
+        try? await router.pause()
         guard currentIndex + 1 < queue.count else {
             state = .idle
             return
@@ -208,6 +220,7 @@ actor PlaybackCoordinator {
         // Same DJ-audio + generation invalidation as skip().
         playbackGeneration += 1
         audioGraph.stop()
+        try? await router.pause()
         currentIndex -= 1
         if state == .playing || state == .buffering {
             try await playCurrentItem()
