@@ -2,7 +2,18 @@ import Foundation
 import AVFoundation
 
 /// Renders DJ scripts using the OS-provided AVSpeechSynthesizer.
-final class SystemDJVoice: DJVoiceProtocol {
+final class SystemDJVoice: DJVoiceProtocol, @unchecked Sendable {
+
+    /// One synthesizer reused across every render. Per K35: constructing a fresh
+    /// `AVSpeechSynthesizer` triggers an Audio Unit IPC handshake on first use,
+    /// and that handshake transiently disrupts the shared `AVAudioSession` —
+    /// which on iOS pre-empts `ApplicationMusicPlayer`, freezing the currently-
+    /// playing track for several seconds at end-of-track when Producer kicks off
+    /// the next-up DJ render. Reusing a warm synth across calls means subsequent
+    /// renders skip the handshake, leaving MusicKit's playback undisturbed.
+    /// Producer awaits each `renderToFile` before starting the next, so concurrent
+    /// access to this synth doesn't happen in normal operation.
+    private let synthesizer = AVSpeechSynthesizer()
 
     func renderToFile(script: String, voiceIdentifier: String) async throws -> URL {
         let voice = Self.voice(for: voiceIdentifier)
@@ -11,7 +22,7 @@ final class SystemDJVoice: DJVoiceProtocol {
             .appendingPathComponent(UUID().uuidString)
             .appendingPathExtension("caf")
 
-        let renderer = SpeechRenderer(utterances: utterances, outputURL: outputURL)
+        let renderer = SpeechRenderer(synthesizer: synthesizer, utterances: utterances, outputURL: outputURL)
 
         return try await withCheckedThrowingContinuation { continuation in
             let timeout = Task {
@@ -99,8 +110,10 @@ final class SystemDJVoice: DJVoiceProtocol {
 
 /// Drives AVSpeechSynthesizer.write and accumulates PCM buffers into a .caf file.
 /// Thread-safe: the synth callback can fire on any queue.
+/// Borrows the synthesizer from the parent `SystemDJVoice` so its AU IPC graph
+/// stays warm across renders (K35).
 private final class SpeechRenderer: @unchecked Sendable {
-    private let synthesizer = AVSpeechSynthesizer()
+    private let synthesizer: AVSpeechSynthesizer
     private let utterances: [AVSpeechUtterance]
     private let outputURL: URL
     private let lock = NSLock()
@@ -110,7 +123,8 @@ private final class SpeechRenderer: @unchecked Sendable {
     private var currentIndex = 0
     private var currentUtteranceWroteAudio = false
 
-    init(utterances: [AVSpeechUtterance], outputURL: URL) {
+    init(synthesizer: AVSpeechSynthesizer, utterances: [AVSpeechUtterance], outputURL: URL) {
+        self.synthesizer = synthesizer
         self.utterances = utterances
         self.outputURL = outputURL
     }
