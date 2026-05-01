@@ -156,4 +156,22 @@ struct DJBrainTests {
         #expect(context?.contains("Steve O'Donnell") == true)
         #expect(context?.contains("<p>") == false)
     }
+
+    @Test func splitSentencesPreservesOriginalTerminators() {
+        let brain = DJBrain()
+        let mixed = "Wow! Up next, Paranoid Android. Are you ready?"
+
+        let sentences = brain.splitSentences(mixed)
+
+        #expect(sentences == ["Wow!", "Up next, Paranoid Android.", "Are you ready?"])
+    }
+
+    @Test func splitSentencesAppendsPeriodToUnterminatedTrailing() {
+        let brain = DJBrain()
+        let trailing = "First sentence. No terminator here"
+
+        let sentences = brain.splitSentences(trailing)
+
+        #expect(sentences == ["First sentence.", "No terminator here."])
+    }
 }

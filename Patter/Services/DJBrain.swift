@@ -369,11 +369,29 @@ final class DJBrain: DJBrainProtocol {
         return cleaned.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private func splitSentences(_ text: String) -> [String] {
-        text.split(whereSeparator: { ".!?".contains($0) })
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-            .map { $0 + "." }
+    /// Split a script on sentence-terminating punctuation while preserving the
+    /// original `.`/`!`/`?` so AVSpeechSynthesizer can apply the right intonation.
+    /// A trailing fragment without a terminator gets `.` appended so downstream
+    /// callers (which rejoin with a space) produce well-formed sentences.
+    /// Internal access (not private) so DJBrainTests can exercise it directly.
+    func splitSentences(_ text: String) -> [String] {
+        var sentences: [String] = []
+        var current = ""
+        for ch in text {
+            current.append(ch)
+            if ".!?".contains(ch) {
+                let trimmed = current.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmed.isEmpty {
+                    sentences.append(trimmed)
+                }
+                current = ""
+            }
+        }
+        let trailing = current.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trailing.isEmpty {
+            sentences.append(trailing + ".")
+        }
+        return sentences
     }
 
     private func truncateAtSentenceBoundary(_ text: String, maxChars: Int) -> String {

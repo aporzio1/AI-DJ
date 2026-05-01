@@ -42,6 +42,7 @@ final class SettingsViewModel {
     private static let activePersonaIDKey = "djActivePersonaID"
     private static let iCloudSyncEnabledKey = "iCloudSyncEnabled"   // device-local, NOT synced
     private static let kokoroDowngradedFromIOS26Key = "kokoroAutoDowngradedFromIOS26"  // device-local sentinel; one-shot
+    private static let openAIKeychainMigratedKey = "openAIKeychainMigratedToSynchronizable"  // device-local sentinel; one-shot
 
     /// Keys that participate in iCloud sync. Kept deliberately narrow:
     /// feed URLs, preferences, and persona library — but NOT the
@@ -196,7 +197,12 @@ final class SettingsViewModel {
         }
         openAIVoice = UserDefaults.standard.string(forKey: Self.openAIVoiceKey) ?? OpenAITTSVoice.alloy.rawValue
         openAIModel = UserDefaults.standard.string(forKey: Self.openAIModelKey) ?? OpenAITTSModel.tts_1.rawValue
-        Keychain.migrateToSynchronizable(KeychainKey.openAIAPIKey)
+        // `loadFromUserDefaults` runs on every iCloud sync import, not just init.
+        // Without the sentinel the Keychain rewrite would re-fire per import batch.
+        if !UserDefaults.standard.bool(forKey: Self.openAIKeychainMigratedKey) {
+            Keychain.migrateToSynchronizable(KeychainKey.openAIAPIKey)
+            UserDefaults.standard.set(true, forKey: Self.openAIKeychainMigratedKey)
+        }
         openAIAPIKey = Keychain.get(KeychainKey.openAIAPIKey) ?? ""
         kokoroVoice = UserDefaults.standard.string(forKey: Self.kokoroVoiceKey) ?? KokoroVoice.defaultVoice.rawValue
         // Phase 2: load the custom persona list and the active-ID pointer.
