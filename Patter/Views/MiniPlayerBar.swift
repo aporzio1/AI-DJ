@@ -100,7 +100,7 @@ struct MiniPlayerBar: View {
             shuffleButton
 
             if vm.duration > 0 {
-                Text(formatTime(displayedTime))
+                Text(formatPlaybackTime(displayedTime))
                     .font(.caption2.monospacedDigit())
                     .foregroundStyle(.secondary)
                     .frame(width: 42, alignment: .leading)
@@ -113,7 +113,7 @@ struct MiniPlayerBar: View {
                 // Don't propagate taps on the slider track to the row's onTapGesture.
                 .onTapGesture { }
 
-                Text("-" + formatTime(max(vm.duration - displayedTime, 0)))
+                Text("-" + formatPlaybackTime(max(vm.duration - displayedTime, 0)))
                     .font(.caption2.monospacedDigit())
                     .foregroundStyle(.secondary)
                     .frame(width: 42, alignment: .trailing)
@@ -175,14 +175,6 @@ struct MiniPlayerBar: View {
             vm.seek(to: scrubValue)
             isScrubbing = false
         }
-    }
-
-    private func formatTime(_ seconds: TimeInterval) -> String {
-        guard seconds.isFinite, seconds >= 0 else { return "0:00" }
-        let total = Int(seconds)
-        let m = total / 60
-        let s = total % 60
-        return String(format: "%d:%02d", m, s)
     }
 
     // MARK: - Subviews

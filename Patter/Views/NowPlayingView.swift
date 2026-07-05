@@ -87,20 +87,14 @@ struct NowPlayingView: View {
             )
             .disabled(vm.duration <= 0)
             HStack {
-                Text(format(scrubTime ?? vm.playbackTime))
+                Text(formatPlaybackTime(scrubTime ?? vm.playbackTime))
                 Spacer()
-                Text("-\(format(max(vm.duration - (scrubTime ?? vm.playbackTime), 0)))")
+                Text("-\(formatPlaybackTime(max(vm.duration - (scrubTime ?? vm.playbackTime), 0)))")
             }
             .font(.caption.monospacedDigit())
             .foregroundStyle(.secondary)
         }
         .frame(maxWidth: 320)
-    }
-
-    private func format(_ time: TimeInterval) -> String {
-        guard time.isFinite, time >= 0 else { return "0:00" }
-        let total = Int(time)
-        return String(format: "%d:%02d", total / 60, total % 60)
     }
 
     @ViewBuilder
