@@ -6,17 +6,13 @@ import Foundation
 @MainActor
 struct SettingsViewModelTests {
 
-    /// Matches `SettingsViewModel`'s private `openAIKeychainMigratedKey`.
-    /// Pre-set to true so `loadFromUserDefaults` skips
-    /// `Keychain.migrateToSynchronizable` mid-test — the remaining
-    /// `Keychain.get` read is safe/nil on the test host.
-    private static let openAIKeychainMigratedKey = "openAIKeychainMigratedToSynchronizable"
-
     private func makeSettings() -> SettingsViewModel {
         let suiteName = "SettingsViewModelTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defaults.removePersistentDomain(forName: suiteName)
-        defaults.set(true, forKey: Self.openAIKeychainMigratedKey)
+        // Pre-set so `loadFromUserDefaults` skips `Keychain.migrateToSynchronizable`
+        // mid-test — the remaining `Keychain.get` read is safe/nil on the test host.
+        defaults.set(true, forKey: SettingsKeys.openAIKeychainMigrated)
         return SettingsViewModel(defaults: defaults)
     }
 
@@ -152,29 +148,29 @@ struct SettingsViewModelTests {
         let suiteName = "SettingsViewModelTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defaults.removePersistentDomain(forName: suiteName)
-        defaults.set(true, forKey: Self.openAIKeychainMigratedKey)
+        defaults.set(true, forKey: SettingsKeys.openAIKeychainMigrated)
         let legacy = DJPersona.alex
-        defaults.set(try! JSONEncoder().encode(legacy), forKey: "djPersona")
+        defaults.set(try! JSONEncoder().encode(legacy), forKey: SettingsKeys.legacyPersona)
 
         let settings = SettingsViewModel(defaults: defaults)
 
         #expect(settings.customPersonas.isEmpty)
-        #expect(defaults.data(forKey: "djPersona") == nil)
+        #expect(defaults.data(forKey: SettingsKeys.legacyPersona) == nil)
     }
 
     @Test func legacyPersonaDifferingFromAlexIsPreservedAsCustom() {
         let suiteName = "SettingsViewModelTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defaults.removePersistentDomain(forName: suiteName)
-        defaults.set(true, forKey: Self.openAIKeychainMigratedKey)
+        defaults.set(true, forKey: SettingsKeys.openAIKeychainMigrated)
         let legacy = DJPersona(id: UUID(), name: "Old Persona", voicePreset: "voice-x", styleDescriptor: "Old style")
-        defaults.set(try! JSONEncoder().encode(legacy), forKey: "djPersona")
+        defaults.set(try! JSONEncoder().encode(legacy), forKey: SettingsKeys.legacyPersona)
 
         let settings = SettingsViewModel(defaults: defaults)
 
         #expect(settings.customPersonas.contains { $0.name == "Old Persona" && $0.styleDescriptor == "Old style" })
         #expect(settings.activePersonaID == settings.customPersonas.first { $0.name == "Old Persona" }?.id)
-        #expect(defaults.data(forKey: "djPersona") == nil)
+        #expect(defaults.data(forKey: SettingsKeys.legacyPersona) == nil)
     }
 
     // MARK: - iOS 26 Kokoro downgrade (macOS no-op path)
@@ -186,8 +182,8 @@ struct SettingsViewModelTests {
         let suiteName = "SettingsViewModelTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defaults.removePersistentDomain(forName: suiteName)
-        defaults.set(true, forKey: Self.openAIKeychainMigratedKey)
-        defaults.set(TTSProvider.kokoro.rawValue, forKey: "ttsProvider")
+        defaults.set(true, forKey: SettingsKeys.openAIKeychainMigrated)
+        defaults.set(TTSProvider.kokoro.rawValue, forKey: SettingsKeys.ttsProvider)
 
         let settings = SettingsViewModel(defaults: defaults)
 

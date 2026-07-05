@@ -81,9 +81,9 @@ final class OnboardingViewModel {
         if defaults.bool(forKey: Self.autoCompleteMigrationRanKey) { return }
         defaults.set(true, forKey: Self.autoCompleteMigrationRanKey)
         if defaults.bool(forKey: Self.onboardingCompletedKey) { return }
-        let hasName = (defaults.string(forKey: "listenerName") ?? "").isEmpty == false
-        let hasFeeds = (defaults.stringArray(forKey: "rssFeedURLs") ?? []).isEmpty == false
-        let hasFrequency = defaults.string(forKey: "djFrequency") != nil
+        let hasName = (defaults.string(forKey: SettingsKeys.listenerName) ?? "").isEmpty == false
+        let hasFeeds = (defaults.stringArray(forKey: SettingsKeys.feeds) ?? []).isEmpty == false
+        let hasFrequency = defaults.string(forKey: SettingsKeys.djFrequency) != nil
         if hasName || hasFeeds || hasFrequency {
             Log.onboarding.info("Existing settings detected — auto-completing onboarding (one-shot migration)")
             defaults.set(true, forKey: Self.onboardingCompletedKey)

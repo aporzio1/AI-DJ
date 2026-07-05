@@ -28,42 +28,24 @@ final class SettingsViewModel {
 
     private let defaults: UserDefaults
 
-    private static let feedsKey = "rssFeedURLs"
-    private static let djEnabledKey = "djEnabled"
-    private static let djFrequencyKey = "djFrequency"
-    private static let newsEnabledKey = "newsEnabled"
-    private static let newsFrequencyKey = "newsFrequency"
-    private static let listenerNameKey = "listenerName"
-    private static let voiceIdentifierKey = "voiceIdentifier"
-    private static let ttsProviderKey = "ttsProvider"
-    private static let openAIVoiceKey = "openAIVoice"
-    private static let openAIModelKey = "openAIModel"
-    private static let kokoroVoiceKey = "kokoroVoice"
-    private static let legacyPersonaKey = "djPersona"         // Phase 1 single-persona storage
-    private static let customPersonasKey = "djCustomPersonas"
-    private static let activePersonaIDKey = "djActivePersonaID"
-    private static let iCloudSyncEnabledKey = "iCloudSyncEnabled"   // device-local, NOT synced
-    private static let kokoroDowngradedFromIOS26Key = "kokoroAutoDowngradedFromIOS26"  // device-local sentinel; one-shot
-    private static let openAIKeychainMigratedKey = "openAIKeychainMigratedToSynchronizable"  // device-local sentinel; one-shot
-
     /// Keys that participate in iCloud sync. Kept deliberately narrow:
     /// feed URLs, preferences, and persona library — but NOT the
     /// iCloudSyncEnabled flag itself (device-local decision), the OpenAI
     /// API key (Keychain), or legacy/transient keys.
     static let syncedKeys: Set<String> = [
-        feedsKey,
-        djEnabledKey,
-        djFrequencyKey,
-        newsEnabledKey,
-        newsFrequencyKey,
-        listenerNameKey,
-        voiceIdentifierKey,
-        ttsProviderKey,
-        openAIVoiceKey,
-        openAIModelKey,
-        kokoroVoiceKey,
-        customPersonasKey,
-        activePersonaIDKey
+        SettingsKeys.feeds,
+        SettingsKeys.djEnabled,
+        SettingsKeys.djFrequency,
+        SettingsKeys.newsEnabled,
+        SettingsKeys.newsFrequency,
+        SettingsKeys.listenerName,
+        SettingsKeys.voiceIdentifier,
+        SettingsKeys.ttsProvider,
+        SettingsKeys.openAIVoice,
+        SettingsKeys.openAIModel,
+        SettingsKeys.kokoroVoice,
+        SettingsKeys.customPersonas,
+        SettingsKeys.activePersonaID
     ]
 
     /// Soft cap on user-edited prompt instructions. Longer descriptors tend to
@@ -132,7 +114,7 @@ final class SettingsViewModel {
     func setiCloudSyncEnabled(_ enabled: Bool) {
         guard enabled != iCloudSyncEnabled else { return }
         iCloudSyncEnabled = enabled
-        defaults.set(enabled, forKey: Self.iCloudSyncEnabledKey)
+        defaults.set(enabled, forKey: SettingsKeys.iCloudSyncEnabled)
         if enabled {
             CloudSyncService.shared.enable()
             // Re-read defaults in case the enable() pulled newer values down.
@@ -154,65 +136,65 @@ final class SettingsViewModel {
             cloud.mirrorIfEnabled(key: key, value: value)
         }
 
-        write(feedURLStrings, forKey: Self.feedsKey)
-        write(djEnabled, forKey: Self.djEnabledKey)
-        write(djFrequency.rawValue, forKey: Self.djFrequencyKey)
-        write(newsEnabled, forKey: Self.newsEnabledKey)
-        write(newsFrequency.rawValue, forKey: Self.newsFrequencyKey)
-        write(listenerName, forKey: Self.listenerNameKey)
-        write(voiceIdentifier, forKey: Self.voiceIdentifierKey)
-        write(ttsProvider.rawValue, forKey: Self.ttsProviderKey)
-        write(openAIVoice, forKey: Self.openAIVoiceKey)
-        write(openAIModel, forKey: Self.openAIModelKey)
-        write(kokoroVoice, forKey: Self.kokoroVoiceKey)
+        write(feedURLStrings, forKey: SettingsKeys.feeds)
+        write(djEnabled, forKey: SettingsKeys.djEnabled)
+        write(djFrequency.rawValue, forKey: SettingsKeys.djFrequency)
+        write(newsEnabled, forKey: SettingsKeys.newsEnabled)
+        write(newsFrequency.rawValue, forKey: SettingsKeys.newsFrequency)
+        write(listenerName, forKey: SettingsKeys.listenerName)
+        write(voiceIdentifier, forKey: SettingsKeys.voiceIdentifier)
+        write(ttsProvider.rawValue, forKey: SettingsKeys.ttsProvider)
+        write(openAIVoice, forKey: SettingsKeys.openAIVoice)
+        write(openAIModel, forKey: SettingsKeys.openAIModel)
+        write(kokoroVoice, forKey: SettingsKeys.kokoroVoice)
         if let data = try? JSONEncoder().encode(customPersonas) {
-            write(data, forKey: Self.customPersonasKey)
+            write(data, forKey: SettingsKeys.customPersonas)
         }
-        write(activePersonaID.uuidString, forKey: Self.activePersonaIDKey)
+        write(activePersonaID.uuidString, forKey: SettingsKeys.activePersonaID)
         // iCloudSyncEnabled is a device-local decision; never mirror it.
-        defaults.set(iCloudSyncEnabled, forKey: Self.iCloudSyncEnabledKey)
+        defaults.set(iCloudSyncEnabled, forKey: SettingsKeys.iCloudSyncEnabled)
         // API key is persisted to Keychain via saveAPIKey(); not echoed to UserDefaults.
     }
 
     private func loadFromUserDefaults() {
-        iCloudSyncEnabled = defaults.object(forKey: Self.iCloudSyncEnabledKey) as? Bool ?? false
-        feedURLStrings = defaults.stringArray(forKey: Self.feedsKey) ?? []
-        djEnabled = defaults.object(forKey: Self.djEnabledKey) as? Bool ?? true
-        if let raw = defaults.string(forKey: Self.djFrequencyKey),
+        iCloudSyncEnabled = defaults.object(forKey: SettingsKeys.iCloudSyncEnabled) as? Bool ?? false
+        feedURLStrings = defaults.stringArray(forKey: SettingsKeys.feeds) ?? []
+        djEnabled = defaults.object(forKey: SettingsKeys.djEnabled) as? Bool ?? true
+        if let raw = defaults.string(forKey: SettingsKeys.djFrequency),
            let freq = DJFrequency(rawValue: raw) {
             djFrequency = freq
         }
-        newsEnabled = defaults.object(forKey: Self.newsEnabledKey) as? Bool ?? true
-        if let raw = defaults.string(forKey: Self.newsFrequencyKey),
+        newsEnabled = defaults.object(forKey: SettingsKeys.newsEnabled) as? Bool ?? true
+        if let raw = defaults.string(forKey: SettingsKeys.newsFrequency),
            let freq = NewsFrequency(rawValue: raw) {
             newsFrequency = freq
         }
-        if let stored = defaults.string(forKey: Self.listenerNameKey), !stored.isEmpty {
+        if let stored = defaults.string(forKey: SettingsKeys.listenerName), !stored.isEmpty {
             listenerName = stored
         } else {
             listenerName = defaultSystemName()
         }
-        voiceIdentifier = defaults.string(forKey: Self.voiceIdentifierKey) ?? ""
-        if let raw = defaults.string(forKey: Self.ttsProviderKey),
+        voiceIdentifier = defaults.string(forKey: SettingsKeys.voiceIdentifier) ?? ""
+        if let raw = defaults.string(forKey: SettingsKeys.ttsProvider),
            let p = TTSProvider(rawValue: raw) {
             ttsProvider = p
         }
-        openAIVoice = defaults.string(forKey: Self.openAIVoiceKey) ?? OpenAITTSVoice.alloy.rawValue
-        openAIModel = defaults.string(forKey: Self.openAIModelKey) ?? OpenAITTSModel.tts_1.rawValue
+        openAIVoice = defaults.string(forKey: SettingsKeys.openAIVoice) ?? OpenAITTSVoice.alloy.rawValue
+        openAIModel = defaults.string(forKey: SettingsKeys.openAIModel) ?? OpenAITTSModel.tts_1.rawValue
         // `loadFromUserDefaults` runs on every iCloud sync import, not just init.
         // Without the sentinel the Keychain rewrite would re-fire per import batch.
-        if !defaults.bool(forKey: Self.openAIKeychainMigratedKey) {
+        if !defaults.bool(forKey: SettingsKeys.openAIKeychainMigrated) {
             Keychain.migrateToSynchronizable(KeychainKey.openAIAPIKey)
-            defaults.set(true, forKey: Self.openAIKeychainMigratedKey)
+            defaults.set(true, forKey: SettingsKeys.openAIKeychainMigrated)
         }
         openAIAPIKey = Keychain.get(KeychainKey.openAIAPIKey) ?? ""
-        kokoroVoice = defaults.string(forKey: Self.kokoroVoiceKey) ?? KokoroVoice.defaultVoice.rawValue
+        kokoroVoice = defaults.string(forKey: SettingsKeys.kokoroVoice) ?? KokoroVoice.defaultVoice.rawValue
         // Phase 2: load the custom persona list and the active-ID pointer.
-        if let data = defaults.data(forKey: Self.customPersonasKey),
+        if let data = defaults.data(forKey: SettingsKeys.customPersonas),
            let decoded = try? JSONDecoder().decode([DJPersona].self, from: data) {
             customPersonas = decoded
         }
-        if let raw = defaults.string(forKey: Self.activePersonaIDKey),
+        if let raw = defaults.string(forKey: SettingsKeys.activePersonaID),
            let uuid = UUID(uuidString: raw) {
             activePersonaID = uuid
         }
@@ -240,7 +222,7 @@ final class SettingsViewModel {
     /// we respect their choice and don't fight them.
     private func applyIOS26KokoroDowngradeIfNeeded() {
         #if os(iOS)
-        let alreadyDowngraded = defaults.bool(forKey: Self.kokoroDowngradedFromIOS26Key)
+        let alreadyDowngraded = defaults.bool(forKey: SettingsKeys.kokoroDowngradedFromIOS26)
         guard !alreadyDowngraded,
               ttsProvider == .kokoro,
               ProcessInfo.processInfo.operatingSystemVersion.majorVersion >= 26
@@ -248,8 +230,8 @@ final class SettingsViewModel {
 
         Log.app.warning("Auto-downgrading TTS provider .kokoro → .system on iOS 26+ (tracker K6/K24)")
         ttsProvider = .system
-        defaults.set(true, forKey: Self.kokoroDowngradedFromIOS26Key)
-        defaults.set(ttsProvider.rawValue, forKey: Self.ttsProviderKey)
+        defaults.set(true, forKey: SettingsKeys.kokoroDowngradedFromIOS26)
+        defaults.set(ttsProvider.rawValue, forKey: SettingsKeys.ttsProvider)
         showKokoroDowngradeNotice = true
         #endif
     }
@@ -331,7 +313,7 @@ final class SettingsViewModel {
     /// it as a custom persona (with a fresh UUID so it's editable). If the
     /// text matches Alex exactly, just drop the legacy key — nothing to save.
     private func migrateLegacyPersonaIfNeeded() {
-        guard let data = defaults.data(forKey: Self.legacyPersonaKey),
+        guard let data = defaults.data(forKey: SettingsKeys.legacyPersona),
               let legacy = try? JSONDecoder().decode(DJPersona.self, from: data) else {
             return
         }
@@ -348,7 +330,7 @@ final class SettingsViewModel {
             customPersonas.append(preserved)
             activePersonaID = preserved.id
         }
-        defaults.removeObject(forKey: Self.legacyPersonaKey)
+        defaults.removeObject(forKey: SettingsKeys.legacyPersona)
     }
 
     /// Persist the OpenAI API key to Keychain. Called from the Settings view.
