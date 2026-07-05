@@ -56,6 +56,14 @@ final class DJVoiceRouter: DJVoiceProtocol, @unchecked Sendable {
         openAI.updateModel(model)
     }
 
+    /// Warms the System-voice provider ahead of the first real render (K35).
+    /// Proxied rather than folded into the protocol's `warmUp` because it's
+    /// meant to be called once at launch regardless of the active provider,
+    /// not routed through the provider-switch logic in `renderToFile`.
+    func warmUpSystemVoice(voiceIdentifier: String) async {
+        await system.warmUp(voiceIdentifier: voiceIdentifier)
+    }
+
     // MARK: - Kokoro model management (proxied to the inner KokoroDJVoice)
 
     var isKokoroModelInstalled: Bool { KokoroDJVoice.isModelInstalled }

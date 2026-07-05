@@ -30,7 +30,51 @@ final class SystemDJVoice: DJVoiceProtocol, @unchecked Sendable {
         return synth
     }()
 
+    /// Serializes access to the shared `synthesizer`. Without this, the
+    /// launch-time `warmUp` and a real Producer render could overlap:
+    /// AVSpeechSynthesizer only drives one utterance stream at a time, so
+    /// interleaved `write` callbacks would corrupt both output files, and
+    /// the warm-up's timeout `stop()` would kill a real render if they raced.
+    private let chainLock = NSLock()
+    private var tail: Task<Void, Never> = Task {}
+
+    private func serialized<T: Sendable>(_ operation: @escaping @Sendable () async throws -> T) async throws -> T {
+        let previous = currentTail()
+        let current = Task<T, Error> {
+            await previous.value
+            return try await operation()
+        }
+        let voidTask = Task<Void, Never> { _ = try? await current.value }
+        setTail(voidTask)
+        return try await current.value
+    }
+
+    private func currentTail() -> Task<Void, Never> {
+        chainLock.lock(); defer { chainLock.unlock() }
+        return tail
+    }
+
+    private func setTail(_ task: Task<Void, Never>) {
+        chainLock.lock(); tail = task; chainLock.unlock()
+    }
+
     func renderToFile(script: String, voiceIdentifier: String) async throws -> URL {
+        try await serialized { [self] in
+            try await performRender(script: script, voiceIdentifier: voiceIdentifier)
+        }
+    }
+
+    /// Renders a minimal throwaway utterance so the first real render
+    /// doesn't pay the AU IPC handshake + neural-voice-model load (K35).
+    /// Best-effort: discards errors and deletes the temp file it produces.
+    func warmUp(voiceIdentifier: String) async {
+        guard let url = try? await serialized({ [self] in
+            try await performRender(script: "Ready.", voiceIdentifier: voiceIdentifier)
+        }) else { return }
+        try? FileManager.default.removeItem(at: url)
+    }
+
+    private func performRender(script: String, voiceIdentifier: String) async throws -> URL {
         let voice = Self.voice(for: voiceIdentifier)
         let utterances = Self.makeUtterances(for: script, voice: voice)
         let outputURL = FileManager.default.temporaryDirectory

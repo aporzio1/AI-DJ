@@ -133,6 +133,15 @@ struct RootView: View {
         }
         applyVoiceSelection()
         Task.detached(priority: .utility) { [djBrain] in await djBrain.warmUp() }
+        // Warm the System-voice synthesizer at launch so the first DJ segment
+        // doesn't pay the AU IPC handshake + neural-voice-model load (K35).
+        // Captured before the detached task since `settings` is @MainActor.
+        if settings.djEnabled && settings.ttsProvider == .system {
+            let voiceIdentifier = settings.effectiveVoiceIdentifier
+            Task.detached(priority: .utility) { [djVoice] in
+                await djVoice.warmUpSystemVoice(voiceIdentifier: voiceIdentifier)
+            }
+        }
         // If Kokoro is the active provider AND the DJ is enabled, warm it
         // up now (in the background, fire-and-forget) so the first DJ
         // segment doesn't eat the CoreML compile + warm-up stall. Skipping
