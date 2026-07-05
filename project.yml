@@ -1,4 +1,9 @@
 name: Patter
+attributes:
+  # Matches installed Xcode's DTXcode value (`plutil -p Xcode.app/Contents/Info.plist`)
+  # so Xcode doesn't prompt "Update to recommended settings" on every open —
+  # bump this alongside any Xcode upgrade.
+  LastUpgradeCheck: "2660"
 options:
   bundleIdPrefix: com.andrewporzio
   createIntermediateGroups: true
