@@ -174,4 +174,160 @@ struct DJBrainTests {
 
         #expect(sentences == ["First sentence.", "No terminator here."])
     }
+
+    // MARK: - DJPromptTemplate.cleanTitle
+
+    @Test func cleanTitleStripsParentheticalSuffix() {
+        #expect(DJPromptTemplate.cleanTitle("Paranoid Android (Remastered)") == "Paranoid Android")
+    }
+
+    @Test func cleanTitleStripsQuoteCharacters() {
+        #expect(DJPromptTemplate.cleanTitle("7\" Mix") == "7 Mix")
+    }
+
+    @Test func cleanTitleLeavesPlainTitleUntouched() {
+        #expect(DJPromptTemplate.cleanTitle("Te Boté") == "Te Boté")
+    }
+
+    // MARK: - DJPromptTemplate.buildPrompt
+
+    private func makeContext(
+        placement: DJContext.Placement = .betweenSongs,
+        recentTracks: [Track] = [],
+        listenerName: String? = nil,
+        feedback: FeedbackSummary? = nil,
+        newsHeadline: NewsHeadline? = nil
+    ) -> DJContext {
+        DJContext(
+            placement: placement,
+            persona: .default,
+            upcomingTrack: Track.stub(id: "next", title: "Next Song"),
+            recentTracks: recentTracks,
+            timeOfDay: .evening,
+            currentTimeString: "8:00 PM",
+            newsHeadline: newsHeadline,
+            listenerName: listenerName,
+            feedback: feedback
+        )
+    }
+
+    @Test func buildPromptOpeningFramesUpcomingTrackAsNotYetPlayed() {
+        let context = makeContext(placement: .opening)
+        let prompt = DJPromptTemplate.buildPrompt(context: context, newsTopic: nil, newsSummary: nil)
+
+        #expect(prompt.contains("Opening intro before any music has played"))
+        #expect(prompt.contains("coming up, up first, or about to play"))
+        #expect(!prompt.contains("Just played:"))
+    }
+
+    @Test func buildPromptBetweenSongsFramesUpcomingTrackAsNext() {
+        let context = makeContext(placement: .betweenSongs)
+        let prompt = DJPromptTemplate.buildPrompt(context: context, newsTopic: nil, newsSummary: nil)
+
+        #expect(prompt.contains("Between-song break"))
+        #expect(prompt.contains("coming up, next, or about to play"))
+    }
+
+    @Test func buildPromptOmitsListenerNameWhenNil() {
+        let context = makeContext(listenerName: nil)
+        let prompt = DJPromptTemplate.buildPrompt(context: context, newsTopic: nil, newsSummary: nil)
+
+        #expect(!prompt.contains("Listener name:"))
+    }
+
+    @Test func buildPromptIncludesListenerNameWhenPresent() {
+        let context = makeContext(listenerName: "Andrew")
+        let prompt = DJPromptTemplate.buildPrompt(context: context, newsTopic: nil, newsSummary: nil)
+
+        #expect(prompt.contains("Listener name: Andrew"))
+    }
+
+    @Test func buildPromptOmitsRecentTracksWhenEmpty() {
+        let context = makeContext(recentTracks: [])
+        let prompt = DJPromptTemplate.buildPrompt(context: context, newsTopic: nil, newsSummary: nil)
+
+        #expect(!prompt.contains("Just played:"))
+    }
+
+    @Test func buildPromptIncludesLastThreeRecentTracksCleaned() {
+        let context = makeContext(recentTracks: [
+            Track.stub(id: "1", title: "One (Live)"),
+            Track.stub(id: "2", title: "Two"),
+            Track.stub(id: "3", title: "Three"),
+            Track.stub(id: "4", title: "Four"),
+        ])
+        let prompt = DJPromptTemplate.buildPrompt(context: context, newsTopic: nil, newsSummary: nil)
+
+        #expect(prompt.contains("Just played: Two by Artist, Three by Artist, Four by Artist."))
+        #expect(!prompt.contains("One"))
+    }
+
+    @Test func buildPromptOmitsFeedbackSectionsWhenNil() {
+        let context = makeContext(feedback: nil)
+        let prompt = DJPromptTemplate.buildPrompt(context: context, newsTopic: nil, newsSummary: nil)
+
+        #expect(!prompt.contains("Recently liked:"))
+        #expect(!prompt.contains("Recently skipped"))
+    }
+
+    @Test func buildPromptIncludesOnlyNonEmptyFeedbackSections() {
+        let context = makeContext(feedback: FeedbackSummary(likes: ["Song A by Artist A"], dislikes: []))
+        let prompt = DJPromptTemplate.buildPrompt(context: context, newsTopic: nil, newsSummary: nil)
+
+        #expect(prompt.contains("Recently liked: Song A by Artist A"))
+        #expect(!prompt.contains("Recently skipped"))
+    }
+
+    @Test func buildPromptOmitsNewsSectionWhenTopicIsNil() {
+        let context = makeContext()
+        let prompt = DJPromptTemplate.buildPrompt(context: context, newsTopic: nil, newsSummary: nil)
+
+        #expect(!prompt.contains("NEWS TOPIC"))
+        #expect(!prompt.contains("NEWS SUMMARY"))
+    }
+
+    @Test func buildPromptIncludesNewsTopicWithoutSummary() {
+        let context = makeContext()
+        let prompt = DJPromptTemplate.buildPrompt(context: context, newsTopic: "A big story", newsSummary: nil)
+
+        #expect(prompt.contains("NEWS TOPIC, NOT A SONG: A big story"))
+        #expect(!prompt.contains("NEWS SUMMARY"))
+    }
+
+    @Test func buildPromptIncludesNewsSummaryWhenPresent() {
+        let context = makeContext()
+        let prompt = DJPromptTemplate.buildPrompt(context: context, newsTopic: "A big story", newsSummary: "Context about the story.")
+
+        #expect(prompt.contains("NEWS SUMMARY: Context about the story."))
+    }
+
+    // MARK: - DJPromptTemplate.instructions
+
+    @Test func instructionsOmitNewsGuidanceWhenNoHeadline() {
+        let context = makeContext(newsHeadline: nil)
+        let instructions = DJPromptTemplate.instructions(context: context)
+
+        #expect(!instructions.contains("A news topic"))
+    }
+
+    @Test func instructionsIncludeNewsGuidanceWhenHeadlinePresent() {
+        let context = makeContext(newsHeadline: NewsHeadline(
+            id: UUID(),
+            title: "Some headline",
+            source: "example.com",
+            url: URL(string: "https://example.com")!,
+            publishedAt: Date(timeIntervalSince1970: 0),
+            summary: "Summary"
+        ))
+        let instructions = DJPromptTemplate.instructions(context: context)
+
+        #expect(instructions.contains("A news topic"))
+    }
+
+    @Test func instructionsIncludePersonaStyleDescriptor() {
+        let context = makeContext()
+        let instructions = DJPromptTemplate.instructions(context: context)
+
+        #expect(instructions.contains(DJPersona.default.styleDescriptor))
+    }
 }

@@ -318,7 +318,7 @@ actor Producer {
             Log.producer.info("DJBrain script: \"\(script, privacy: .public)\"")
         } catch {
             Log.producer.error("DJBrain failed (\(error, privacy: .public)) — falling back to canned template")
-            script = "Up next, \(upcomingTrack.title) by \(upcomingTrack.artist)."
+            script = "Up next, \(DJPromptTemplate.cleanTitle(upcomingTrack.title)) by \(upcomingTrack.artist)."
         }
 
         do {
