@@ -223,23 +223,30 @@ final class SettingsViewModel {
         }
     }
 
-    /// On iOS 26.x, FluidAudio's Kokoro CoreML model triggers a hard segfault
-    /// inside libBNNS.dylib's SME2 1D-conv-transpose kernel during model load
-    /// (tracker K6, FB radar pending). The crash is in Apple framework code so
-    /// the in-app `try/catch` fallback in DJVoiceRouter can't catch it — the
-    /// process is dead before the fallback runs. So if the persisted provider
-    /// is `.kokoro` on iOS 26, force-flip it to `.system` once and surface a
-    /// notice. The sentinel is per-device and one-shot: if the user re-enables
-    /// Kokoro afterwards we respect their choice and don't fight them.
+    /// On iOS 26+, FluidAudio's Kokoro CoreML model triggers a hard crash
+    /// during model load (tracker K6/K24: iOS 26 segfaults inside
+    /// libBNNS.dylib's SME2 1D-conv-transpose kernel; iOS 27 hits a different
+    /// but equally fatal MPSGraph/MLIR compile assertion — same underlying
+    /// "Kokoro's CoreML graph doesn't survive Apple's on-device ML stack on
+    /// this OS" problem, confirmed non-fixed across at least two major
+    /// versions). The crash is in Apple framework code so the in-app
+    /// `try/catch` fallback in DJVoiceRouter can't catch it — the process is
+    /// dead (or hung) before the fallback runs. So if the persisted provider
+    /// is `.kokoro` on iOS 26 or later, force-flip it to `.system` once and
+    /// surface a notice. `>=` rather than `==` — there's no evidence a future
+    /// major version fixes this without a FluidAudio update, and `==` left
+    /// iOS 27 completely unguarded (reproduced as an app hang). The sentinel
+    /// is per-device and one-shot: if the user re-enables Kokoro afterwards
+    /// we respect their choice and don't fight them.
     private func applyIOS26KokoroDowngradeIfNeeded() {
         #if os(iOS)
         let alreadyDowngraded = defaults.bool(forKey: Self.kokoroDowngradedFromIOS26Key)
         guard !alreadyDowngraded,
               ttsProvider == .kokoro,
-              ProcessInfo.processInfo.operatingSystemVersion.majorVersion == 26
+              ProcessInfo.processInfo.operatingSystemVersion.majorVersion >= 26
         else { return }
 
-        Log.app.warning("Auto-downgrading TTS provider .kokoro → .system on iOS 26 (tracker K6)")
+        Log.app.warning("Auto-downgrading TTS provider .kokoro → .system on iOS 26+ (tracker K6/K24)")
         ttsProvider = .system
         defaults.set(true, forKey: Self.kokoroDowngradedFromIOS26Key)
         defaults.set(ttsProvider.rawValue, forKey: Self.ttsProviderKey)

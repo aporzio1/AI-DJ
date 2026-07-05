@@ -14,13 +14,16 @@ enum TTSProvider: String, Codable, CaseIterable, Identifiable {
         }
     }
 
-    /// Providers offered in the picker. Hides Kokoro on iOS 26 — see
-    /// K6/K24/K26 in the tracker. Existing iOS-26 users with `.kokoro`
-    /// selected get auto-downgraded once at launch via
+    /// Providers offered in the picker. Hides Kokoro on iOS 26+ — see
+    /// K6/K24/K26 in the tracker. `>=` rather than `==`: the underlying
+    /// CoreML-compile crash reproduces on iOS 27 too (different failure
+    /// signature, same fatal outcome), and there's no evidence a future OS
+    /// fixes it without a FluidAudio update. Existing iOS-26+ users with
+    /// `.kokoro` selected get auto-downgraded once at launch via
     /// `SettingsViewModel.applyIOS26KokoroDowngradeIfNeeded`.
     static var available: [TTSProvider] {
 #if os(iOS)
-        if ProcessInfo.processInfo.operatingSystemVersion.majorVersion == 26 {
+        if ProcessInfo.processInfo.operatingSystemVersion.majorVersion >= 26 {
             return TTSProvider.allCases.filter { $0 != .kokoro }
         }
 #endif
