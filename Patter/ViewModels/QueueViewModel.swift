@@ -21,10 +21,8 @@ final class QueueViewModel {
             while !Task.isCancelled {
                 let queue = await coordinator.queue
                 let index = await coordinator.currentIndex
-                await MainActor.run {
-                    self.items = queue
-                    self.currentIndex = index
-                }
+                self.items = queue
+                self.currentIndex = index
                 try? await Task.sleep(for: .milliseconds(250))
             }
         }

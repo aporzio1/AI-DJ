@@ -79,8 +79,6 @@ final class NowPlayingViewModel {
                     return queuedItem
                 }()
 
-                // Pre-fetch current-track feedback outside the MainActor hop so
-                // the actor call doesn't block the UI-state apply.
                 let currentRating: TrackFeedback.Rating? = await {
                     if case .track(let t) = item {
                         return await self.feedbackStore?.rating(for: t.id)
@@ -88,21 +86,19 @@ final class NowPlayingViewModel {
                     return nil
                 }()
 
-                await MainActor.run {
-                    self.playbackState = state
-                    self.currentItem = item
-                    self.playbackTime = time
-                    self.duration = dur
-                    self.isDJSpeaking = {
-                        if case .djSegment = item { return state == .playing }
-                        return false
-                    }()
-                    self.currentArtwork = {
-                        if case .track(let t) = item { return self.router.artwork(for: t.id) }
-                        return nil
-                    }()
-                    self.currentFeedback = currentRating
-                }
+                self.playbackState = state
+                self.currentItem = item
+                self.playbackTime = time
+                self.duration = dur
+                self.isDJSpeaking = {
+                    if case .djSegment = item { return state == .playing }
+                    return false
+                }()
+                self.currentArtwork = {
+                    if case .track(let t) = item { return self.router.artwork(for: t.id) }
+                    return nil
+                }()
+                self.currentFeedback = currentRating
                 try? await Task.sleep(for: .milliseconds(250))
             }
         }

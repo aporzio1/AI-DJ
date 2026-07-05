@@ -14,6 +14,7 @@ struct PreferencesWizardView: View {
 
     @State private var step = 0
     private let totalSteps = 4
+    @State private var installedEnglishVoices: [AVSpeechSynthesisVoice] = []
 
     var body: some View {
         VStack(spacing: 24) {
@@ -46,6 +47,9 @@ struct PreferencesWizardView: View {
 #if os(macOS)
         .frame(minWidth: 520, minHeight: 560)
 #endif
+        .onAppear {
+            installedEnglishVoices = Self.loadInstalledEnglishVoices()
+        }
     }
 
     // MARK: - Step 1: Name
@@ -165,9 +169,7 @@ struct PreferencesWizardView: View {
         }
     }
 
-    /// Load installed English AVSpeechSynthesis voices once per wizard render
-    /// — the list doesn't change between taps.
-    private var installedEnglishVoices: [AVSpeechSynthesisVoice] {
+    private static func loadInstalledEnglishVoices() -> [AVSpeechSynthesisVoice] {
         AVSpeechSynthesisVoice.speechVoices()
             .filter { $0.language.hasPrefix("en") }
             .sorted { lhs, rhs in
