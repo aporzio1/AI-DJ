@@ -3,6 +3,7 @@ import Foundation
 @testable import Patter
 
 @Suite("DJVoiceRouter")
+@MainActor
 struct DJVoiceRouterTests {
 
     private func makeRouter(

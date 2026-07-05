@@ -19,15 +19,25 @@ final class FakeMusicService: MusicProviderService {
     var currentTrack: Patter.Track? = nil
     var playbackStatus: MusicPlaybackStatus = .stopped
 
+    /// When set, `start(track:)` throws this instead of recording the track —
+    /// exercises PlaybackCoordinator/Producer error paths that a
+    /// never-fails fake can't reach.
+    var startError: Error?
+    var songsInPlaylist: [String: [Patter.Track]] = [:]
+
     func requestAuthorization() async -> ProviderAuthStatus { .authorized }
     func signOut() async { authorizationStatus = .notAuthorized }
-    func start(track: Patter.Track) async throws { startedTracks.append(track); currentTrack = track }
+    func start(track: Patter.Track) async throws {
+        if let startError { throw startError }
+        startedTracks.append(track)
+        currentTrack = track
+    }
     func pause() async throws { pauseCallCount += 1 }
     func resume() async throws { resumeCallCount += 1 }
     func stop() async throws { stopCallCount += 1 }
     func seek(to time: TimeInterval) async throws { currentPlaybackTime = time }
     func playlists() async throws -> [PlaylistInfo] { [] }
-    func songs(inPlaylistWith id: String) async throws -> [Patter.Track] { [] }
+    func songs(inPlaylistWith id: String) async throws -> [Patter.Track] { songsInPlaylist[id] ?? [] }
     func songs(inAlbumWith id: String) async throws -> [Patter.Track] { [] }
     func startStation(id: String) async throws {}
     func skipToNext() async throws {}
@@ -67,7 +77,12 @@ final class FakeAudioGraph: AudioGraphProtocol, @unchecked Sendable {
 
 // MARK: - FakeDJBrain
 
-final class FakeDJBrain: DJBrainProtocol, @unchecked Sendable {
+/// `DJBrainProtocol` requirements are all `async`, so a `@MainActor`
+/// witness is a legal conformance — callers already cross an isolation
+/// boundary to invoke them. Drops the `@unchecked Sendable` escape hatch
+/// in favor of real actor isolation.
+@MainActor
+final class FakeDJBrain: DJBrainProtocol {
     var nextScript = "Up next, great stuff."
     var generateCallCount = 0
     var shouldThrow = false
@@ -83,10 +98,11 @@ final class FakeDJBrain: DJBrainProtocol, @unchecked Sendable {
 
 // MARK: - FakeDJVoice
 
-final class FakeDJVoice: DJVoiceProtocol, @unchecked Sendable {
+@MainActor
+final class FakeDJVoice: DJVoiceProtocol {
     var renderCallCount = 0
     var shouldThrow = false
-    var fakeURL = URL(filePath: "/tmp/fake.caf")
+    var fakeURL = makeTemporaryFileURL(extension: "caf")
     var lastScript: String?
     var lastVoiceIdentifier: String?
 
@@ -101,10 +117,11 @@ final class FakeDJVoice: DJVoiceProtocol, @unchecked Sendable {
 
 // MARK: - FakeKokoroDJVoice
 
-final class FakeKokoroDJVoice: DJVoiceProtocol, KokoroModelManaging, @unchecked Sendable {
+@MainActor
+final class FakeKokoroDJVoice: DJVoiceProtocol, KokoroModelManaging {
     var renderCallCount = 0
     var shouldThrow = false
-    var fakeURL = URL(filePath: "/tmp/fake-kokoro.caf")
+    var fakeURL = makeTemporaryFileURL(extension: "caf")
     var prepareModelCallCount = 0
     var removeModelCallCount = 0
 
@@ -120,6 +137,10 @@ final class FakeKokoroDJVoice: DJVoiceProtocol, KokoroModelManaging, @unchecked 
 
 // MARK: - FakeRSSFetcher
 
+/// Unlike `FakeDJBrain`/`FakeDJVoice`, `RSSFetcherProtocol` has one
+/// non-async requirement (`updateFeeds`), so it can't take a `@MainActor`
+/// witness without breaking nonisolated callers — stays `@unchecked
+/// Sendable`, safe here since tests exercise it sequentially.
 final class FakeRSSFetcher: RSSFetcherProtocol, @unchecked Sendable {
     var headlines: [NewsHeadline] = []
     var fetchCallCount = 0
@@ -141,6 +162,15 @@ enum FakeError: Error {
     case intentional
 }
 
+/// A unique, non-colliding placeholder file URL under the system temp
+/// directory — avoids fakes racing on a shared hardcoded path like
+/// `/tmp/fake.caf` when tests run concurrently.
+func makeTemporaryFileURL(extension ext: String) -> URL {
+    FileManager.default.temporaryDirectory
+        .appendingPathComponent(UUID().uuidString)
+        .appendingPathExtension(ext)
+}
+
 extension Patter.Track {
     static func stub(id: String = UUID().uuidString, title: String = "Track", duration: TimeInterval = 180) -> Patter.Track {
         Patter.Track(id: id, title: title, artist: "Artist", album: "Album", artworkURL: nil, duration: duration, providerID: .appleMusic)
@@ -149,6 +179,6 @@ extension Patter.Track {
 
 extension DJSegment {
     static func stub(duration: TimeInterval = 3.0) -> DJSegment {
-        DJSegment(id: UUID(), kind: .banter, script: "Banter.", audioFileURL: URL(filePath: "/tmp/seg.caf"), duration: duration, overlapStart: nil, sourceHeadline: nil)
+        DJSegment(id: UUID(), kind: .banter, script: "Banter.", audioFileURL: makeTemporaryFileURL(extension: "caf"), duration: duration, overlapStart: nil, sourceHeadline: nil)
     }
 }
