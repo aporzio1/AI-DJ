@@ -255,28 +255,34 @@ actor Producer {
         await coordinator.isPlayable(track)
     }
 
-    private func shouldGenerate() -> Bool {
+    /// Pure predicate: does this transition warrant a DJ segment? Reads
+    /// `hasGivenIntro`/`tracksSinceLastSegment` but does not mutate them —
+    /// see `recordGenerationDecision` for the state update.
+    private func shouldGenerateSegment() -> Bool {
         guard config.djEnabled else { return false }
-        if !hasGivenIntro {
-            hasGivenIntro = true
-            tracksSinceLastSegment = 0
-            return true
-        }
+        if !hasGivenIntro { return true }
         let frequency = config.djFrequency
-        if tracksSinceLastSegment >= frequency.maxGap {
-            tracksSinceLastSegment = 0
-            return true
-        }
-        if frequency.randomChance > 0, Double.random(in: 0..<1) < frequency.randomChance {
-            tracksSinceLastSegment = 0
-            return true
-        }
-        tracksSinceLastSegment += 1
+        if tracksSinceLastSegment >= frequency.maxGap { return true }
+        if frequency.randomChance > 0, Double.random(in: 0..<1) < frequency.randomChance { return true }
         return false
     }
 
+    /// Applies the state mutation implied by a `shouldGenerateSegment()`
+    /// result: a "yes" marks the intro given and resets the gap counter
+    /// (idempotent after the first segment); a "no" advances the gap counter.
+    private func recordGenerationDecision(_ willGenerate: Bool) {
+        if willGenerate {
+            hasGivenIntro = true
+            tracksSinceLastSegment = 0
+        } else {
+            tracksSinceLastSegment += 1
+        }
+    }
+
     private func primeSegment(upcomingTrack: Patter.Track) async -> DJSegment? {
-        guard shouldGenerate() else {
+        let willGenerate = shouldGenerateSegment()
+        recordGenerationDecision(willGenerate)
+        guard willGenerate else {
             Log.producer.debug("Skipping DJ for this transition (tracksSinceLast=\(self.tracksSinceLastSegment))")
             return nil
         }
@@ -333,9 +339,10 @@ actor Producer {
         }
     }
 
+    private static let wordsPerMinute = 130.0
+
     private func estimateDuration(script: String) -> TimeInterval {
-        let wpm = 130.0
         let words = script.split(separator: " ").count
-        return max(1.0, Double(words) / wpm * 60.0)
+        return max(1.0, Double(words) / Self.wordsPerMinute * 60.0)
     }
 }
