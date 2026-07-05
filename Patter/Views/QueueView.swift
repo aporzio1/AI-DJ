@@ -13,7 +13,9 @@ struct QueueView: View {
                 queueRow(item: item, index: index)
                     .listRowBackground(index == vm.currentIndex ? Color.accentColor.opacity(0.1) : Color.clear)
             }
-            .onDelete { vm.remove(at: $0.first!) }
+            .onDelete { indexSet in
+                if let first = indexSet.first { vm.remove(at: first) }
+            }
         }
         .navigationTitle("Queue")
         .onAppear { vm.startObserving() }
