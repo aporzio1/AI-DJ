@@ -79,7 +79,7 @@ final class SettingsViewModel {
     // MARK: RSS Feed management
 
     func addFeed(urlString: String) {
-        guard !urlString.isEmpty, URL(string: urlString) != nil else { return }
+        guard OPMLParser.isValidFeedURL(urlString) else { return }
         guard !feedURLStrings.contains(urlString) else { return }
         feedURLStrings.append(urlString)
         saveToUserDefaults()
@@ -351,25 +351,5 @@ final class SettingsViewModel {
     private func defaultSystemName() -> String {
         let full = NSFullUserName()
         return full.components(separatedBy: .whitespaces).first ?? full
-    }
-}
-
-// MARK: - OPML Parser
-
-private struct OPMLParser {
-    static func parse(data: Data) -> [String] {
-        guard let xml = String(data: data, encoding: .utf8) else { return [] }
-        var urls: [String] = []
-        // Simple regex-free extraction: find xmlUrl attributes
-        let lines = xml.components(separatedBy: .newlines)
-        for line in lines {
-            if let range = line.range(of: "xmlUrl=\"") {
-                let after = line[range.upperBound...]
-                if let endRange = after.range(of: "\"") {
-                    urls.append(String(after[after.startIndex..<endRange.lowerBound]))
-                }
-            }
-        }
-        return urls
     }
 }

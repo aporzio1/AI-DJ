@@ -683,21 +683,16 @@ struct SettingsView: View {
 #endif
                 Button("Add") { commitFeed() }
                     .buttonStyle(.borderedProminent)
-                    .disabled(!isValidURL(newFeedURL))
+                    .disabled(!OPMLParser.isValidFeedURL(newFeedURL))
             }
         }
         .padding(.vertical, 4)
     }
 
     private func commitFeed() {
-        guard isValidURL(newFeedURL) else { return }
+        guard OPMLParser.isValidFeedURL(newFeedURL) else { return }
         vm.addFeed(urlString: newFeedURL)
         newFeedURL = ""
-    }
-
-    private func isValidURL(_ string: String) -> Bool {
-        guard !string.isEmpty, let url = URL(string: string), url.scheme != nil else { return false }
-        return true
     }
 
     private func hostName(for urlString: String) -> String {
