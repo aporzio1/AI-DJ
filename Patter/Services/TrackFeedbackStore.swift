@@ -12,11 +12,13 @@ actor TrackFeedbackStore {
     private static let storageKey = "trackFeedbackEntries"
 
     private var entries: [TrackFeedback] = []
+    private let defaults: UserDefaults
 
-    init() {
+    init(defaults: UserDefaults = .standard) {
         // Inline the load so nonisolated init doesn't have to hop to the
         // actor for a helper method call.
-        if let data = UserDefaults.standard.data(forKey: Self.storageKey),
+        self.defaults = defaults
+        if let data = defaults.data(forKey: Self.storageKey),
            let decoded = try? JSONDecoder().decode([TrackFeedback].self, from: data) {
             entries = decoded
         }
@@ -81,6 +83,6 @@ actor TrackFeedbackStore {
 
     private func save() {
         guard let data = try? JSONEncoder().encode(entries) else { return }
-        UserDefaults.standard.set(data, forKey: Self.storageKey)
+        defaults.set(data, forKey: Self.storageKey)
     }
 }
