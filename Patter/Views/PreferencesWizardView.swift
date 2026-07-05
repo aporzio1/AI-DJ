@@ -98,7 +98,7 @@ struct PreferencesWizardView: View {
             Text("Voice Provider")
                 .font(.subheadline.weight(.semibold))
             Picker("Provider", selection: $settings.ttsProvider) {
-                ForEach(availableTTSProviders) { provider in
+                ForEach(TTSProvider.available) { provider in
                     Text(provider.displayName).tag(provider)
                 }
             }
@@ -367,13 +367,4 @@ struct PreferencesWizardView: View {
         }
     }
 
-    /// Hides Kokoro on iOS 26 — see K6/K24/K26 in the tracker.
-    private var availableTTSProviders: [TTSProvider] {
-#if os(iOS)
-        if ProcessInfo.processInfo.operatingSystemVersion.majorVersion == 26 {
-            return TTSProvider.allCases.filter { $0 != .kokoro }
-        }
-#endif
-        return TTSProvider.allCases
-    }
 }

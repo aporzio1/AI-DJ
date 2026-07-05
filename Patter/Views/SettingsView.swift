@@ -193,7 +193,7 @@ struct SettingsView: View {
     private var voiceSection: some View {
         Section {
             Picker("Provider", selection: $vm.ttsProvider) {
-                ForEach(availableTTSProviders) { provider in
+                ForEach(TTSProvider.available) { provider in
                     Text(provider.displayName).tag(provider)
                 }
             }
@@ -459,18 +459,6 @@ struct SettingsView: View {
         availableVoices.contains { $0.quality == .premium }
     }
 
-    /// On iOS 26 the Kokoro option is hidden — FluidAudio's CoreML model
-    /// segfaults inside libBNNS during load and there's no in-app catch
-    /// (see K6/K24/K26). Existing iOS-26 users with `.kokoro` selected get
-    /// auto-downgraded once at launch via `applyIOS26KokoroDowngradeIfNeeded`.
-    private var availableTTSProviders: [TTSProvider] {
-#if os(iOS)
-        if ProcessInfo.processInfo.operatingSystemVersion.majorVersion == 26 {
-            return TTSProvider.allCases.filter { $0 != .kokoro }
-        }
-#endif
-        return TTSProvider.allCases
-    }
 
 #if os(macOS)
     private func openSpokenContentSettings() {

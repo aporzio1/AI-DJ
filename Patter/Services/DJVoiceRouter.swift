@@ -13,6 +13,19 @@ enum TTSProvider: String, Codable, CaseIterable, Identifiable {
         case .kokoro: "Kokoro (on-device)"
         }
     }
+
+    /// Providers offered in the picker. Hides Kokoro on iOS 26 — see
+    /// K6/K24/K26 in the tracker. Existing iOS-26 users with `.kokoro`
+    /// selected get auto-downgraded once at launch via
+    /// `SettingsViewModel.applyIOS26KokoroDowngradeIfNeeded`.
+    static var available: [TTSProvider] {
+#if os(iOS)
+        if ProcessInfo.processInfo.operatingSystemVersion.majorVersion == 26 {
+            return TTSProvider.allCases.filter { $0 != .kokoro }
+        }
+#endif
+        return TTSProvider.allCases
+    }
 }
 
 /// Routes DJ-voice rendering requests to the active provider, with a fallback
