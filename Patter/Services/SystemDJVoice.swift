@@ -39,23 +39,23 @@ final class SystemDJVoice: DJVoiceProtocol, @unchecked Sendable {
     private var tail: Task<Void, Never> = Task {}
 
     private func serialized<T: Sendable>(_ operation: @escaping @Sendable () async throws -> T) async throws -> T {
-        let previous = currentTail()
-        let current = Task<T, Error> {
-            await previous.value
-            return try await operation()
-        }
-        let voidTask = Task<Void, Never> { _ = try? await current.value }
-        setTail(voidTask)
+        // Read the previous tail and install the new one inside a single
+        // locked section. `Task { ... }` init is synchronous (it schedules
+        // the closure but doesn't run/await it here), so no suspension point
+        // exists between the read and the write — two concurrent callers
+        // can't both observe the same `previous` the way they could with
+        // separate get/set locks.
+        let current: Task<T, Error> = {
+            chainLock.lock(); defer { chainLock.unlock() }
+            let previous = tail
+            let current = Task<T, Error> {
+                await previous.value
+                return try await operation()
+            }
+            tail = Task<Void, Never> { _ = try? await current.value }
+            return current
+        }()
         return try await current.value
-    }
-
-    private func currentTail() -> Task<Void, Never> {
-        chainLock.lock(); defer { chainLock.unlock() }
-        return tail
-    }
-
-    private func setTail(_ task: Task<Void, Never>) {
-        chainLock.lock(); tail = task; chainLock.unlock()
     }
 
     func renderToFile(script: String, voiceIdentifier: String) async throws -> URL {
