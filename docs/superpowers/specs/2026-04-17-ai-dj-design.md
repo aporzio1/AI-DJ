@@ -1,8 +1,10 @@
 # AI DJ — Design Spec
 
 **Date:** 2026-04-17
-**Status:** Approved, pre-implementation
+**Status:** ARCHIVED — historical pre-implementation spec, not current
 **Author:** Andrew P (with Claude Code)
+
+> **This doc is frozen at pre-implementation intent and does not reflect the shipped app.** Bundle ID, module name, project layout, and Swift version below are all stale (app renamed AI DJ → Patter 2026-04-23; module/bundle id/paths changed accordingly; Swift 6.0 strict concurrency, not 5.9). Scope has also grown well past this doc: personas, RSS/news, and CloudSync are shipped, not deferred, and voice rendering is multi-provider (`DJVoiceRouter`: system/OpenAI/on-device Kokoro), not single-`AVSpeechSynthesizer`. Kept for historical rationale only (why Apple Music-only, why Foundation Models, why between-songs timing). For current architecture read `CLAUDE.md`; for live state read `docs/project-tracker.md`.
 
 ## Summary
 

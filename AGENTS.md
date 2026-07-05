@@ -13,6 +13,8 @@ Patter is a Swift 6 Xcode project generated from `project.yml`. App source lives
 - `PatterTests/` contains Swift Testing unit tests and fakes.
 - `docs/` contains design notes, implementation plans, and the project tracker.
 
+For service-level architecture (what each `Patter/Services/` file owns, provider routing, concurrency boundaries), see `CLAUDE.md`.
+
 ## Build, Test, and Development Commands
 
 Regenerate the Xcode project after editing `project.yml`:
@@ -49,6 +51,8 @@ Use Swift 6 with strict concurrency in mind. Prefer constructor injection and pr
 
 Tests use Swift Testing (`import Testing`) and live in `PatterTests/`. Use focused suites such as `@Suite("Producer")`, `@Test func behaviorUnderCondition() async`, and shared fakes in `PatterTests/Fakes.swift`. Add regression tests for playback state, prompt context, RSS parsing, and service fallback behavior when changing those areas.
 
+`xcodebuild test` only works with `-destination 'platform=macOS'` — the iOS Simulator destination isn't wired for the test target; don't waste a build cycle trying it.
+
 ## Commit & Pull Request Guidelines
 
 Recent commits follow conventional prefixes: `feat:`, `fix:`, `docs:`, `build:`, `chore:`, and `refactor:`. Keep commit subjects imperative and scoped, for example `fix: prevent opening DJ intro from using past tense`.
@@ -58,3 +62,11 @@ Pull requests should include a concise summary, test/build results, linked issue
 ## Security & Configuration Tips
 
 Do not commit API keys, tokens, provisioning profiles, or generated private build artifacts. Keep bundle identifiers, entitlements, and deployment targets in sync through `project.yml` and regenerated Xcode project files.
+
+`CFBundleVersion` auto-bumps from `git rev-list --count HEAD` via a preBuild script in `project.yml`; don't hand-edit it.
+
+**FluidAudio** (SPM, pinned `0.13.5`) is the on-device Kokoro TTS provider via CoreML — one of three `DJVoiceRouter` backends alongside system AVSpeechSynthesizer and OpenAI cloud TTS.
+
+## Project Tracker & PM Agent
+
+`docs/project-tracker.md` is the canonical live-state record (in-progress work, backlog, known issues). The `patter-pm` subagent (`.claude/agents/patter-pm.md`) owns it — consult before non-trivial design/scoping decisions and after shipping substantial work.
