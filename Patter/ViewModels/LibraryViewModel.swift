@@ -64,37 +64,40 @@ final class LibraryViewModel {
     /// Empty results are also never SAVED to the cache, so a one-off
     /// failure doesn't poison future launches.
     func loadRecentlyPlayed(forceRefresh: Bool = false) async {
-        let cached = LibrarySectionCache.load(.recentlyPlayed, provider: .appleMusic)
-        if let cached {
-            recentlyPlayed = cached.items
-        }
-        let isStale = cached.map { !$0.isFresh(ttl: LibrarySectionCache.ttl) } ?? true
-        let isEmpty = cached?.items.isEmpty ?? true
-        let needsArtworkRefresh = cached?.items.contains(where: \.needsProviderArtworkRefresh) ?? false
-        guard forceRefresh || isStale || isEmpty || needsArtworkRefresh else { return }
-
-        if let items = try? await musicService.recentlyPlayed() {
-            recentlyPlayed = items
-            if !items.isEmpty {
-                LibrarySectionCache.save(items, for: .recentlyPlayed, provider: .appleMusic)
-            }
+        await loadSection(.recentlyPlayed, forceRefresh: forceRefresh, into: \.recentlyPlayed) {
+            try await self.musicService.recentlyPlayed()
         }
     }
 
     func loadRecommendations(forceRefresh: Bool = false) async {
-        let cached = LibrarySectionCache.load(.recommendations, provider: .appleMusic)
+        await loadSection(.recommendations, forceRefresh: forceRefresh, into: \.recommendations) {
+            try await self.musicService.recommendations()
+        }
+    }
+
+    /// Shared stale-while-revalidate loader — see `loadRecentlyPlayed`'s doc
+    /// comment above for the caching rules. `keyPath` is the published
+    /// property to update (`recentlyPlayed` or `recommendations`); `fetch` is
+    /// the provider call that refreshes it.
+    private func loadSection(
+        _ section: LibrarySectionCache.Section,
+        forceRefresh: Bool,
+        into keyPath: ReferenceWritableKeyPath<LibraryViewModel, [LibraryItem]>,
+        fetch: () async throws -> [LibraryItem]
+    ) async {
+        let cached = LibrarySectionCache.load(section, provider: .appleMusic)
         if let cached {
-            recommendations = cached.items
+            self[keyPath: keyPath] = cached.items
         }
         let isStale = cached.map { !$0.isFresh(ttl: LibrarySectionCache.ttl) } ?? true
         let isEmpty = cached?.items.isEmpty ?? true
         let needsArtworkRefresh = cached?.items.contains(where: \.needsProviderArtworkRefresh) ?? false
         guard forceRefresh || isStale || isEmpty || needsArtworkRefresh else { return }
 
-        if let items = try? await musicService.recommendations() {
-            recommendations = items
+        if let items = try? await fetch() {
+            self[keyPath: keyPath] = items
             if !items.isEmpty {
-                LibrarySectionCache.save(items, for: .recommendations, provider: .appleMusic)
+                LibrarySectionCache.save(items, for: section, provider: .appleMusic)
             }
         }
     }
