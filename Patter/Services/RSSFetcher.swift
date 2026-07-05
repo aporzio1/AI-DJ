@@ -1,5 +1,9 @@
 import Foundation
 
+enum RSSFetchError: Error {
+    case badStatus(Int)
+}
+
 final class RSSFetcher: RSSFetcherProtocol, @unchecked Sendable {
     private let lock = NSLock()
     private var _feedURLs: [URL]
@@ -24,23 +28,40 @@ final class RSSFetcher: RSSFetcherProtocol, @unchecked Sendable {
     }
 
     func fetchHeadlines() async throws -> [NewsHeadline] {
-        var all: [NewsHeadline] = []
-        for url in currentFeeds {
-            do {
-                let headlines = try await fetch(url)
-                all.append(contentsOf: headlines)
-            } catch {
-                Log.producer.error("RSSFetcher: \(url.host ?? url.absoluteString, privacy: .public) failed: \(error.localizedDescription, privacy: .public)")
+        // Feeds fetch concurrently — one slow/unreachable feed no longer
+        // holds up the others. Each task catches its own error so a single
+        // bad feed still fails soft rather than sinking the whole fetch.
+        let all = await withTaskGroup(of: [NewsHeadline].self) { group in
+            for url in currentFeeds {
+                group.addTask {
+                    do {
+                        return try await self.fetch(url)
+                    } catch {
+                        Log.producer.error("RSSFetcher: \(url.host ?? url.absoluteString, privacy: .public) failed: \(error.localizedDescription, privacy: .public)")
+                        return []
+                    }
+                }
             }
+            var collected: [NewsHeadline] = []
+            for await headlines in group {
+                collected.append(contentsOf: headlines)
+            }
+            return collected
         }
-        // Dedupe by URL string, then sort newest-first
+        // Dedupe by URL string, then sort newest-first. Note: with concurrent
+        // fetch, if the same URL appears in two feeds, which copy wins the
+        // dedupe is no longer deterministic — acceptable since duplicate
+        // entries are expected to be near-identical.
         var seen = Set<String>()
         let unique = all.filter { seen.insert($0.url.absoluteString).inserted }
         return unique.sorted { $0.publishedAt > $1.publishedAt }
     }
 
     private func fetch(_ url: URL) async throws -> [NewsHeadline] {
-        let (data, _) = try await session.data(from: url)
+        let (data, response) = try await session.data(from: url)
+        if let httpResponse = response as? HTTPURLResponse, !(200...299).contains(httpResponse.statusCode) {
+            throw RSSFetchError.badStatus(httpResponse.statusCode)
+        }
         return try parse(data: data, source: url.host ?? url.absoluteString)
     }
 
@@ -81,6 +102,17 @@ private final class FeedParser: NSObject, XMLParserDelegate {
     private var entrySummary = ""
 
     private var parseError: Error?
+
+    // Constructed once per feed parse (not per item) — DateFormatter isn't
+    // Sendable so these can't be `static let`s under strict concurrency, but
+    // FeedParser is single-threaded per parse so instance storage is safe.
+    private let rfc2822Formatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "EEE, dd MMM yyyy HH:mm:ss Z"
+        return formatter
+    }()
+    private let iso8601Formatter = ISO8601DateFormatter()
 
     init(data: Data, source: String, max: Int) {
         self.data = data
@@ -188,15 +220,8 @@ private final class FeedParser: NSObject, XMLParserDelegate {
     }
 
     private func parseDate(_ string: String) -> Date {
-        // RFC 2822 (RSS pubDate)
-        let rfc2822 = DateFormatter()
-        rfc2822.locale = Locale(identifier: "en_US_POSIX")
-        rfc2822.dateFormat = "EEE, dd MMM yyyy HH:mm:ss Z"
-        if let d = rfc2822.date(from: string) { return d }
-
-        // ISO 8601 (Atom updated)
-        if let d = ISO8601DateFormatter().date(from: string) { return d }
-
+        if let d = rfc2822Formatter.date(from: string) { return d }  // RFC 2822 (RSS pubDate)
+        if let d = iso8601Formatter.date(from: string) { return d }  // ISO 8601 (Atom updated)
         return Date()
     }
 }
