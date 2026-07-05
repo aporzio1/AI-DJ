@@ -341,6 +341,24 @@ actor PlaybackCoordinator {
         try await monitorTrackUntilEnd(track: track)
     }
 
+    /// How often `monitorTrackUntilEnd` polls MusicKit's playback time.
+    private static let monitorPollInterval: Duration = .milliseconds(500)
+    /// Lead time before track-end at which willAdvance fires. Wide on purpose:
+    /// segment generation (Foundation Models text + cloud TTS round-trip —
+    /// combined this can run 10–15s on slow generations) needs room to finish
+    /// before the track ends, or Producer drops the rendered segment because
+    /// the upcoming track has already become current.
+    private static let willAdvanceLeadTime: TimeInterval = 35.0
+    /// Extra pad added to `willAdvanceRemaining` before the advance timer
+    /// fires, so the real track-end (not just the willAdvance estimate) has
+    /// a moment to land first.
+    private static let advanceTimerPad: TimeInterval = 1.5
+    /// A track is considered "ended and looped/reset" once playback has
+    /// progressed past this many seconds and then elapsed drops back below
+    /// this floor — distinguishes a real reset from a fresh track's own 0s start.
+    private static let resetProgressThreshold: TimeInterval = 10
+    private static let resetElapsedFloor: TimeInterval = 1.0
+
     /// Polls MusicKit while a track is playing, emits willAdvance near the
     /// end, and advances when the track actually finishes. Shared between
     /// the cold-start path (playTrack → start + monitor) and the
@@ -359,7 +377,7 @@ actor PlaybackCoordinator {
         var maxElapsedSeen: TimeInterval = 0
 
         while !Task.isCancelled {
-            try await Task.sleep(for: .milliseconds(500))
+            try await Task.sleep(for: Self.monitorPollInterval)
 
             if playbackGeneration != myGen {
                 Log.coordinator.info("monitor superseded (gen \(myGen) → \(self.playbackGeneration)) — exiting")
@@ -384,14 +402,9 @@ actor PlaybackCoordinator {
                 Log.coordinator.debug("poll[gen=\(myGen)]: elapsed=\(elapsed, format: .fixed(precision: 1)) / \(duration, format: .fixed(precision: 1)) (remaining=\(remaining, format: .fixed(precision: 1)))")
             }
 
-            // Fire willAdvance with a wide lead time so segment generation
-            // (Foundation Models text + cloud TTS round-trip — combined this
-            // can run 10–15s on slow generations) has room to finish before
-            // the track ends. Without enough headroom, Producer drops the
-            // rendered segment because the upcoming track has already become
-            // the current track. The advance timer still pins the actual
-            // handoff to the track's real end.
-            if !emittedWillAdvance, duration > 0, remaining <= 35.0, remaining > 0 {
+            // The advance timer still pins the actual handoff to the track's
+            // real end; willAdvanceLeadTime only controls when generation starts.
+            if !emittedWillAdvance, duration > 0, remaining <= Self.willAdvanceLeadTime, remaining > 0 {
                 if repeatMode == .one {
                     Log.coordinator.info("T-\(remaining, format: .fixed(precision: 1))s — repeat.one, skipping willAdvance emit (gen=\(myGen))")
                 } else {
@@ -405,13 +418,13 @@ actor PlaybackCoordinator {
 
             if let firedAt = willAdvanceFiredAt {
                 let sinceFired = clock.now - firedAt
-                if sinceFired >= .seconds(willAdvanceRemaining + 1.5) {
+                if sinceFired >= .seconds(willAdvanceRemaining + Self.advanceTimerPad) {
                     Log.coordinator.info("willAdvance timer elapsed — advancing (gen=\(myGen))")
                     break
                 }
             }
 
-            if maxElapsedSeen > 10, elapsed < 1.0 {
+            if maxElapsedSeen > Self.resetProgressThreshold, elapsed < Self.resetElapsedFloor {
                 Log.coordinator.info("playbackTime reset after progress — track ended (gen=\(myGen))")
                 break
             }
