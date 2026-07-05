@@ -14,6 +14,9 @@ final class MusicKitService: MusicProviderService {
     /// for any track we already saw via a fetcher.
     private var songCache: [String: Song] = [:]
 
+    /// Cap on the flattened item count `recommendations()` returns.
+    private static let sectionFetchLimit = 24
+
     let providerID: Patter.Track.MusicProviderID = .appleMusic
 
     var authorizationStatus: ProviderAuthStatus {
@@ -222,7 +225,7 @@ final class MusicKitService: MusicProviderService {
                     artworkURL: playlist.artwork?.url(width: 200, height: 200)
                 )))
                 playlistCount += 1
-                if items.count >= 24 { break }
+                if items.count >= Self.sectionFetchLimit { break }
             }
             for album in rec.albums {
                 let id = album.id.rawValue
@@ -235,7 +238,7 @@ final class MusicKitService: MusicProviderService {
                     artworkURL: album.artwork?.url(width: 200, height: 200)
                 )))
                 albumCount += 1
-                if items.count >= 24 { break }
+                if items.count >= Self.sectionFetchLimit { break }
             }
             for station in rec.stations {
                 let id = station.id.rawValue
@@ -247,9 +250,9 @@ final class MusicKitService: MusicProviderService {
                     artworkURL: station.artwork?.url(width: 200, height: 200)
                 )))
                 stationCount += 1
-                if items.count >= 24 { break }
+                if items.count >= Self.sectionFetchLimit { break }
             }
-            if items.count >= 24 { break }
+            if items.count >= Self.sectionFetchLimit { break }
         }
         Log.musicKit.info("recommendations: \(response.recommendations.count) buckets → \(playlistCount) playlists, \(albumCount) albums, \(stationCount) stations (\(items.count) total after dedupe)")
         return items
@@ -333,16 +336,5 @@ private extension Track {
             duration: song.duration.map { TimeInterval($0) } ?? 0,
             providerID: .appleMusic
         )
-    }
-}
-
-private extension MusicKit.Track {
-    var asTrack: Patter.Track? {
-        switch self {
-        case .song(let song):
-            return Patter.Track(song: song)
-        default:
-            return nil
-        }
     }
 }
