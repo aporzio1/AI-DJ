@@ -4,8 +4,6 @@ import Foundation
 @MainActor
 final class SettingsViewModel {
 
-    var customPersonas: [DJPersona] = []
-    var activePersonaID: UUID = DJPersona.default.id
     var iCloudSyncEnabled: Bool = false
     var djEnabled: Bool = true
     var djFrequency: DJFrequency = .default
@@ -27,6 +25,7 @@ final class SettingsViewModel {
     var showKokoroDowngradeNotice: Bool = false
 
     private let defaults: UserDefaults
+    private let personaStore: PersonaStore
 
     /// Keys that participate in iCloud sync. Kept deliberately narrow:
     /// feed URLs, preferences, and persona library — but NOT the
@@ -54,6 +53,7 @@ final class SettingsViewModel {
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+        self.personaStore = PersonaStore(defaults: defaults)
         loadFromUserDefaults()
         CloudSyncService.shared.register(keys: Self.syncedKeys)
         if iCloudSyncEnabled {
@@ -147,10 +147,7 @@ final class SettingsViewModel {
         write(openAIVoice, forKey: SettingsKeys.openAIVoice)
         write(openAIModel, forKey: SettingsKeys.openAIModel)
         write(kokoroVoice, forKey: SettingsKeys.kokoroVoice)
-        if let data = try? JSONEncoder().encode(customPersonas) {
-            write(data, forKey: SettingsKeys.customPersonas)
-        }
-        write(activePersonaID.uuidString, forKey: SettingsKeys.activePersonaID)
+        // Persona state is persisted by PersonaStore itself.
         // iCloudSyncEnabled is a device-local decision; never mirror it.
         defaults.set(iCloudSyncEnabled, forKey: SettingsKeys.iCloudSyncEnabled)
         // API key is persisted to Keychain via saveAPIKey(); not echoed to UserDefaults.
@@ -189,20 +186,7 @@ final class SettingsViewModel {
         }
         openAIAPIKey = Keychain.get(KeychainKey.openAIAPIKey) ?? ""
         kokoroVoice = defaults.string(forKey: SettingsKeys.kokoroVoice) ?? KokoroVoice.defaultVoice.rawValue
-        // Phase 2: load the custom persona list and the active-ID pointer.
-        if let data = defaults.data(forKey: SettingsKeys.customPersonas),
-           let decoded = try? JSONDecoder().decode([DJPersona].self, from: data) {
-            customPersonas = decoded
-        }
-        if let raw = defaults.string(forKey: SettingsKeys.activePersonaID),
-           let uuid = UUID(uuidString: raw) {
-            activePersonaID = uuid
-        }
-        migrateLegacyPersonaIfNeeded()
-        // If the stored active ID no longer exists (deleted custom), fall back to default.
-        if allPersonas.first(where: { $0.id == activePersonaID }) == nil {
-            activePersonaID = DJPersona.default.id
-        }
+        personaStore.load()
     }
 
     /// On iOS 26+, FluidAudio's Kokoro CoreML model triggers a hard crash
@@ -237,100 +221,44 @@ final class SettingsViewModel {
     }
 
     // MARK: Persona
+    //
+    // Thin delegates to PersonaStore so PersonaListView/PersonaEditorView/
+    // RootView call sites don't churn — see PersonaStore.swift for the
+    // actual CRUD + persistence logic.
 
-    /// Built-ins + user customs, in that order. Computed on demand.
-    var allPersonas: [DJPersona] {
-        DJPersona.builtIns + customPersonas
+    var customPersonas: [DJPersona] {
+        get { personaStore.customPersonas }
+        set { personaStore.customPersonas = newValue }
     }
 
-    /// The active persona. Defaults to Alex if the active ID doesn't resolve.
-    var persona: DJPersona {
-        allPersonas.first(where: { $0.id == activePersonaID }) ?? .default
+    var activePersonaID: UUID {
+        get { personaStore.activePersonaID }
+        set { personaStore.activePersonaID = newValue }
     }
 
-    /// Activate a persona by ID. Triggers the UserDefaults save so the
-    /// onChange(of: settings.persona) observer in RootView fires and hot-
-    /// reloads the Producer.
+    var allPersonas: [DJPersona] { personaStore.allPersonas }
+    var persona: DJPersona { personaStore.persona }
+
     func setActivePersona(id: UUID) {
-        activePersonaID = id
-        saveToUserDefaults()
+        personaStore.setActivePersona(id: id)
     }
 
-    /// Create a new custom persona and return it. If `activate` is true (the
-    /// default), the new persona becomes active immediately.
     @discardableResult
     func addCustomPersona(name: String, styleDescriptor: String, activate: Bool = true) -> DJPersona {
-        let persona = DJPersona(
-            id: UUID(),
-            name: name,
-            voicePreset: DJPersona.default.voicePreset,
-            styleDescriptor: styleDescriptor
-        )
-        customPersonas.append(persona)
-        if activate { activePersonaID = persona.id }
-        saveToUserDefaults()
-        return persona
+        personaStore.addCustomPersona(name: name, styleDescriptor: styleDescriptor, activate: activate)
     }
 
-    /// Duplicate a built-in (or any persona) as a new editable custom copy.
-    /// Appends " Copy" to the name so the source is easy to spot.
     @discardableResult
     func duplicatePersona(_ source: DJPersona, activate: Bool = true) -> DJPersona {
-        addCustomPersona(
-            name: source.name + " Copy",
-            styleDescriptor: source.styleDescriptor,
-            activate: activate
-        )
+        personaStore.duplicatePersona(source, activate: activate)
     }
 
-    /// Edit an existing custom persona. Silently no-ops on built-in IDs —
-    /// the editor never opens for those.
     func updateCustomPersona(id: UUID, name: String, styleDescriptor: String) {
-        guard let idx = customPersonas.firstIndex(where: { $0.id == id }) else { return }
-        let existing = customPersonas[idx]
-        customPersonas[idx] = DJPersona(
-            id: existing.id,
-            name: name,
-            voicePreset: existing.voicePreset,
-            styleDescriptor: styleDescriptor
-        )
-        saveToUserDefaults()
+        personaStore.updateCustomPersona(id: id, name: name, styleDescriptor: styleDescriptor)
     }
 
-    /// Remove a custom persona. Built-ins can't be deleted. If the deleted
-    /// persona was active, activation falls back to `DJPersona.default`.
     func deleteCustomPersona(id: UUID) {
-        guard let idx = customPersonas.firstIndex(where: { $0.id == id }) else { return }
-        customPersonas.remove(at: idx)
-        if activePersonaID == id {
-            activePersonaID = DJPersona.default.id
-        }
-        saveToUserDefaults()
-    }
-
-    /// One-time migration: if Phase 1 stored a single persona under the old
-    /// `djPersona` key AND its text differs from the built-in Alex, preserve
-    /// it as a custom persona (with a fresh UUID so it's editable). If the
-    /// text matches Alex exactly, just drop the legacy key — nothing to save.
-    private func migrateLegacyPersonaIfNeeded() {
-        guard let data = defaults.data(forKey: SettingsKeys.legacyPersona),
-              let legacy = try? JSONDecoder().decode(DJPersona.self, from: data) else {
-            return
-        }
-        let alex = DJPersona.alex
-        let isUnchanged = legacy.name == alex.name
-            && legacy.styleDescriptor == alex.styleDescriptor
-        if !isUnchanged {
-            let preserved = DJPersona(
-                id: UUID(),
-                name: legacy.name,
-                voicePreset: legacy.voicePreset,
-                styleDescriptor: legacy.styleDescriptor
-            )
-            customPersonas.append(preserved)
-            activePersonaID = preserved.id
-        }
-        defaults.removeObject(forKey: SettingsKeys.legacyPersona)
+        personaStore.deleteCustomPersona(id: id)
     }
 
     /// Persist the OpenAI API key to Keychain. Called from the Settings view.
