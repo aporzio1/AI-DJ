@@ -59,8 +59,19 @@ final class SystemDJVoice: DJVoiceProtocol, @unchecked Sendable {
     }
 
     func renderToFile(script: String, voiceIdentifier: String) async throws -> URL {
-        try await serialized { [self] in
-            try await performRender(script: script, voiceIdentifier: voiceIdentifier)
+        // K35 diagnostics: total wall time including any queue wait behind
+        // a concurrent warm-up/render on the shared synth — this is the
+        // number that matches what the listener actually perceives.
+        let callStart = ContinuousClock.now
+        do {
+            let url = try await serialized { [self] in
+                try await performRender(script: script, voiceIdentifier: voiceIdentifier, label: "render")
+            }
+            Log.voice.info("SystemDJVoice.renderToFile total \(String(describing: ContinuousClock.now - callStart), privacy: .public) (incl. any queue wait)")
+            return url
+        } catch {
+            Log.voice.error("SystemDJVoice.renderToFile failed after \(String(describing: ContinuousClock.now - callStart), privacy: .public): \(error.localizedDescription, privacy: .public)")
+            throw error
         }
     }
 
@@ -68,13 +79,24 @@ final class SystemDJVoice: DJVoiceProtocol, @unchecked Sendable {
     /// doesn't pay the AU IPC handshake + neural-voice-model load (K35).
     /// Best-effort: discards errors and deletes the temp file it produces.
     func warmUp(voiceIdentifier: String) async {
-        guard let url = try? await serialized({ [self] in
-            try await performRender(script: "Ready.", voiceIdentifier: voiceIdentifier)
-        }) else { return }
-        try? FileManager.default.removeItem(at: url)
+        let callStart = ContinuousClock.now
+        Log.voice.info("SystemDJVoice.warmUp starting")
+        do {
+            let url = try await serialized { [self] in
+                try await performRender(script: "Ready.", voiceIdentifier: voiceIdentifier, label: "warmup")
+            }
+            Log.voice.info("SystemDJVoice.warmUp total \(String(describing: ContinuousClock.now - callStart), privacy: .public) (incl. any queue wait)")
+            try? FileManager.default.removeItem(at: url)
+        } catch {
+            Log.voice.error("SystemDJVoice.warmUp failed after \(String(describing: ContinuousClock.now - callStart), privacy: .public): \(error.localizedDescription, privacy: .public)")
+        }
     }
 
-    private func performRender(script: String, voiceIdentifier: String) async throws -> URL {
+    /// `label` distinguishes the launch warm-up from a real Producer render
+    /// in the logs — both funnel through the same synth + serialization.
+    private func performRender(script: String, voiceIdentifier: String, label: String) async throws -> URL {
+        let renderStart = ContinuousClock.now
+        Log.voice.info("SystemDJVoice[\(label, privacy: .public)] synth write starting")
         let voice = Self.voice(for: voiceIdentifier)
         let utterances = Self.makeUtterances(for: script, voice: voice)
         let outputURL = FileManager.default.temporaryDirectory
@@ -83,16 +105,23 @@ final class SystemDJVoice: DJVoiceProtocol, @unchecked Sendable {
 
         let renderer = SpeechRenderer(synthesizer: synthesizer, utterances: utterances, outputURL: outputURL)
 
-        return try await withCheckedThrowingContinuation { continuation in
-            let timeout = Task {
-                try? await Task.sleep(for: .seconds(Self.timeoutSeconds(for: script)))
-                renderer.stop()
+        do {
+            let url: URL = try await withCheckedThrowingContinuation { continuation in
+                let timeout = Task {
+                    try? await Task.sleep(for: .seconds(Self.timeoutSeconds(for: script)))
+                    renderer.stop()
+                }
+                renderer.render { [renderer] result in
+                    _ = renderer
+                    timeout.cancel()
+                    continuation.resume(with: result)
+                }
             }
-            renderer.render { [renderer] result in
-                _ = renderer
-                timeout.cancel()
-                continuation.resume(with: result)
-            }
+            Log.voice.info("SystemDJVoice[\(label, privacy: .public)] synth write finished in \(String(describing: ContinuousClock.now - renderStart), privacy: .public) — this is the AU handshake + speech-synthesis cost K35 targets")
+            return url
+        } catch {
+            Log.voice.error("SystemDJVoice[\(label, privacy: .public)] synth write failed after \(String(describing: ContinuousClock.now - renderStart), privacy: .public): \(error.localizedDescription, privacy: .public)")
+            throw error
         }
     }
 
