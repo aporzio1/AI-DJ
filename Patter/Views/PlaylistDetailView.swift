@@ -2,12 +2,7 @@ import SwiftUI
 
 struct PlaylistDetailView: View {
     let playlist: PlaylistInfo
-    @State private var vm: LibraryViewModel
-
-    init(playlist: PlaylistInfo, vm: LibraryViewModel) {
-        self.playlist = playlist
-        self._vm = State(initialValue: vm)
-    }
+    let vm: LibraryViewModel
 
     var body: some View {
         List {

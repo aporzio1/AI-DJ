@@ -13,9 +13,12 @@ struct PersonaListView: View {
     /// Identifiable wrapper that drives `.sheet(item:)` for the editor. Using
     /// an item-driven sheet avoids the classic "state read at sheet-creation
     /// time" bug.
-    private struct EditorTarget: Identifiable {
+    private struct EditorTarget: Identifiable, Hashable {
         let id = UUID()
         let persona: DJPersona?   // nil = create new
+
+        static func == (lhs: Self, rhs: Self) -> Bool { lhs.id == rhs.id }
+        func hash(into hasher: inout Hasher) { hasher.combine(id) }
     }
 
     var body: some View {
@@ -51,7 +54,7 @@ struct PersonaListView: View {
                     }
                 }
             }
-            .sheet(item: $editorTarget) { target in
+            .navigationDestination(item: $editorTarget) { target in
                 PersonaEditorView(vm: vm, editing: target.persona)
             }
             .confirmationDialog(

@@ -25,56 +25,51 @@ struct PersonaEditorView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    TextField("Name", text: $name)
-                        .textFieldStyle(.roundedBorder)
-                } header: {
-                    Text("Name")
-                } footer: {
-                    Text("Shown in Settings. Not spoken aloud unless the instructions ask the DJ to use it.")
-                }
+        Form {
+            Section {
+                TextField("Name", text: $name)
+                    .textFieldStyle(.roundedBorder)
+            } header: {
+                Text("Name")
+            } footer: {
+                Text("Shown in Settings. Not spoken aloud unless the instructions ask the DJ to use it.")
+            }
 
-                Section {
-                    TextEditor(text: $styleDescriptor)
-                        .frame(minHeight: 180)
-                        .font(.body)
-                } header: {
-                    HStack {
-                        Text("Instructions")
-                        Spacer()
-                        Text("\(characterCount)/\(SettingsViewModel.maxStyleDescriptorLength)")
-                            .font(.caption.monospacedDigit())
-                            .foregroundStyle(isOverLimit ? Color.red : Color.secondary)
-                    }
-                } footer: {
-                    Text("Prompt injected into every DJ segment. Describe tone, personality, and any do's/don'ts. Keep it under \(SettingsViewModel.maxStyleDescriptorLength) characters — longer instructions tend to drift the DJ off-topic.")
+            Section {
+                TextEditor(text: $styleDescriptor)
+                    .frame(minHeight: 180)
+                    .font(.body)
+            } header: {
+                HStack {
+                    Text("Instructions")
+                    Spacer()
+                    Text("\(characterCount)/\(SettingsViewModel.maxStyleDescriptorLength)")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(isOverLimit ? Color.red : Color.secondary)
                 }
+            } footer: {
+                Text("Prompt injected into every DJ segment. Describe tone, personality, and any do's/don'ts. Keep it under \(SettingsViewModel.maxStyleDescriptorLength) characters — longer instructions tend to drift the DJ off-topic.")
             }
-            .formStyle(.grouped)
-            .navigationTitle(navTitle)
+        }
+        .formStyle(.grouped)
+        .navigationTitle(navTitle)
 #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
+        .navigationBarTitleDisplayMode(.inline)
 #endif
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { save() }
-                        .disabled(!isValid)
-                }
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("Cancel") { dismiss() }
             }
-            .onAppear {
-                if let editing {
-                    name = editing.name
-                    styleDescriptor = editing.styleDescriptor
-                }
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Save") { save() }
+                    .disabled(!isValid)
             }
-#if os(macOS)
-            .frame(minWidth: 520, minHeight: 480)
-#endif
+        }
+        .onAppear {
+            if let editing {
+                name = editing.name
+                styleDescriptor = editing.styleDescriptor
+            }
         }
     }
 

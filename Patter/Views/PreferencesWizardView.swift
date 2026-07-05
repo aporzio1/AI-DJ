@@ -14,7 +14,7 @@ struct PreferencesWizardView: View {
 
     @State private var step = 0
     private let totalSteps = 4
-    @State private var installedEnglishVoices: [AVSpeechSynthesisVoice] = []
+    @State private var installedEnglishVoices: [VoiceOption] = []
 
     var body: some View {
         VStack(spacing: 24) {
@@ -48,7 +48,7 @@ struct PreferencesWizardView: View {
         .frame(minWidth: 520, minHeight: 560)
 #endif
         .onAppear {
-            installedEnglishVoices = Self.loadInstalledEnglishVoices()
+            installedEnglishVoices = VoiceOption.installedEnglish()
         }
     }
 
@@ -142,8 +142,8 @@ struct PreferencesWizardView: View {
         case .system:
             Picker("Voice", selection: $settings.voiceIdentifier) {
                 Text("Best Available Device Voice").tag("")
-                ForEach(installedEnglishVoices, id: \.identifier) { voice in
-                    Text("\(voice.name) — \(qualityLabel(for: voice))").tag(voice.identifier)
+                ForEach(installedEnglishVoices) { voice in
+                    Text(voice.displayName).tag(voice.id)
                 }
             }
             .labelsHidden()
@@ -167,17 +167,6 @@ struct PreferencesWizardView: View {
             }
             .labelsHidden()
         }
-    }
-
-    private static func loadInstalledEnglishVoices() -> [AVSpeechSynthesisVoice] {
-        AVSpeechSynthesisVoice.speechVoices()
-            .filter { $0.language.hasPrefix("en") }
-            .sorted { lhs, rhs in
-                if lhs.quality.rawValue != rhs.quality.rawValue {
-                    return lhs.quality.rawValue > rhs.quality.rawValue
-                }
-                return lhs.name < rhs.name
-            }
     }
 
     private var hasPremiumEnglishVoice: Bool {
@@ -206,14 +195,6 @@ struct PreferencesWizardView: View {
         .accessibilityElement(children: .combine)
     }
 #endif
-
-    private func qualityLabel(for voice: AVSpeechSynthesisVoice) -> String {
-        switch voice.quality {
-        case .premium:  return "Premium"
-        case .enhanced: return "Enhanced"
-        default:        return "Compact"
-        }
-    }
 
     // MARK: - Step 3: News
 
@@ -261,34 +242,14 @@ struct PreferencesWizardView: View {
 
     private func suggestedFeedRow(_ feed: SuggestedRSSFeed) -> some View {
         let isAdded = settings.feedURLStrings.contains(feed.url)
-        return HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(feed.name).font(.body)
-                Text(feed.url)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
+        return SuggestedFeedRow(feed: feed, isAdded: isAdded) {
+            if isAdded {
+                settings.feedURLStrings.removeAll { $0 == feed.url }
+                settings.save()
+            } else {
+                settings.addFeed(urlString: feed.url)
             }
-            Spacer(minLength: 8)
-            Button {
-                if isAdded {
-                    settings.feedURLStrings.removeAll { $0 == feed.url }
-                    settings.save()
-                } else {
-                    settings.addFeed(urlString: feed.url)
-                }
-            } label: {
-                Image(systemName: isAdded ? "checkmark.circle.fill" : "plus.circle")
-                    .font(.title3)
-                    .foregroundStyle(isAdded ? Color.accentColor : .secondary)
-                    .frame(minWidth: 44, minHeight: 44)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(isAdded ? "Remove \(feed.name)" : "Add \(feed.name)")
         }
-        .padding(.vertical, 4)
     }
 
     // MARK: - Step 4: iCloud

@@ -1,11 +1,7 @@
 import SwiftUI
 
 struct QueueView: View {
-    @State private var vm: QueueViewModel
-
-    init(vm: QueueViewModel) {
-        self._vm = State(initialValue: vm)
-    }
+    let vm: QueueViewModel
 
     var body: some View {
         List {
