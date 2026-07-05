@@ -45,21 +45,21 @@ enum LibrarySectionCache {
     /// Default TTL per the PM's 30-minute call.
     static let ttl: TimeInterval = 30 * 60
 
-    static func load(_ section: Section, provider: Track.MusicProviderID) -> Entry? {
-        guard let data = UserDefaults.standard.data(forKey: section.defaultsKey(for: provider)),
+    static func load(_ section: Section, provider: Track.MusicProviderID, defaults: UserDefaults = .standard) -> Entry? {
+        guard let data = defaults.data(forKey: section.defaultsKey(for: provider)),
               let entry = try? JSONDecoder().decode(Entry.self, from: data) else {
             return nil
         }
         return entry
     }
 
-    static func save(_ items: [LibraryItem], for section: Section, provider: Track.MusicProviderID) {
+    static func save(_ items: [LibraryItem], for section: Section, provider: Track.MusicProviderID, defaults: UserDefaults = .standard) {
         let entry = Entry(fetchedAt: Date(), items: items)
         guard let data = try? JSONEncoder().encode(entry) else { return }
-        UserDefaults.standard.set(data, forKey: section.defaultsKey(for: provider))
+        defaults.set(data, forKey: section.defaultsKey(for: provider))
     }
 
-    static func clear(_ section: Section, provider: Track.MusicProviderID) {
-        UserDefaults.standard.removeObject(forKey: section.defaultsKey(for: provider))
+    static func clear(_ section: Section, provider: Track.MusicProviderID, defaults: UserDefaults = .standard) {
+        defaults.removeObject(forKey: section.defaultsKey(for: provider))
     }
 }
