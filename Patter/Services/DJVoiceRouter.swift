@@ -28,13 +28,23 @@ enum TTSProvider: String, Codable, CaseIterable, Identifiable {
     }
 }
 
+/// Model-management surface for an on-device TTS provider whose model is a
+/// separate downloadable asset (Kokoro today). Kept apart from
+/// `DJVoiceProtocol` because rendering and model lifecycle are independent
+/// concerns — a provider with no downloadable model (System, OpenAI) has
+/// nothing to conform to here.
+protocol KokoroModelManaging {
+    func prepareModel() async throws
+    func removeModel() async throws
+}
+
 /// Routes DJ-voice rendering requests to the active provider, with a fallback
 /// to SystemDJVoice so a misconfigured cloud/on-device provider never stalls playback.
 final class DJVoiceRouter: DJVoiceProtocol, @unchecked Sendable {
 
-    private let system: SystemDJVoice
-    private let openAI: OpenAIDJVoice
-    private let kokoro: KokoroDJVoice
+    private let system: any DJVoiceProtocol
+    private let openAI: any DJVoiceProtocol
+    private let kokoro: any DJVoiceProtocol & KokoroModelManaging
 
     private let lock = NSLock()
     private var _provider: TTSProvider = .system
@@ -44,16 +54,19 @@ final class DJVoiceRouter: DJVoiceProtocol, @unchecked Sendable {
         set { lock.lock(); _provider = newValue; lock.unlock() }
     }
 
-    init(system: SystemDJVoice = SystemDJVoice(),
-         openAI: OpenAIDJVoice = OpenAIDJVoice(),
-         kokoro: KokoroDJVoice = KokoroDJVoice()) {
+    init(system: any DJVoiceProtocol = SystemDJVoice(),
+         openAI: any DJVoiceProtocol = OpenAIDJVoice(),
+         kokoro: any DJVoiceProtocol & KokoroModelManaging = KokoroDJVoice()) {
         self.system = system
         self.openAI = openAI
         self.kokoro = kokoro
     }
 
     func setOpenAIModel(_ model: OpenAITTSModel) {
-        openAI.updateModel(model)
+        // Model selection is provider-specific, not part of the render
+        // protocol — downcast rather than growing DJVoiceProtocol for one
+        // provider's concern. No-op for fakes/other providers in tests.
+        (openAI as? OpenAIDJVoice)?.updateModel(model)
     }
 
     /// Warms the System-voice provider ahead of the first real render (K35).

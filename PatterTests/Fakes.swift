@@ -88,13 +88,34 @@ final class FakeDJVoice: DJVoiceProtocol, @unchecked Sendable {
     var shouldThrow = false
     var fakeURL = URL(filePath: "/tmp/fake.caf")
     var lastScript: String?
+    var lastVoiceIdentifier: String?
 
     func renderToFile(script: String, voiceIdentifier: String) async throws -> URL {
         renderCallCount += 1
         lastScript = script
+        lastVoiceIdentifier = voiceIdentifier
         if shouldThrow { throw FakeError.intentional }
         return fakeURL
     }
+}
+
+// MARK: - FakeKokoroDJVoice
+
+final class FakeKokoroDJVoice: DJVoiceProtocol, KokoroModelManaging, @unchecked Sendable {
+    var renderCallCount = 0
+    var shouldThrow = false
+    var fakeURL = URL(filePath: "/tmp/fake-kokoro.caf")
+    var prepareModelCallCount = 0
+    var removeModelCallCount = 0
+
+    func renderToFile(script: String, voiceIdentifier: String) async throws -> URL {
+        renderCallCount += 1
+        if shouldThrow { throw FakeError.intentional }
+        return fakeURL
+    }
+
+    func prepareModel() async throws { prepareModelCallCount += 1 }
+    func removeModel() async throws { removeModelCallCount += 1 }
 }
 
 // MARK: - FakeRSSFetcher

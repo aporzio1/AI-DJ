@@ -132,7 +132,7 @@ private actor KokoroSynthesizer {
 /// ~/.cache/fluidaudio/Models/kokoro (macOS) or Caches/fluidaudio/Models/kokoro (iOS).
 /// Initialization is deferred until the first renderToFile call so app launch
 /// isn't blocked by a cold download.
-final class KokoroDJVoice: DJVoiceProtocol, Sendable {
+final class KokoroDJVoice: DJVoiceProtocol, KokoroModelManaging, Sendable {
 
     private let synth = KokoroSynthesizer()
 
