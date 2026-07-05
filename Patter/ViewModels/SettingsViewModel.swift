@@ -26,6 +26,8 @@ final class SettingsViewModel {
     /// back to false on dismissal.
     var showKokoroDowngradeNotice: Bool = false
 
+    private let defaults: UserDefaults
+
     private static let feedsKey = "rssFeedURLs"
     private static let djEnabledKey = "djEnabled"
     private static let djFrequencyKey = "djFrequency"
@@ -68,7 +70,8 @@ final class SettingsViewModel {
     /// pull the DJ off-topic; the editor enforces this in UI.
     static let maxStyleDescriptorLength = 500
 
-    init() {
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
         loadFromUserDefaults()
         CloudSyncService.shared.register(keys: Self.syncedKeys)
         if iCloudSyncEnabled {
@@ -129,7 +132,7 @@ final class SettingsViewModel {
     func setiCloudSyncEnabled(_ enabled: Bool) {
         guard enabled != iCloudSyncEnabled else { return }
         iCloudSyncEnabled = enabled
-        UserDefaults.standard.set(enabled, forKey: Self.iCloudSyncEnabledKey)
+        defaults.set(enabled, forKey: Self.iCloudSyncEnabledKey)
         if enabled {
             CloudSyncService.shared.enable()
             // Re-read defaults in case the enable() pulled newer values down.
@@ -140,7 +143,6 @@ final class SettingsViewModel {
     }
 
     private func saveToUserDefaults() {
-        let defaults = UserDefaults.standard
         let cloud = CloudSyncService.shared
 
         func write(_ value: Any?, forKey key: String) {
@@ -173,44 +175,44 @@ final class SettingsViewModel {
     }
 
     private func loadFromUserDefaults() {
-        iCloudSyncEnabled = UserDefaults.standard.object(forKey: Self.iCloudSyncEnabledKey) as? Bool ?? false
-        feedURLStrings = UserDefaults.standard.stringArray(forKey: Self.feedsKey) ?? []
-        djEnabled = UserDefaults.standard.object(forKey: Self.djEnabledKey) as? Bool ?? true
-        if let raw = UserDefaults.standard.string(forKey: Self.djFrequencyKey),
+        iCloudSyncEnabled = defaults.object(forKey: Self.iCloudSyncEnabledKey) as? Bool ?? false
+        feedURLStrings = defaults.stringArray(forKey: Self.feedsKey) ?? []
+        djEnabled = defaults.object(forKey: Self.djEnabledKey) as? Bool ?? true
+        if let raw = defaults.string(forKey: Self.djFrequencyKey),
            let freq = DJFrequency(rawValue: raw) {
             djFrequency = freq
         }
-        newsEnabled = UserDefaults.standard.object(forKey: Self.newsEnabledKey) as? Bool ?? true
-        if let raw = UserDefaults.standard.string(forKey: Self.newsFrequencyKey),
+        newsEnabled = defaults.object(forKey: Self.newsEnabledKey) as? Bool ?? true
+        if let raw = defaults.string(forKey: Self.newsFrequencyKey),
            let freq = NewsFrequency(rawValue: raw) {
             newsFrequency = freq
         }
-        if let stored = UserDefaults.standard.string(forKey: Self.listenerNameKey), !stored.isEmpty {
+        if let stored = defaults.string(forKey: Self.listenerNameKey), !stored.isEmpty {
             listenerName = stored
         } else {
             listenerName = defaultSystemName()
         }
-        voiceIdentifier = UserDefaults.standard.string(forKey: Self.voiceIdentifierKey) ?? ""
-        if let raw = UserDefaults.standard.string(forKey: Self.ttsProviderKey),
+        voiceIdentifier = defaults.string(forKey: Self.voiceIdentifierKey) ?? ""
+        if let raw = defaults.string(forKey: Self.ttsProviderKey),
            let p = TTSProvider(rawValue: raw) {
             ttsProvider = p
         }
-        openAIVoice = UserDefaults.standard.string(forKey: Self.openAIVoiceKey) ?? OpenAITTSVoice.alloy.rawValue
-        openAIModel = UserDefaults.standard.string(forKey: Self.openAIModelKey) ?? OpenAITTSModel.tts_1.rawValue
+        openAIVoice = defaults.string(forKey: Self.openAIVoiceKey) ?? OpenAITTSVoice.alloy.rawValue
+        openAIModel = defaults.string(forKey: Self.openAIModelKey) ?? OpenAITTSModel.tts_1.rawValue
         // `loadFromUserDefaults` runs on every iCloud sync import, not just init.
         // Without the sentinel the Keychain rewrite would re-fire per import batch.
-        if !UserDefaults.standard.bool(forKey: Self.openAIKeychainMigratedKey) {
+        if !defaults.bool(forKey: Self.openAIKeychainMigratedKey) {
             Keychain.migrateToSynchronizable(KeychainKey.openAIAPIKey)
-            UserDefaults.standard.set(true, forKey: Self.openAIKeychainMigratedKey)
+            defaults.set(true, forKey: Self.openAIKeychainMigratedKey)
         }
         openAIAPIKey = Keychain.get(KeychainKey.openAIAPIKey) ?? ""
-        kokoroVoice = UserDefaults.standard.string(forKey: Self.kokoroVoiceKey) ?? KokoroVoice.defaultVoice.rawValue
+        kokoroVoice = defaults.string(forKey: Self.kokoroVoiceKey) ?? KokoroVoice.defaultVoice.rawValue
         // Phase 2: load the custom persona list and the active-ID pointer.
-        if let data = UserDefaults.standard.data(forKey: Self.customPersonasKey),
+        if let data = defaults.data(forKey: Self.customPersonasKey),
            let decoded = try? JSONDecoder().decode([DJPersona].self, from: data) {
             customPersonas = decoded
         }
-        if let raw = UserDefaults.standard.string(forKey: Self.activePersonaIDKey),
+        if let raw = defaults.string(forKey: Self.activePersonaIDKey),
            let uuid = UUID(uuidString: raw) {
             activePersonaID = uuid
         }
@@ -231,7 +233,7 @@ final class SettingsViewModel {
     /// Kokoro afterwards we respect their choice and don't fight them.
     private func applyIOS26KokoroDowngradeIfNeeded() {
         #if os(iOS)
-        let alreadyDowngraded = UserDefaults.standard.bool(forKey: Self.kokoroDowngradedFromIOS26Key)
+        let alreadyDowngraded = defaults.bool(forKey: Self.kokoroDowngradedFromIOS26Key)
         guard !alreadyDowngraded,
               ttsProvider == .kokoro,
               ProcessInfo.processInfo.operatingSystemVersion.majorVersion == 26
@@ -239,8 +241,8 @@ final class SettingsViewModel {
 
         Log.app.warning("Auto-downgrading TTS provider .kokoro → .system on iOS 26 (tracker K6)")
         ttsProvider = .system
-        UserDefaults.standard.set(true, forKey: Self.kokoroDowngradedFromIOS26Key)
-        UserDefaults.standard.set(ttsProvider.rawValue, forKey: Self.ttsProviderKey)
+        defaults.set(true, forKey: Self.kokoroDowngradedFromIOS26Key)
+        defaults.set(ttsProvider.rawValue, forKey: Self.ttsProviderKey)
         showKokoroDowngradeNotice = true
         #endif
     }
@@ -322,11 +324,10 @@ final class SettingsViewModel {
     /// it as a custom persona (with a fresh UUID so it's editable). If the
     /// text matches Alex exactly, just drop the legacy key — nothing to save.
     private func migrateLegacyPersonaIfNeeded() {
-        guard let data = UserDefaults.standard.data(forKey: Self.legacyPersonaKey),
+        guard let data = defaults.data(forKey: Self.legacyPersonaKey),
               let legacy = try? JSONDecoder().decode(DJPersona.self, from: data) else {
             return
         }
-        let defaults = UserDefaults.standard
         let alex = DJPersona.alex
         let isUnchanged = legacy.name == alex.name
             && legacy.styleDescriptor == alex.styleDescriptor
