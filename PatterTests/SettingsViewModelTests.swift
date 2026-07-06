@@ -204,4 +204,36 @@ struct SettingsViewModelTests {
         settings.voiceIdentifier = "com.apple.voice.premium.en-US.Zoe"
         #expect(settings.effectiveVoiceIdentifier == "com.apple.voice.premium.en-US.Zoe")
     }
+
+    // MARK: - News verbosity
+
+    @Test func newsVerbosityDefaultsToStandard() {
+        let settings = makeSettings()
+        #expect(settings.newsVerbosity == .standard)
+    }
+
+    @Test func newsVerbosityPersistsAcrossInstances() {
+        let suiteName = "SettingsViewModelTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+        defaults.set(true, forKey: SettingsKeys.openAIKeychainMigrated)
+        let settings = SettingsViewModel(defaults: defaults)
+        settings.newsVerbosity = .deepDive
+        settings.save()
+        let reloaded = SettingsViewModel(defaults: defaults)
+        #expect(reloaded.newsVerbosity == .deepDive)
+    }
+
+    @Test func deepDiveWarningSentinelIsOneShot() {
+        let suiteName = "SettingsViewModelTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+        defaults.set(true, forKey: SettingsKeys.openAIKeychainMigrated)
+        let settings = SettingsViewModel(defaults: defaults)
+        #expect(!settings.hasSeenDeepDiveWarning)
+        settings.markDeepDiveWarned()
+        #expect(settings.hasSeenDeepDiveWarning)
+        let reloaded = SettingsViewModel(defaults: defaults)
+        #expect(reloaded.hasSeenDeepDiveWarning)
+    }
 }

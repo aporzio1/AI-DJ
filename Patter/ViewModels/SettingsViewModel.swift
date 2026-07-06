@@ -9,6 +9,7 @@ final class SettingsViewModel {
     var djFrequency: DJFrequency = .default
     var newsEnabled: Bool = true
     var newsFrequency: NewsFrequency = .default
+    var newsVerbosity: NewsVerbosity = .default
     var feedURLStrings: [String] = []
     var listenerName: String = ""
     var voiceIdentifier: String = ""
@@ -37,6 +38,7 @@ final class SettingsViewModel {
         SettingsKeys.djFrequency,
         SettingsKeys.newsEnabled,
         SettingsKeys.newsFrequency,
+        SettingsKeys.newsVerbosity,
         SettingsKeys.listenerName,
         SettingsKeys.voiceIdentifier,
         SettingsKeys.ttsProvider,
@@ -141,6 +143,7 @@ final class SettingsViewModel {
         write(djFrequency.rawValue, forKey: SettingsKeys.djFrequency)
         write(newsEnabled, forKey: SettingsKeys.newsEnabled)
         write(newsFrequency.rawValue, forKey: SettingsKeys.newsFrequency)
+        write(newsVerbosity.rawValue, forKey: SettingsKeys.newsVerbosity)
         write(listenerName, forKey: SettingsKeys.listenerName)
         write(voiceIdentifier, forKey: SettingsKeys.voiceIdentifier)
         write(ttsProvider.rawValue, forKey: SettingsKeys.ttsProvider)
@@ -165,6 +168,12 @@ final class SettingsViewModel {
         if let raw = defaults.string(forKey: SettingsKeys.newsFrequency),
            let freq = NewsFrequency(rawValue: raw) {
             newsFrequency = freq
+        }
+        if let raw = defaults.string(forKey: SettingsKeys.newsVerbosity),
+           let level = NewsVerbosity(rawValue: raw) {
+            newsVerbosity = level
+        } else {
+            newsVerbosity = .default
         }
         if let stored = defaults.string(forKey: SettingsKeys.listenerName), !stored.isEmpty {
             listenerName = stored
@@ -228,6 +237,15 @@ final class SettingsViewModel {
         defaults.set(ttsProvider.rawValue, forKey: SettingsKeys.ttsProvider)
         showKokoroDowngradeNotice = true
         #endif
+    }
+
+    /// One-shot "Deep Dive takes longer" alert bookkeeping (device-local).
+    var hasSeenDeepDiveWarning: Bool {
+        defaults.bool(forKey: SettingsKeys.newsVerbosityDeepDiveWarned)
+    }
+
+    func markDeepDiveWarned() {
+        defaults.set(true, forKey: SettingsKeys.newsVerbosityDeepDiveWarned)
     }
 
     // MARK: Persona

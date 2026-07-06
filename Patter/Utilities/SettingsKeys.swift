@@ -11,6 +11,8 @@ enum SettingsKeys {
     static let djFrequency = "djFrequency"
     static let newsEnabled = "newsEnabled"
     static let newsFrequency = "newsFrequency"
+    static let newsVerbosity = "newsVerbosity"
+    static let newsVerbosityDeepDiveWarned = "newsVerbosityDeepDiveWarned"  // device-local sentinel; one-shot
     static let listenerName = "listenerName"
     static let voiceIdentifier = "voiceIdentifier"
     static let ttsProvider = "ttsProvider"
