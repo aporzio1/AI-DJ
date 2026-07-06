@@ -93,6 +93,72 @@ struct ProducerTests {
         #expect(queue.count == 2)
     }
 
+    /// Builds the same stack as `makeStack()` but wires a `FakeArticleFetcher`
+    /// and primes `FakeRSSFetcher` with one headline under a news-enabled
+    /// config at the given verbosity — mirrors `makeStack()`'s construction
+    /// plus the news wiring `generateSegment` needs to reach the fetch path.
+    /// Segment generation is triggered the same way
+    /// `primeOpeningIntroUsesOpeningContext` does: seed the coordinator's
+    /// queue with one track and call `primeOpeningIntro()`.
+    func makeStackWithNews(verbosity: NewsVerbosity) -> (Producer, PlaybackCoordinator, FakeDJBrain, FakeArticleFetcher) {
+        let music = FakeMusicService()
+        let audio = FakeAudioGraph()
+        let router = MusicProviderRouter(appleMusic: music)
+        let coordinator = PlaybackCoordinator(router: router, audioGraph: audio)
+        let brain = FakeDJBrain()
+        let voice = FakeDJVoice()
+        let rss = FakeRSSFetcher()
+        rss.headlines = [
+            NewsHeadline(
+                id: UUID(),
+                title: "Headline",
+                source: "Source",
+                url: URL(string: "https://example.com/article")!,
+                publishedAt: Date(),
+                summary: "Summary."
+            )
+        ]
+        let fetcher = FakeArticleFetcher()
+        let config = Producer.Config(djEnabled: true, newsEnabled: true, newsFrequency: .always, newsVerbosity: verbosity)
+        let producer = Producer(coordinator: coordinator, brain: brain, voice: voice, rssFetcher: rss, articleFetcher: fetcher, config: config)
+        return (producer, coordinator, brain, fetcher)
+    }
+
+    @Test func standardVerbosityNeverFetchesArticle() async {
+        let (producer, coordinator, _, fetcher) = makeStackWithNews(verbosity: .standard)
+        let t1 = Patter.Track.stub(id: "t1", title: "Opening Song")
+        await coordinator.replaceQueue([.track(t1)])
+
+        await producer.primeOpeningIntro()
+
+        #expect(fetcher.requestedURLs.isEmpty)
+    }
+
+    @Test func deepDiveFetchesArticleWithCap() async {
+        let (producer, coordinator, brain, fetcher) = makeStackWithNews(verbosity: .deepDive)
+        fetcher.result = "ARTICLE BODY TEXT"
+        let t1 = Patter.Track.stub(id: "t1", title: "Opening Song")
+        await coordinator.replaceQueue([.track(t1)])
+
+        await producer.primeOpeningIntro()
+
+        #expect(fetcher.requestedMaxChars == [3500])
+        #expect(brain.lastContext?.articleBody == "ARTICLE BODY TEXT")
+        #expect(brain.lastContext?.newsVerbosity == .deepDive)
+    }
+
+    @Test func fetchFailureFallsBackToStandard() async {
+        let (producer, coordinator, brain, fetcher) = makeStackWithNews(verbosity: .deepDive)
+        fetcher.result = nil
+        let t1 = Patter.Track.stub(id: "t1", title: "Opening Song")
+        await coordinator.replaceQueue([.track(t1)])
+
+        await producer.primeOpeningIntro()
+
+        #expect(brain.lastContext?.articleBody == nil)
+        #expect(brain.lastContext?.newsVerbosity == .standard)   // spec: nil body ⇒ behave as .standard
+    }
+
     @Test func noSegmentPrimedForNonTrackNextItem() async {
         let (producer, coordinator, brain, _, _) = makeStack()
         let t1 = Patter.Track.stub(id: "t1")

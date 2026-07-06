@@ -9,11 +9,13 @@ actor Producer {
         var newsEnabled: Bool
         var djFrequency: DJFrequency = .default
         var newsFrequency: NewsFrequency = .default
+        var newsVerbosity: NewsVerbosity = .default
         static let `default` = Config(
             djEnabled: true,
             newsEnabled: true,
             djFrequency: .default,
-            newsFrequency: .default
+            newsFrequency: .default,
+            newsVerbosity: .default
         )
     }
 
@@ -21,6 +23,7 @@ actor Producer {
     private let brain: any DJBrainProtocol
     private let voice: any DJVoiceProtocol
     private let rssFetcher: any RSSFetcherProtocol
+    private let articleFetcher: any ArticleFetching
     private let feedbackStore: TrackFeedbackStore?
     private var persona: DJPersona
     private var listenerName: String?
@@ -49,6 +52,7 @@ actor Producer {
         brain: any DJBrainProtocol,
         voice: any DJVoiceProtocol,
         rssFetcher: any RSSFetcherProtocol,
+        articleFetcher: any ArticleFetching = ArticleFetcher(),
         feedbackStore: TrackFeedbackStore? = nil,
         persona: DJPersona = .default,
         listenerName: String? = nil,
@@ -58,6 +62,7 @@ actor Producer {
         self.brain = brain
         self.voice = voice
         self.rssFetcher = rssFetcher
+        self.articleFetcher = articleFetcher
         self.feedbackStore = feedbackStore
         self.persona = persona
         self.listenerName = listenerName
@@ -292,6 +297,19 @@ actor Producer {
     private func generateSegment(upcomingTrack: Patter.Track, placement: DJContext.Placement) async -> DJSegment? {
         let headline: NewsHeadline? = await fetchTopHeadlineIfEnabled()
 
+        // Detailed/Deep Dive: pull the article body; on any failure fall back
+        // to Standard behavior (spec rule — the DJ never blocks on a website).
+        var effectiveVerbosity = config.newsVerbosity
+        var articleBody: String? = nil
+        if let headline, effectiveVerbosity.needsArticleFetch,
+           let cap = effectiveVerbosity.articleBodyCharCap {
+            articleBody = await articleFetcher.body(for: headline.url, maxChars: cap)
+            if articleBody == nil {
+                Log.producer.info("Article fetch failed for \(headline.source, privacy: .public) — using Standard verbosity")
+                effectiveVerbosity = .standard
+            }
+        }
+
         let feedbackSummary: FeedbackSummary?
         if let store = feedbackStore {
             let s = await store.summary()
@@ -309,7 +327,9 @@ actor Producer {
             currentTimeString: DJContext.currentClockString(),
             newsHeadline: headline,
             listenerName: listenerName,
-            feedback: feedbackSummary
+            feedback: feedbackSummary,
+            newsVerbosity: effectiveVerbosity,
+            articleBody: articleBody
         )
 
         let script: String

@@ -156,6 +156,19 @@ final class FakeRSSFetcher: RSSFetcherProtocol, @unchecked Sendable {
     }
 }
 
+// MARK: - FakeArticleFetcher
+
+final class FakeArticleFetcher: ArticleFetching, @unchecked Sendable {
+    var result: String?
+    var requestedURLs: [URL] = []
+    var requestedMaxChars: [Int] = []
+    func body(for url: URL, maxChars: Int) async -> String? {
+        requestedURLs.append(url)
+        requestedMaxChars.append(maxChars)
+        return result
+    }
+}
+
 // MARK: - Helpers
 
 enum FakeError: Error {
