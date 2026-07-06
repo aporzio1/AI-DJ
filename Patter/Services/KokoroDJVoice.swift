@@ -1,5 +1,5 @@
 import Foundation
-@preconcurrency import FluidAudio
+import FluidAudio
 
 /// American-English Kokoro voices exposed in Settings.
 /// (FluidAudio supports more but only af_*/am_* are documented as production-ready.)
@@ -10,6 +10,13 @@ enum KokoroVoice: String, CaseIterable, Identifiable {
          am_michael, am_onyx, am_puck, am_santa
 
     var id: String { rawValue }
+
+    /// Voices actually offered in pickers. The KokoroAne backend
+    /// (FluidAudio 0.14.2+) ships only the `af_heart` voice pack on
+    /// HuggingFace (`FluidInference/kokoro-82m-coreml/ANE`) — the other
+    /// enum cases are retained so persisted selections keep decoding, but
+    /// they clamp to `af_heart` at render time.
+    static var available: [KokoroVoice] { [.af_heart] }
 
     /// Human-readable name shown in the Picker.
     var displayName: String {
@@ -38,56 +45,35 @@ enum KokoroDJVoiceError: Error, LocalizedError {
     }
 }
 
-/// Wraps a `KokoroTtsManager` in a Sendable holder so the actor can send
-/// references across its own await points without tripping Swift 6's
-/// strict "sending non-Sendable value" check. Safe because all access is
-/// serialized by `KokoroSynthesizer`.
-private final class ManagerBox: @unchecked Sendable {
-    let manager: KokoroTtsManager
-    init(_ manager: KokoroTtsManager) { self.manager = manager }
-
-    func initialize() async throws {
-        try await manager.initialize()
-    }
-
-    func synthesize(text: String, voice: String?, outputURL: URL) async throws {
-        try await manager.synthesizeToFile(
-            text: text,
-            outputURL: outputURL,
-            voice: voice
-        )
-    }
-}
-
-/// Serializes access to the non-Sendable `KokoroTtsManager` and coalesces the
-/// one-time model download behind the first render call.
+/// Serializes access to the `KokoroAneManager` and coalesces the one-time
+/// model download behind the first render call.
 private actor KokoroSynthesizer {
-    private var box: ManagerBox?
+    private var manager: KokoroAneManager?
 
     func ensureInitialized() async throws {
-        if box != nil { return }
+        if manager != nil { return }
         // Distinguish "downloading from HuggingFace" (~30 s) from "cached
-        // but needs CoreML compile + warm-up" (~2-3 s on macOS, 15-30 s on
-        // iOS 26) by checking whether the model directory is already
-        // populated. Different user messaging for each. Defer end() so
-        // errors and cancellations still reset the indicator.
+        // but needs CoreML compile + warm-up" by checking whether the model
+        // directory is already populated. Different user messaging for each.
+        // Defer end() so errors and cancellations still reset the indicator.
         let mode: KokoroDownloadState.Mode = KokoroDJVoice.isModelInstalled
             ? .loading
             : .downloading
         await KokoroDownloadState.shared.begin(mode)
         defer { Task { @MainActor in KokoroDownloadState.shared.end() } }
-        // Guard initialize() with a timeout — iOS 26's CoreML Metal compile
-        // has occasionally hung on the second (15 s) model, leaving the
+        // Guard initialize() with a timeout — the pre-0.14 mono-Kokoro
+        // CoreML compile hung on iOS 26 (tracker K6), leaving the
         // "Loading DJ voice…" indicator stuck in the MiniPlayerBar forever.
-        // Throwing here lets the defer end the indicator and forces a
-        // retry path on the next render attempt. 120 s is a very generous
-        // upper bound for a legitimate compile.
+        // The 7-stage KokoroAne chain hasn't shown that failure mode, but
+        // the guard stays: throwing lets the defer end the indicator and
+        // forces a retry path on the next render attempt. 120 s is a very
+        // generous upper bound for a legitimate compile of all 7 models.
         do {
-            let pending = ManagerBox(KokoroTtsManager())
+            let pending = KokoroAneManager()
             try await withTimeout(seconds: 120) {
                 try await pending.initialize()
             }
-            box = pending
+            manager = pending
         } catch {
             throw KokoroDJVoiceError.initializationFailed(underlying: error)
         }
@@ -113,23 +99,26 @@ private actor KokoroSynthesizer {
     }
 
     /// Drop the in-memory manager so a subsequent call re-downloads / re-loads.
-    func reset() {
-        box = nil
+    func reset() async {
+        await manager?.cleanup()
+        manager = nil
     }
 
     func render(text: String, voice: String?, outputURL: URL) async throws {
         try await ensureInitialized()
         do {
-            try await box!.synthesize(text: text, voice: voice, outputURL: outputURL)
+            let wav = try await manager!.synthesize(text: text, voice: voice)
+            try wav.write(to: outputURL)
         } catch {
             throw KokoroDJVoiceError.synthesisFailed(underlying: error)
         }
     }
 }
 
-/// On-device TTS using FluidAudio's CoreML Kokoro model.
-/// The model and G2P assets download on first use and cache under
-/// ~/.cache/fluidaudio/Models/kokoro (macOS) or Caches/fluidaudio/Models/kokoro (iOS).
+/// On-device TTS using FluidAudio's KokoroAne model (7-stage CoreML chain).
+/// The models, G2P assets, and voice pack download on first use and cache under
+/// ~/.cache/fluidaudio/Models/kokoro-82m-coreml/ANE (macOS) or
+/// Application Support/fluidaudio/Models/kokoro-82m-coreml/ANE (iOS).
 /// Initialization is deferred until the first renderToFile call so app launch
 /// isn't blocked by a cold download.
 final class KokoroDJVoice: DJVoiceProtocol, KokoroModelManaging, Sendable {
@@ -137,7 +126,16 @@ final class KokoroDJVoice: DJVoiceProtocol, KokoroModelManaging, Sendable {
     private let synth = KokoroSynthesizer()
 
     func renderToFile(script: String, voiceIdentifier: String) async throws -> URL {
-        let voice = voiceIdentifier.isEmpty ? nil : voiceIdentifier
+        // Clamp to the published voice pack — see `KokoroVoice.available`.
+        let voice: String?
+        if voiceIdentifier.isEmpty {
+            voice = nil
+        } else if KokoroVoice.available.map(\.rawValue).contains(voiceIdentifier) {
+            voice = voiceIdentifier
+        } else {
+            Log.voice.warning("Kokoro voice \(voiceIdentifier, privacy: .public) has no published KokoroAne voice pack — clamping to \(KokoroVoice.defaultVoice.rawValue, privacy: .public)")
+            voice = KokoroVoice.defaultVoice.rawValue
+        }
         let outputURL = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
             .appendingPathExtension("wav")
@@ -166,7 +164,7 @@ final class KokoroDJVoice: DJVoiceProtocol, KokoroModelManaging, Sendable {
         Log.voice.info("Kokoro model cache cleared")
     }
 
-    /// Whether the Kokoro model directory exists and is non-empty on disk.
+    /// Whether the KokoroAne model directory exists and is non-empty on disk.
     static var isModelInstalled: Bool {
         let dir = modelCacheDirectory
         var isDir: ObjCBool = false
@@ -177,15 +175,17 @@ final class KokoroDJVoice: DJVoiceProtocol, KokoroModelManaging, Sendable {
         return !contents.isEmpty
     }
 
-    /// Mirrors FluidAudio's own TTS cache-location rules. See
-    /// `DownloadUtils.clearAllModelCaches` in the FluidAudio source.
+    /// Mirrors FluidAudio's own TTS cache-location rules (`TtsCacheDirectory`
+    /// + `ModelNames`): `<cache root>/Models/kokoro-82m-coreml/ANE`, where the
+    /// cache root is `~/.cache/fluidaudio` on macOS and
+    /// `Application Support/fluidaudio` on iOS.
     private static var modelCacheDirectory: URL {
         #if os(macOS)
         let home = FileManager.default.homeDirectoryForCurrentUser
-        return home.appendingPathComponent(".cache/fluidaudio/Models/kokoro")
+        return home.appendingPathComponent(".cache/fluidaudio/Models/kokoro-82m-coreml/ANE")
         #else
-        let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
-        return caches.appendingPathComponent("fluidaudio/Models/kokoro")
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        return appSupport.appendingPathComponent("fluidaudio/Models/kokoro-82m-coreml/ANE")
         #endif
     }
 }

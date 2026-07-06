@@ -185,7 +185,12 @@ final class SettingsViewModel {
             defaults.set(true, forKey: SettingsKeys.openAIKeychainMigrated)
         }
         openAIAPIKey = Keychain.get(KeychainKey.openAIAPIKey) ?? ""
-        kokoroVoice = defaults.string(forKey: SettingsKeys.kokoroVoice) ?? KokoroVoice.defaultVoice.rawValue
+        // Clamp persisted selections to voices that have a published
+        // KokoroAne voice pack — see KokoroVoice.available.
+        let storedKokoroVoice = defaults.string(forKey: SettingsKeys.kokoroVoice) ?? KokoroVoice.defaultVoice.rawValue
+        kokoroVoice = KokoroVoice.available.map(\.rawValue).contains(storedKokoroVoice)
+            ? storedKokoroVoice
+            : KokoroVoice.defaultVoice.rawValue
         personaStore.load()
     }
 
@@ -206,6 +211,11 @@ final class SettingsViewModel {
     /// we respect their choice and don't fight them.
     private func applyIOS26KokoroDowngradeIfNeeded() {
         #if os(iOS)
+        // SPIKE (kokoro-ane-0.15.4): downgrade disabled on this branch so the
+        // KokoroAne backend can be device-tested on iOS 26+ (Backlog #12).
+        // Restore before merge if the device gates fail.
+        return
+        #elseif os(iOS)
         let alreadyDowngraded = defaults.bool(forKey: SettingsKeys.kokoroDowngradedFromIOS26)
         guard !alreadyDowngraded,
               ttsProvider == .kokoro,

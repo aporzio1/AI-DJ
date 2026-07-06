@@ -11,7 +11,7 @@ struct KokoroSection: View {
     var body: some View {
         Group {
             Picker("Voice", selection: $vm.kokoroVoice) {
-                ForEach(KokoroVoice.allCases) { voice in
+                ForEach(KokoroVoice.available) { voice in
                     Text(voice.displayName).tag(voice.rawValue)
                 }
             }

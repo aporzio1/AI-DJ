@@ -14,20 +14,17 @@ enum TTSProvider: String, Codable, CaseIterable, Identifiable {
         }
     }
 
-    /// Providers offered in the picker. Hides Kokoro on iOS 26+ — see
-    /// K6/K24/K26 in the tracker. `>=` rather than `==`: the underlying
-    /// CoreML-compile crash reproduces on iOS 27 too (different failure
-    /// signature, same fatal outcome), and there's no evidence a future OS
-    /// fixes it without a FluidAudio update. Existing iOS-26+ users with
-    /// `.kokoro` selected get auto-downgraded once at launch via
-    /// `SettingsViewModel.applyIOS26KokoroDowngradeIfNeeded`.
+    /// Providers offered in the picker.
+    ///
+    /// SPIKE (kokoro-ane-0.15.4): the iOS 26+ Kokoro exclusion (K6/K24/K26)
+    /// is lifted on this branch. FluidAudio 0.14.2+ replaced the mono
+    /// Kokoro CoreML model that crashed iOS 26/27 with the 7-stage
+    /// KokoroAne chain; this spike exists to verify that on a physical
+    /// iPhone (tracker Backlog #12 gates: OOV proper-noun inputs per
+    /// upstream #587, backgrounded render per #738). Do not merge without
+    /// both gates passing — restore the filter if either fails.
     static var available: [TTSProvider] {
-#if os(iOS)
-        if ProcessInfo.processInfo.operatingSystemVersion.majorVersion >= 26 {
-            return TTSProvider.allCases.filter { $0 != .kokoro }
-        }
-#endif
-        return TTSProvider.allCases
+        TTSProvider.allCases
     }
 }
 
