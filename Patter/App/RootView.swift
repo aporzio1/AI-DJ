@@ -33,7 +33,7 @@ struct RootView: View {
         @Bindable var settings = settings
         Group {
             if isReady, let nowPlaying = nowPlayingVM, let queue = queueVM, let library = libraryVM {
-                mainContent(nowPlaying: nowPlaying, queue: queue, library: library)
+                let configObservedContent = mainContent(nowPlaying: nowPlaying, queue: queue, library: library)
                     .onAppear { Log.app.info("Main content appeared") }
                     .onChange(of: settings.listenerName) { _, newName in
                         if let p = producer {
@@ -44,9 +44,12 @@ struct RootView: View {
                     .onChange(of: settings.djFrequency) { _, _ in updateProducerConfig() }
                     .onChange(of: settings.newsEnabled) { _, _ in updateProducerConfig() }
                     .onChange(of: settings.newsFrequency) { _, _ in updateProducerConfig() }
+                    .onChange(of: settings.newsVerbosity) { _, _ in updateProducerConfig() }
                     .onChange(of: settings.feedURLStrings) { _, _ in
                         rssFetcher.updateFeeds(settings.feedURLs)
                     }
+
+                configObservedContent
                     .onChange(of: settings.voiceIdentifier) { _, newID in
                         if let p = producer {
                             Task { await p.updateVoice(newID.isEmpty ? nil : newID) }
@@ -175,7 +178,8 @@ struct RootView: View {
             djEnabled: settings.djEnabled,
             newsEnabled: settings.newsEnabled,
             djFrequency: settings.djFrequency,
-            newsFrequency: settings.newsFrequency
+            newsFrequency: settings.newsFrequency,
+            newsVerbosity: settings.newsVerbosity
         )
     }
 

@@ -9,6 +9,8 @@ struct NewsSection: View {
     @State private var newFeedURL = ""
     @State private var showingOPMLImporter = false
     @State private var feedPendingRemoval: String?
+    @State private var showDeepDiveWarning = false
+    @State private var verbosityBeforeDeepDive: NewsVerbosity = .default
 
     var body: some View {
         Group {
@@ -44,10 +46,37 @@ struct NewsSection: View {
             .pickerStyle(.segmented)
             .disabled(!vm.djEnabled || !vm.newsEnabled)
             .onChange(of: vm.newsFrequency) { _, _ in vm.save() }
+
+            Picker("News Detail", selection: $vm.newsVerbosity) {
+                ForEach(NewsVerbosity.allCases) { level in
+                    Text(level.displayName).tag(level)
+                }
+            }
+            .pickerStyle(.segmented)
+            .disabled(!vm.djEnabled || !vm.newsEnabled)
+            .onChange(of: vm.newsVerbosity) { old, new in
+                if new == .deepDive && !vm.hasSeenDeepDiveWarning {
+                    verbosityBeforeDeepDive = old
+                    showDeepDiveWarning = true
+                } else {
+                    vm.save()
+                }
+            }
+            .alert("Deep Dive Takes Longer", isPresented: $showDeepDiveWarning) {
+                Button("Use Deep Dive") {
+                    vm.markDeepDiveWarned()
+                    vm.save()
+                }
+                Button("Cancel", role: .cancel) {
+                    vm.newsVerbosity = verbosityBeforeDeepDive
+                }
+            } message: {
+                Text("Deep Dive downloads the full article and generates a longer segment. Expect a noticeably longer wait before news segments play.")
+            }
         } header: {
             Text("News")
         } footer: {
-            Text("When enabled, the DJ will reference a recent headline from your RSS feeds. Frequency controls how often a headline is injected into a DJ segment.")
+            Text("When enabled, the DJ will reference a recent headline from your RSS feeds. Frequency controls how often a headline is injected into a DJ segment. \(vm.newsVerbosity.settingsDescription)")
         }
     }
 
