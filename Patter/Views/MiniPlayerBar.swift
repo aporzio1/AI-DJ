@@ -47,10 +47,15 @@ struct MiniPlayerBar: View {
                     .accessibilityLabel("DJ speaking")
             }
 
-            thumbsDownButton
-            thumbsUpButton
-            playPauseButton
-            skipButton
+            // No inter-button spacing: each button already provides its own
+            // 44pt tap frame, and the freed width goes to the title/artist
+            // labels so they don't truncate on iPhone.
+            HStack(spacing: 0) {
+                thumbsDownButton
+                thumbsUpButton
+                playPauseButton
+                skipButton
+            }
         }
         .frame(minHeight: 48)
     }
