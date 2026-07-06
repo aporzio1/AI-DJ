@@ -27,6 +27,12 @@ struct DJScriptResponse {
     let script: String
 }
 
+@Generable
+struct DJScriptResponseExtended {
+    @Guide(description: "Only the spoken radio DJ break covering a news story in depth. Complete sentences, 120 to 320 words. No labels, notes, URLs, lists, or repeated facts.")
+    let script: String
+}
+
 final class DJBrain: DJBrainProtocol {
 
     /// Touch the on-device LLM once to force model load. Dramatically reduces
@@ -43,14 +49,25 @@ final class DJBrain: DJBrainProtocol {
     func generateScript(for context: DJContext) async throws -> String {
         let newsTopic = context.newsHeadline.map { cleanHeadline($0.title) }
         let newsSummary = context.newsHeadline.flatMap { usableNewsContext(from: $0.summary) }
-        let prompt = DJPromptTemplate.buildPrompt(context: context, newsTopic: newsTopic, newsSummary: newsSummary)
+        let prompt = DJPromptTemplate.buildPrompt(context: context, newsTopic: newsTopic,
+                                                  newsSummary: newsSummary,
+                                                  articleBody: context.articleBody)
         Log.brain.debug("prompt: \(prompt, privacy: .public)")
         let instructions = DJPromptTemplate.instructions(context: context)
         let session = LanguageModelSession(instructions: instructions)
         let genStart = ContinuousClock.now
-        let response = try await session.respond(to: prompt, generating: DJScriptResponse.self)
+        let useExtended = context.newsHeadline != nil
+            && (context.newsVerbosity == .detailed || context.newsVerbosity == .deepDive)
+            && context.articleBody != nil
+        let script: String
+        if useExtended {
+            let response = try await session.respond(to: prompt, generating: DJScriptResponseExtended.self)
+            script = response.content.script.trimmingCharacters(in: .whitespacesAndNewlines)
+        } else {
+            let response = try await session.respond(to: prompt, generating: DJScriptResponse.self)
+            script = response.content.script.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
         let elapsed = ContinuousClock.now - genStart
-        let script = response.content.script.trimmingCharacters(in: .whitespacesAndNewlines)
         Log.brain.info("generated in \(String(describing: elapsed), privacy: .public): \(script, privacy: .public)")
         let clean = stripEmoji(script).trimmingCharacters(in: .whitespacesAndNewlines)
         var sanitized = sanitizePromptLeakage(clean)
@@ -60,7 +77,8 @@ final class DJBrain: DJBrainProtocol {
             sanitized = "Up next, \(DJPromptTemplate.cleanTitle(context.upcomingTrack.title)) by \(context.upcomingTrack.artist)."
         }
         let guarded = enforceSongNewsBoundary(sanitized, context: context)
-        return truncateAtSentenceBoundary(guarded, maxChars: 500)
+        let cap = useExtended ? context.newsVerbosity.scriptCharCap : 500
+        return truncateAtSentenceBoundary(guarded, maxChars: cap)
     }
 
     private func stripEmoji(_ text: String) -> String {
@@ -169,6 +187,7 @@ final class DJBrain: DJBrainProtocol {
             "NEWS TOPIC",
             "NEWS CONTEXT",
             "NEWS SUMMARY",
+            "ARTICLE TEXT",
             "NEXT SONG",
             "SEGMENT:",
             "Current time:",

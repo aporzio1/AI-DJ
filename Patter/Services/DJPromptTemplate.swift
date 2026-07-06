@@ -67,11 +67,13 @@ enum DJPromptTemplate {
             ignore them; the listener has explicitly opted in to hear news. The news topic is only a
             quick aside right now, not a later tease and not the next item in the music queue.
 
-            If a NEWS SUMMARY field is present, give the listener 1–2 sentences of actual context on
-            the story — what happened, who's involved, why it matters — then bridge back by naming
-            the NEXT SONG. If only a NEWS TOPIC is present, mention it briefly in one sentence and
-            do not invent article details. For news segments with a summary, override the usual length
-            guidance: aim for 4–5 sentences, 60–100 words.
+            If a NEWS SUMMARY field is present, give the listener actual context on the story — what
+            happened, who's involved, why it matters — then bridge back by naming the NEXT SONG. If an
+            ARTICLE TEXT field is present, it is the article itself: draw your details from it.
+            State only facts that appear in the NEWS SUMMARY or ARTICLE TEXT. If a detail is not
+            there, do not invent or embellish it. If only a NEWS TOPIC is present, mention it briefly
+            in one sentence and do not invent article details. For news segments with a summary,
+            override the usual length guidance: \(context.newsVerbosity.promptGuidance)
             """
         }
         return instructions
@@ -80,7 +82,8 @@ enum DJPromptTemplate {
     /// `newsTopic`/`newsSummary` are pre-resolved by the caller (DJBrain owns
     /// `cleanHeadline`/`usableNewsContext`, which are tested directly as
     /// instance methods) so this type stays free of any DJBrain dependency.
-    static func buildPrompt(context: DJContext, newsTopic: String?, newsSummary: String?) -> String {
+    static func buildPrompt(context: DJContext, newsTopic: String?, newsSummary: String?,
+                            articleBody: String? = nil) -> String {
         var parts: [String] = []
         let upcoming = "'\(cleanTitle(context.upcomingTrack.title))' by \(context.upcomingTrack.artist)"
         switch context.placement {
@@ -126,6 +129,9 @@ enum DJPromptTemplate {
                     ? String(newsSummary.prefix(500)) + "…"
                     : newsSummary
                 parts.append("NEWS SUMMARY: \(truncated)")
+            }
+            if let articleBody, !articleBody.isEmpty {
+                parts.append("ARTICLE TEXT: \(articleBody)")
             }
         }
 

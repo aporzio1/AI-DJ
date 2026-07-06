@@ -330,4 +330,86 @@ struct DJBrainTests {
 
         #expect(instructions.contains(DJPersona.default.styleDescriptor))
     }
+
+    // MARK: - News verbosity + article body plumbing
+
+    @Test func newsGuidanceVariesByVerbosity() {
+        let headline = NewsHeadline(id: UUID(), title: "T", source: "s",
+                                    url: URL(string: "https://example.com")!,
+                                    publishedAt: Date(), summary: "sum")
+        func instructions(_ level: NewsVerbosity) -> String {
+            let ctx = DJContext(
+                placement: .betweenSongs, persona: .default,
+                upcomingTrack: Track.stub(), recentTracks: [],
+                timeOfDay: .afternoon, currentTimeString: "2:11 PM",
+                newsHeadline: headline, listenerName: nil, feedback: nil,
+                newsVerbosity: level
+            )
+            return DJPromptTemplate.instructions(context: ctx)
+        }
+        #expect(instructions(.standard).contains("4–5 sentences, 60–100 words"))
+        #expect(instructions(.detailed).contains("120–180 words"))
+        #expect(instructions(.deepDive).contains("220–320 words"))
+        #expect(instructions(.brief).contains("at most 1–2 sentences"))
+    }
+
+    @Test func newsInstructionsIncludeArticleFactGuardrail() {
+        let headline = NewsHeadline(id: UUID(), title: "T", source: "s",
+                                    url: URL(string: "https://example.com")!,
+                                    publishedAt: Date(), summary: "sum")
+        let ctx = DJContext(
+            placement: .betweenSongs, persona: .default,
+            upcomingTrack: Track.stub(), recentTracks: [],
+            timeOfDay: .afternoon, currentTimeString: "2:11 PM",
+            newsHeadline: headline, listenerName: nil, feedback: nil,
+            newsVerbosity: .deepDive
+        )
+        let instructions = DJPromptTemplate.instructions(context: ctx)
+        #expect(instructions.contains("State only facts that appear in the NEWS SUMMARY or ARTICLE TEXT"))
+    }
+
+    @Test func promptIncludesArticleTextOnlyWhenBodyPresent() {
+        let headline = NewsHeadline(id: UUID(), title: "Big Story", source: "s",
+                                    url: URL(string: "https://example.com")!,
+                                    publishedAt: Date(), summary: "sum")
+        let ctx = DJContext(
+            placement: .betweenSongs, persona: .default,
+            upcomingTrack: Track.stub(), recentTracks: [],
+            timeOfDay: .afternoon, currentTimeString: "2:11 PM",
+            newsHeadline: headline, listenerName: nil, feedback: nil,
+            newsVerbosity: .deepDive, articleBody: "Full article body text here."
+        )
+        let withBody = DJPromptTemplate.buildPrompt(context: ctx, newsTopic: "Big Story",
+                                                    newsSummary: "sum",
+                                                    articleBody: ctx.articleBody)
+        #expect(withBody.contains("ARTICLE TEXT: Full article body text here."))
+
+        let without = DJPromptTemplate.buildPrompt(context: ctx, newsTopic: "Big Story",
+                                                   newsSummary: "sum", articleBody: nil)
+        #expect(!without.contains("ARTICLE TEXT"))
+    }
+
+    @Test func sanitizerStripsArticleTextLeakage() {
+        let brain = DJBrain()
+        let leaked = "Great song coming up. ARTICLE TEXT: the model echoed the prompt"
+        #expect(brain.sanitizePromptLeakage(leaked) == "Great song coming up.")
+    }
+
+    @Test func standardPromptUnchangedByNewFields() {
+        // Regression guard: default-verbosity prompt must be identical to the
+        // pre-feature output for the same inputs.
+        let headline = NewsHeadline(id: UUID(), title: "T", source: "s",
+                                    url: URL(string: "https://example.com")!,
+                                    publishedAt: Date(), summary: "context blurb")
+        let ctx = DJContext(
+            placement: .betweenSongs, persona: .default,
+            upcomingTrack: Track.stub(), recentTracks: [],
+            timeOfDay: .afternoon, currentTimeString: "2:11 PM",
+            newsHeadline: headline, listenerName: nil, feedback: nil
+        )
+        let prompt = DJPromptTemplate.buildPrompt(context: ctx, newsTopic: "T",
+                                                  newsSummary: "context blurb", articleBody: nil)
+        #expect(prompt.contains("NEWS SUMMARY: context blurb"))
+        #expect(!prompt.contains("ARTICLE TEXT"))
+    }
 }

@@ -11,6 +11,11 @@ struct DJContext: Sendable {
     let newsHeadline: NewsHeadline?
     let listenerName: String?
     let feedback: FeedbackSummary?
+    /// News coverage depth + optional full-article body (fetched by Producer
+    /// for .detailed/.deepDive only). Defaults keep existing construction
+    /// sites and .standard behavior unchanged.
+    var newsVerbosity: NewsVerbosity = .standard
+    var articleBody: String? = nil
 
     enum Placement: String, Sendable {
         case opening
