@@ -51,7 +51,7 @@ struct ArticleFetcher: ArticleFetching {
         // Drop whole non-content blocks (case-insensitive, dot matches newlines).
         for tag in ["script", "style", "nav", "header", "footer", "aside", "noscript", "form", "svg"] {
             work = work.replacingOccurrences(
-                of: "<\(tag)\\b[^>]*>.*?</\(tag)>",
+                of: "(?s)<\(tag)\\b[^>]*>.*?</\(tag)>",
                 with: " ",
                 options: [.regularExpression, .caseInsensitive]
             )
