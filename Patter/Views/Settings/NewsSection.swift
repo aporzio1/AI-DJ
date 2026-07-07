@@ -196,6 +196,7 @@ struct NewsSection: View {
                     text: $newFeedURL,
                     prompt: Text(verbatim: "https://example.com/feed.xml")
                 )
+                    .accessibilityLabel("Feed URL")
                     .textFieldStyle(.roundedBorder)
 #if os(iOS)
                     .keyboardType(.URL)
