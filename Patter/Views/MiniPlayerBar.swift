@@ -28,7 +28,7 @@ struct MiniPlayerBar: View {
         HStack(spacing: 12) {
             artworkThumb
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(title)
                     .font(.subheadline.weight(.medium))
                     .lineLimit(1)
@@ -117,6 +117,7 @@ struct MiniPlayerBar: View {
                 )
                 // Don't propagate taps on the slider track to the row's onTapGesture.
                 .onTapGesture { }
+                .accessibilityLabel("Playback position")
 
                 Text("-" + formatPlaybackTime(max(vm.duration - displayedTime, 0)))
                     .font(.caption2.monospacedDigit())
