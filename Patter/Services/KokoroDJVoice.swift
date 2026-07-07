@@ -140,9 +140,18 @@ final class KokoroDJVoice: DJVoiceProtocol, KokoroModelManaging, Sendable {
             .appendingPathComponent(UUID().uuidString)
             .appendingPathExtension("wav")
 
-        Log.voice.info("Kokoro TTS request (voice=\(voice ?? "default", privacy: .public), chars=\(script.count))")
+        // Kokoro's G2P/lexicon only recognizes the ASCII apostrophe — typographic
+        // quotes from LLM output (e.g. "that’s") are read as an unknown character
+        // and mispronounced (audibly "that ex s"). Normalize before synthesis.
+        let normalizedScript = script
+            .replacingOccurrences(of: "\u{2018}", with: "'")
+            .replacingOccurrences(of: "\u{2019}", with: "'")
+            .replacingOccurrences(of: "\u{201C}", with: "\"")
+            .replacingOccurrences(of: "\u{201D}", with: "\"")
+
+        Log.voice.info("Kokoro TTS request (voice=\(voice ?? "default", privacy: .public), chars=\(normalizedScript.count))")
         let started = ContinuousClock.now
-        try await synth.render(text: script, voice: voice, outputURL: outputURL)
+        try await synth.render(text: normalizedScript, voice: voice, outputURL: outputURL)
         let elapsed = ContinuousClock.now - started
         Log.voice.info("Kokoro TTS rendered in \(String(describing: elapsed), privacy: .public) → \(outputURL.lastPathComponent, privacy: .public)")
         return outputURL
