@@ -56,6 +56,7 @@ struct VoiceSection: View {
             Text("API Key")
             Spacer(minLength: 16)
             SecureField("sk-…", text: $vm.openAIAPIKey)
+                .accessibilityLabel("OpenAI API Key")
                 .textFieldStyle(.plain)
                 .multilineTextAlignment(.trailing)
                 .frame(maxWidth: 320)

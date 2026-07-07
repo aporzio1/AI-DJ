@@ -76,6 +76,7 @@ struct SettingsView: View {
                 Text("Your Name")
                 Spacer(minLength: 16)
                 TextField("", text: $vm.listenerName)
+                    .accessibilityLabel("Your Name")
                     .multilineTextAlignment(.trailing)
                     .textFieldStyle(.plain)
                     .frame(maxWidth: 240)

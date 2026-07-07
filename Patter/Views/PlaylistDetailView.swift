@@ -38,7 +38,7 @@ struct PlaylistDetailView: View {
                     Button {
                         Task { await vm.playPlaylist(playlist) }
                     } label: {
-                        HStack(spacing: 6) {
+                        HStack(spacing: 8) {
                             Image(systemName: "play.fill")
                             Text("Play")
                         }
@@ -49,7 +49,7 @@ struct PlaylistDetailView: View {
                     Button {
                         Task { await vm.shufflePlaylist(playlist) }
                     } label: {
-                        HStack(spacing: 6) {
+                        HStack(spacing: 8) {
                             Image(systemName: "shuffle")
                             Text("Shuffle")
                         }
@@ -99,7 +99,7 @@ struct PlaylistDetailView: View {
                 .font(.footnote.monospacedDigit())
                 .foregroundStyle(.secondary)
                 .frame(width: 28, alignment: .trailing)
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(track.title).font(.body).lineLimit(1)
                 Text(track.artist).font(.footnote).foregroundStyle(.secondary).lineLimit(1)
             }

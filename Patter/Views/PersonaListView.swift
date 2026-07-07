@@ -91,7 +91,7 @@ struct PersonaListView: View {
                 vm.setActivePersona(id: persona.id)
             } label: {
                 HStack(spacing: 12) {
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: 4) {
                         HStack(spacing: 8) {
                             Text(persona.name)
                                 .font(.body)

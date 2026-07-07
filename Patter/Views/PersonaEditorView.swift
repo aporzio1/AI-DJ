@@ -39,6 +39,7 @@ struct PersonaEditorView: View {
                 TextEditor(text: $styleDescriptor)
                     .frame(minHeight: 180)
                     .font(.body)
+                    .accessibilityLabel("Persona instructions")
             } header: {
                 HStack {
                     Text("Instructions")

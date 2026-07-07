@@ -117,10 +117,13 @@ struct LibraryView: View {
             }
             .buttonStyle(.plain)
         case .track, .album, .station:
-            LibraryCardView(item: item, artwork: vm.artwork(for: item))
-                .onTapGesture {
-                    Task { await vm.playLibraryItem(item) }
-                }
+            Button {
+                Task { await vm.playLibraryItem(item) }
+            } label: {
+                LibraryCardView(item: item, artwork: vm.artwork(for: item))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Play \(item.title)")
         }
     }
 
@@ -206,7 +209,7 @@ struct LibraryView: View {
                 .font(.title3)
                 .foregroundStyle(.secondary)
                 .frame(width: 32)
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(track.title).font(.body).lineLimit(1)
                 Text(track.artist).font(.footnote).foregroundStyle(.secondary).lineLimit(1)
             }

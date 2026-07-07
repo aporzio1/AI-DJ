@@ -86,6 +86,7 @@ struct NowPlayingView: View {
                 }
             )
             .disabled(vm.duration <= 0)
+            .accessibilityLabel("Playback position")
             HStack {
                 Text(formatPlaybackTime(scrubTime ?? vm.playbackTime))
                 Spacer()
@@ -147,12 +148,16 @@ struct NowPlayingView: View {
             Button {
                 vm.regenerateDJ()
             } label: {
-                if vm.isRegenerating {
-                    ProgressView().controlSize(.small)
-                } else {
-                    Label("Regenerate", systemImage: "arrow.clockwise")
-                        .labelStyle(.iconOnly)
+                Group {
+                    if vm.isRegenerating {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Label("Regenerate", systemImage: "arrow.clockwise")
+                            .labelStyle(.iconOnly)
+                    }
                 }
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.borderless)
             .disabled(vm.isRegenerating)

@@ -23,7 +23,7 @@ struct QueueView: View {
         switch item {
         case .track(let track):
             HStack {
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 4) {
                     Text(track.title).font(.body)
                     Text(track.artist).font(.caption).foregroundStyle(.secondary)
                 }
@@ -38,7 +38,7 @@ struct QueueView: View {
             HStack(spacing: 8) {
                 Image(systemName: "waveform")
                     .foregroundStyle(Color.accentColor)
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 4) {
                     Text("DJ — \(segment.kind.rawValue.capitalized)")
                         .font(.body.italic())
                     Text(segment.script)
