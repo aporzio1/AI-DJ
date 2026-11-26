@@ -297,6 +297,7 @@ struct SettingsView: View {
         }
     }
 
+    @ViewBuilder
     private var kokoroRows: some View {
         Picker("Voice", selection: $vm.kokoroVoice) {
             ForEach(KokoroVoice.allCases) { voice in
