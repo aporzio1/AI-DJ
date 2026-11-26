@@ -262,7 +262,6 @@ struct SettingsView: View {
     }
 
     @ViewBuilder
-    @ViewBuilder
     private var sherpaRows: some View {
         LabeledContent("Model") {
             HStack(spacing: 4) {
