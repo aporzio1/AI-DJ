@@ -124,11 +124,11 @@ actor Producer {
         return persona.voicePreset
     }
 
-    /// Fetch the newest headline across all feeds, or nil if news is disabled
-    /// or the frequency roll fails or the fetch surfaces no usable item.
-    /// Errors are logged explicitly so a silent DNS/404/parser failure
-    /// doesn't masquerade as "no news today."
-    private func fetchTopHeadlineIfEnabled() async -> NewsHeadline? {
+    /// Fetch the news desk for the next segment: a lead headline plus one
+    /// follow-on story, or nil if news is disabled, the frequency roll fails,
+    /// or the feed surfaces nothing usable. Errors are logged explicitly so a
+    /// silent DNS/404/parser failure doesn't masquerade as "no news today."
+    private func fetchNewsDeskIfEnabled() async -> (lead: NewsHeadline, secondary: [NewsHeadline])? {
         guard config.newsEnabled else { return nil }
         let frequency = config.newsFrequency
         guard Double.random(in: 0..<1) < frequency.probability else {
@@ -141,13 +141,17 @@ actor Producer {
                 Log.producer.info("News enabled but fetcher returned 0 headlines — check feed URLs")
                 return nil
             }
-            // Prefer an unused headline. If every headline in the feed has been
-            // used recently (small feeds), fall back to the newest.
+            // Prefer unused stories; if the whole feed has been read recently,
+            // fall back to the newest. Lead + one secondary keeps the break a
+            // news desk rather than a bullet list.
             let recentSet = Set(recentHeadlineURLs)
-            let pick = headlines.first(where: { !recentSet.contains($0.url.absoluteString) }) ?? headlines.first!
-            recordRecentHeadline(pick)
-            Log.producer.info("News headline ready: \"\(pick.title, privacy: .public)\" (\(pick.source, privacy: .public))")
-            return pick
+            let fresh = headlines.filter { !recentSet.contains($0.url.absoluteString) }
+            let pool = fresh.isEmpty ? headlines : fresh
+            guard let lead = pool.first else { return nil }
+            let secondary = Array(pool.dropFirst().prefix(1))
+            for item in [lead] + secondary { recordRecentHeadline(item) }
+            Log.producer.info("News desk ready: lead=\"\(lead.title, privacy: .public)\" (\(lead.source, privacy: .public)), secondary=\(secondary.count)")
+            return (lead, secondary)
         } catch {
             Log.producer.error("News fetch failed: \(error.localizedDescription, privacy: .public)")
             return nil
@@ -292,7 +296,9 @@ actor Producer {
     }
 
     private func generateSegment(upcomingTrack: Patter.Track, placement: DJContext.Placement) async -> DJSegment? {
-        let headline: NewsHeadline? = await fetchTopHeadlineIfEnabled()
+        let newsDesk = await fetchNewsDeskIfEnabled()
+        let headline = newsDesk?.lead
+        let secondaryHeadlines = newsDesk?.secondary ?? []
 
         let feedbackSummary: FeedbackSummary?
         if let store = feedbackStore {
@@ -313,6 +319,7 @@ actor Producer {
             newsHeadline: headline,
             listenerName: listenerName,
             feedback: feedbackSummary,
+            secondaryHeadlines: secondaryHeadlines,
             flow: flow,
             avoidOpenings: recentOpenings
         )

@@ -11,6 +11,9 @@ struct DJContext: Sendable {
     let newsHeadline: NewsHeadline?
     let listenerName: String?
     let feedback: FeedbackSummary?
+    /// Follow-on stories for a news-desk delivery (read after the lead, one
+    /// short line each). Empty when news is off or the feed had nothing fresh.
+    let secondaryHeadlines: [NewsHeadline]
     /// Energy read of previous→upcoming from `DJFlowReader`. The DJ's
     /// transition spine. nil only when flow reading was skipped.
     let flow: DJFlowRead?
@@ -21,6 +24,7 @@ struct DJContext: Sendable {
     init(placement: Placement, persona: DJPersona, upcomingTrack: Track,
          recentTracks: [Track], timeOfDay: TimeOfDay, currentTimeString: String,
          newsHeadline: NewsHeadline?, listenerName: String?, feedback: FeedbackSummary?,
+         secondaryHeadlines: [NewsHeadline] = [],
          flow: DJFlowRead? = nil, avoidOpenings: [String] = []) {
         self.placement = placement
         self.persona = persona
@@ -31,6 +35,7 @@ struct DJContext: Sendable {
         self.newsHeadline = newsHeadline
         self.listenerName = listenerName
         self.feedback = feedback
+        self.secondaryHeadlines = secondaryHeadlines
         self.flow = flow
         self.avoidOpenings = avoidOpenings
     }

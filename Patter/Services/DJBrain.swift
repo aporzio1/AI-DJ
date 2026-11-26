@@ -58,7 +58,8 @@ final class DJBrain: DJBrainProtocol {
         - If a FLOW READ line is provided, let it set the spine of the transition:
           you're either stepping the room up, holding the lane, or bringing it
           down. Speak energy and mood, not theory.
-        - If there is news, make it one quick aside unless a summary gives real context.
+        - If there is news, read it like a newsreader — topic in natural spoken
+          form, context if a summary gives it — then return to the music.
         - End by naming the upcoming song once.
         - Do not repeat the same song, artist, listener name, or clock time.
 
@@ -106,16 +107,15 @@ final class DJBrain: DJBrainProtocol {
             instructions += """
 
 
-            A news topic and (usually) a short context blurb are provided below. You MUST weave them
-            into the script — paraphrase naturally, NEVER recite the headline or blurb verbatim. Do not
-            ignore them; the listener has explicitly opted in to hear news. The news topic is only a
-            quick aside right now, not a later tease and not the next item in the music queue.
-
-            If a NEWS SUMMARY field is present, give the listener 1–2 sentences of actual context on
-            the story — what happened, who's involved, why it matters — then bridge back by naming
-            the NEXT SONG. If only a NEWS TOPIC is present, mention it briefly in one sentence and
-            do not invent article details. For news segments with a summary, override the usual length
-            guidance: aim for 4–5 sentences, 60–100 words.
+            News time: read it like a radio newsreader, not a footnote. Say the NEWS TOPIC in
+            natural spoken form — you may trim or lightly reword the headline so it sounds said
+            out loud, but never invent facts it doesn't contain. Then, if a NEWS SUMMARY is
+            provided, give 1-2 sentences of real context: what happened, who's involved, why it
+            matters. If SECONDARY HEADLINE fields are present, give each one short sentence after
+            the lead story. No article details beyond what the summary says. Then bridge back to
+            the NEXT SONG. This is happening NOW on the air — the news is never a tease, never
+            "coming up", never the next item in the queue. With a summary, let the break run
+            4-6 sentences, 60-110 words; without one, keep it a single clean mention.
             """
         }
         let session = LanguageModelSession(instructions: instructions)
@@ -198,6 +198,15 @@ final class DJBrain: DJBrainProtocol {
                     ? String(newsContext.prefix(500)) + "…"
                     : newsContext
                 parts.append("NEWS SUMMARY: \(truncated)")
+            }
+            for secondary in context.secondaryHeadlines {
+                parts.append("SECONDARY HEADLINE, NOT A SONG: \(cleanHeadline(secondary.title))")
+                if let secondaryContext = usableNewsContext(from: secondary.summary) {
+                    let truncated = secondaryContext.count > 250
+                        ? String(secondaryContext.prefix(250)) + "…"
+                        : secondaryContext
+                    parts.append("SECONDARY SUMMARY: \(truncated)")
+                }
             }
         }
 
@@ -308,6 +317,9 @@ final class DJBrain: DJBrainProtocol {
             "NEWS TOPIC",
             "NEWS CONTEXT",
             "NEWS SUMMARY",
+            "SECONDARY HEADLINE",
+            "SECONDARY SUMMARY",
+            "FLOW READ",
             "NEXT SONG",
             "SEGMENT:",
             "Current time:",
