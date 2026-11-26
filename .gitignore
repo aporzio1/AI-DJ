@@ -20,3 +20,5 @@ Patter.doccarchive/
 # Xcode Cloud needs the generated project + scheme in the clone
 !Patter.xcodeproj/
 !Patter.xcodeproj/**
+!Patter.xcodeproj/project.xcworkspace/
+!Patter.xcodeproj/project.xcworkspace/**
