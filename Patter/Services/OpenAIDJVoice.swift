@@ -19,13 +19,15 @@ enum OpenAITTSVoice: String, CaseIterable, Identifiable {
 }
 
 enum OpenAITTSModel: String, CaseIterable, Identifiable {
+    case gpt4o_mini = "gpt-4o-mini-tts"
     case tts_1 = "tts-1"
     case tts_1_hd = "tts-1-hd"
     var id: String { rawValue }
     var displayName: String {
         switch self {
-        case .tts_1:    "Standard"
-        case .tts_1_hd: "HD"
+        case .gpt4o_mini: "Conversational"
+        case .tts_1:      "Standard"
+        case .tts_1_hd:   "HD"
         }
     }
 }
@@ -82,12 +84,21 @@ final class OpenAIDJVoice: DJVoiceProtocol, @unchecked Sendable {
 
         let activeModel = model
         let voice = OpenAITTSVoice(rawValue: voiceIdentifier) ?? .alloy
-        let body: [String: Any] = [
+        var body: [String: Any] = [
             "model": activeModel.rawValue,
             "voice": voice.rawValue,
             "input": script,
             "response_format": "mp3"
         ]
+        // gpt-4o-mini-tts accepts style `instructions` — the difference between
+        // "reading a script" and "talking like a DJ". Other models ignore it.
+        if activeModel == .gpt4o_mini {
+            body["instructions"] = """
+            You are a radio DJ on the mic between songs. Speak warm and human: relaxed \
+            pacing, natural rhythm, a slight smile in the voice. Slight pauses between \
+            thoughts, never rushed, never announcing. Sound like you're enjoying the record.
+            """
+        }
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
         Log.voice.info("OpenAI TTS request (model=\(activeModel.rawValue, privacy: .public), voice=\(voice.rawValue, privacy: .public), chars=\(script.count))")

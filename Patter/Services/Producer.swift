@@ -1,4 +1,5 @@
 import Foundation
+import AVFoundation
 
 /// Subscribes to PlaybackCoordinator advance events and primes DJ segments in advance.
 /// On any failure in the generation pipeline, degrades gracefully (never stops music).
@@ -9,6 +10,9 @@ actor Producer {
         var newsEnabled: Bool
         var djFrequency: DJFrequency = .default
         var newsFrequency: NewsFrequency = .default
+        /// Seconds of the upcoming track that start under the tail of the DJ's
+        /// voice (talk-over handoff) so breaks don't end in dead air. 0 disables.
+        var talkOverTail: TimeInterval = 1.8
         static let `default` = Config(
             djEnabled: true,
             newsEnabled: true,
@@ -28,6 +32,10 @@ actor Producer {
     private var voiceOverride: String?
 
     private var recentTracks: [Patter.Track] = []
+    /// First words of the last few breaks — keeps the DJ from opening every
+    /// break with the same greeting.
+    private var recentOpenings: [String] = []
+    private static let openingMemoryCount = 3
     private var monitorTask: Task<Void, Never>?
     private var tracksSinceLastSegment = 0
     private var hasGivenIntro = false
@@ -294,6 +302,7 @@ actor Producer {
             feedbackSummary = nil
         }
 
+        let flow = DJFlowReader.read(previous: recentTracks.last, next: upcomingTrack)
         let context = DJContext(
             placement: placement,
             persona: persona,
@@ -303,7 +312,9 @@ actor Producer {
             currentTimeString: DJContext.currentClockString(),
             newsHeadline: headline,
             listenerName: listenerName,
-            feedback: feedbackSummary
+            feedback: feedbackSummary,
+            flow: flow,
+            avoidOpenings: recentOpenings
         )
 
         let script: String
@@ -317,20 +328,42 @@ actor Producer {
 
         do {
             let audioURL = try await voice.renderToFile(script: script, voiceIdentifier: currentVoiceIdentifier)
-            Log.producer.debug("DJVoice rendered to \(audioURL.lastPathComponent, privacy: .public)")
+            Log.voice.debug("DJVoice rendered to \(audioURL.lastPathComponent, privacy: .public)")
+            recordOpening(of: script)
             return DJSegment(
                 id: UUID(),
                 kind: headline != nil ? .news : .announcement,
                 script: script,
                 audioFileURL: audioURL,
                 duration: estimateDuration(script: script),
-                overlapStart: nil,
+                overlapStart: talkOverSeconds(renderedURL: audioURL),
                 sourceHeadline: headline
             )
         } catch {
-            Log.producer.error("DJVoice failed: \(error, privacy: .public) — skipping segment")
+            Log.producer.error("DJVoice failed: \(error.localizedDescription, privacy: .public) — skipping segment")
             return nil
         }
+    }
+
+    /// Seconds of next track allowed under the voice tail. Requires the real
+    /// rendered length (estimate is wpm math, not audio): a talk-over needs at
+    /// least ~4s of clean voice before the music can come up under it.
+    private func talkOverSeconds(renderedURL: URL) -> TimeInterval? {
+        let tail = config.talkOverTail
+        guard tail > 0 else { return nil }
+        guard let file = try? AVAudioFile(forReading: renderedURL),
+              file.processingFormat.sampleRate > 0 else { return nil }
+        let seconds = Double(file.length) / file.processingFormat.sampleRate
+        guard seconds >= 4 else { return nil }
+        return min(tail, seconds * 0.4)
+    }
+
+    /// Remember how this break opened so the next one can't open the same way.
+    private func recordOpening(of script: String) {
+        let words = script.split(whereSeparator: \.isWhitespace).prefix(3).joined(separator: " ")
+        guard !words.isEmpty else { return }
+        recentOpenings.append(String(words))
+        if recentOpenings.count > Self.openingMemoryCount { recentOpenings.removeFirst() }
     }
 
     private func estimateDuration(script: String) -> TimeInterval {

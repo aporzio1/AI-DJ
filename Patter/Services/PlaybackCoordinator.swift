@@ -1,4 +1,5 @@
 import Foundation
+import AVFoundation
 
 enum CoordinatorState: Sendable, Equatable {
     case idle, playing, paused, buffering
@@ -428,17 +429,102 @@ actor PlaybackCoordinator {
         state = .playing
         Log.coordinator.info("playSegment kind=\(String(describing: segment.kind), privacy: .public) script=\"\(segment.script, privacy: .public)\" (gen=\(myGen))")
         try? await router.pause()
+
+        // Talk-over handoff (realism): start the upcoming track under the tail
+        // of the DJ's voice so the break doesn't end in dead air — a real DJ
+        // rides the intro. Only fires when the Producer armed an overlap and
+        // the voice is long enough to keep a clean opening.
+        var handoffTrack: Track?
+        var leader = TimeInterval(0)
+        if let overlap = segment.overlapStart, overlap > 0,
+           currentIndex + 1 < queue.count, case .track(let nextTrack) = queue[currentIndex + 1],
+           let audioSeconds = Self.audioDuration(of: segment.audioFileURL),
+           audioSeconds > overlap + 1.5 {
+            handoffTrack = nextTrack
+            leader = max(0.3, audioSeconds - overlap)
+        }
+
+        var handoffStarted = false
         do {
-            try await audioGraph.play(url: segment.audioFileURL)
-            Log.coordinator.info("segment done, resuming queue (gen=\(myGen))")
+            if let track = handoffTrack {
+                handoffStarted = await Self.rideSegmentHandoff(
+                    coordinator: self, graph: audioGraph, url: segment.audioFileURL,
+                    leader: leader, generation: myGen, track: track
+                )
+                Log.coordinator.info("segment done (handoffStarted=\(handoffStarted), gen=\(myGen))")
+            } else {
+                try await audioGraph.play(url: segment.audioFileURL)
+                Log.coordinator.info("segment done, resuming queue (gen=\(myGen))")
+            }
         } catch {
-            Log.coordinator.error("segment playback failed: \(error, privacy: .public) — advancing anyway (gen=\(myGen))")
+            Log.coordinator.error("segment playback failed: \(error.localizedDescription, privacy: .public) — advancing anyway (gen=\(myGen))")
         }
         guard playbackGeneration == myGen else {
             Log.coordinator.info("playSegment(gen=\(myGen)) skipping advance — superseded")
             return
         }
-        await advance()
+        if handoffStarted, let track = handoffTrack {
+            // The track is already playing under the voice tail — step onto it
+            // and monitor to its end instead of restarting it from zero.
+            currentIndex += 1
+            try? await monitorTrackUntilEnd(track: track)
+        } else {
+            await advance()
+        }
+    }
+
+    /// Voice playback racing the talk-over handoff timer. Lives as a
+    /// `nonisolated` static with only Sendable captures so Swift 6 region
+    /// isolation accepts the task-group closures (an actor-isolated group
+    /// body over `self` trips the sending-closure checker — K35 lineage).
+    /// Returns true when the track was started under the voice.
+    private nonisolated static func rideSegmentHandoff(
+        coordinator: PlaybackCoordinator,
+        graph: any AudioGraphProtocol,
+        url: URL,
+        leader: TimeInterval,
+        generation: Int,
+        track: Track
+    ) async -> Bool {
+        await withThrowingTaskGroup(of: Bool.self) { group in
+            group.addTask {
+                // Swallowed like the caller's do/catch: a failed voice render
+                // must not strand the queue.
+                try? await graph.play(url: url)
+                return false
+            }
+            group.addTask {
+                try? await Task.sleep(for: .seconds(leader))
+                // Skip if anything (skip/pause/replace) took over while the
+                // voice was still up — that caller owns the transport.
+                if await coordinator.playbackGeneration == generation,
+                   await coordinator.state == .playing {
+                    try? await coordinator.startTrackForTalkOver(track)
+                    return true
+                }
+                return false
+            }
+            var fired = false
+            while let result = try? await group.next() {
+                fired = fired || result
+            }
+            return fired
+        }
+    }
+
+    /// Router hop for the talk-over start, internal so `rideSegmentHandoff`
+    /// can reach `router` from outside the actor's isolated members.
+    func startTrackForTalkOver(_ track: Track) async throws {
+        try await router.start(track: track)
+    }
+
+    /// Real audio length of a rendered DJ segment file. `DJSegment.duration` is
+    /// wpm math and can be several seconds off the TTS output — the talk-over
+    /// timer needs the truth.
+    private static func audioDuration(of url: URL) -> TimeInterval? {
+        guard let file = try? AVAudioFile(forReading: url),
+              file.processingFormat.sampleRate > 0 else { return nil }
+        return Double(file.length) / file.processingFormat.sampleRate
     }
 
     private func advance() async {

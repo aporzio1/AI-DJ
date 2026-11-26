@@ -11,6 +11,29 @@ struct DJContext: Sendable {
     let newsHeadline: NewsHeadline?
     let listenerName: String?
     let feedback: FeedbackSummary?
+    /// Energy read of previous→upcoming from `DJFlowReader`. The DJ's
+    /// transition spine. nil only when flow reading was skipped.
+    let flow: DJFlowRead?
+    /// First words of the last few breaks, so the DJ doesn't open every break
+    /// with the same greeting.
+    let avoidOpenings: [String]
+
+    init(placement: Placement, persona: DJPersona, upcomingTrack: Track,
+         recentTracks: [Track], timeOfDay: TimeOfDay, currentTimeString: String,
+         newsHeadline: NewsHeadline?, listenerName: String?, feedback: FeedbackSummary?,
+         flow: DJFlowRead? = nil, avoidOpenings: [String] = []) {
+        self.placement = placement
+        self.persona = persona
+        self.upcomingTrack = upcomingTrack
+        self.recentTracks = recentTracks
+        self.timeOfDay = timeOfDay
+        self.currentTimeString = currentTimeString
+        self.newsHeadline = newsHeadline
+        self.listenerName = listenerName
+        self.feedback = feedback
+        self.flow = flow
+        self.avoidOpenings = avoidOpenings
+    }
 
     enum Placement: String, Sendable {
         case opening

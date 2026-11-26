@@ -64,7 +64,17 @@ final class DJVoiceRouter: DJVoiceProtocol, @unchecked Sendable {
             do {
                 return try await openAI.renderToFile(script: script, voiceIdentifier: voiceIdentifier)
             } catch {
-                Log.voice.error("OpenAI provider failed (\(error.localizedDescription, privacy: .public)) — falling back to System voice")
+                Log.voice.error("OpenAI provider failed (\(error.localizedDescription, privacy: .public)) — falling back")
+                // Kokoro sounds materially more human than the system voices, so
+                // prefer it whenever the model is already on disk; system is the
+                // always-available floor.
+                if KokoroDJVoice.isModelInstalled {
+                    do {
+                        return try await kokoro.renderToFile(script: script, voiceIdentifier: "")
+                    } catch {
+                        Log.voice.error("Kokoro fallback failed too — using System voice")
+                    }
+                }
                 return try await system.renderToFile(script: script, voiceIdentifier: fallbackSystemVoice())
             }
         case .kokoro:

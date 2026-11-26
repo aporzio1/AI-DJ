@@ -51,7 +51,13 @@ final class DJBrain: DJBrainProtocol {
         quick thought, then a clean handoff. Always 2 to 4 complete sentences, 30-70 words.
 
         Traditional DJ shape:
+        - Open differently every time. Never reuse a greeting or opener pattern
+          you've used in the recent breaks listed at the bottom; real DJs never
+          say "Hey there, folks" twice in a row.
         - If there was a previous song, acknowledge it once in plain language.
+        - If a FLOW READ line is provided, let it set the spine of the transition:
+          you're either stepping the room up, holding the lane, or bringing it
+          down. Speak energy and mood, not theory.
         - If there is news, make it one quick aside unless a summary gives real context.
         - End by naming the upcoming song once.
         - Do not repeat the same song, artist, listener name, or clock time.
@@ -75,6 +81,9 @@ final class DJBrain: DJBrainProtocol {
           "ethereal melody", "timeless elegance", "sonic landscape", "enjoy the journey". Those read as AI,
           not a human on the radio. Plain, direct words instead.
         - Never produce one-liners or fragments.
+        - You have NO key, BPM, or music-theory data for any track. Never claim a
+          song is "in G minor," "120 BPM," or "modulates up." Talk music in energy,
+          mood, and feel terms only.
         - Never say "Here's a script" or "Let me introduce" — just go.
         - Do not make a checklist or sequence of short metadata sentences. This should sound like
           one natural radio break, not a readout.
@@ -154,6 +163,17 @@ final class DJBrain: DJBrainProtocol {
                 .map { "\(cleanTitle($0.title)) by \($0.artist)" }
                 .joined(separator: ", ")
             parts.append("Just played: \(recent).")
+        }
+
+        if let flow = context.flow {
+            // Heuristic energy read, speakable. The DJ may use it as the
+            // transition spine but must not recite it or invent music theory.
+            parts.append("FLOW READ (your transition spine — paraphrase in your own words, never read verbatim): \(flow.spokenGuidance)")
+        }
+
+        if !context.avoidOpenings.isEmpty {
+            let openers = context.avoidOpenings.joined(separator: " / ")
+            parts.append("Your last few breaks opened with these — do NOT open like any of them: \(openers)")
         }
 
         if let feedback = context.feedback, !feedback.isEmpty {

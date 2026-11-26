@@ -54,7 +54,10 @@ The `patter-pm` subagent owns that tracker. Consult it BEFORE surfacing non-triv
 - Bundle ID: `com.andrewporzio.patter`
 - Targets: iOS 26.0, macOS 26.0 (Apple Silicon only)
 - Swift 6.0 strict concurrency
-- No Spotify, no MLX, no talk-over (MVP)
+- No Spotify, no MLX. Talk-over handoff shipped: the upcoming track can start
+  under the tail of the DJ's voice (`DJSegment.overlapStart`, armed by Producer
+  from real rendered audio length; `PlaybackCoordinator.playSegment` rides the
+  intro instead of dead-air). `Producer.Config.talkOverTail` (default 1.8s, 0 = off).
 - Renamed from "AI DJ" → "Patter" on 2026-04-23 (see project tracker for the rename rationale + research)
 
 For coding style, commit/PR conventions, and test-suite structure, see `AGENTS.md`.

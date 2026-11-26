@@ -331,7 +331,11 @@ private extension Track {
             album: song.albumTitle ?? "",
             artworkURL: song.artwork?.url(width: 300, height: 300),
             duration: song.duration.map { TimeInterval($0) } ?? 0,
-            providerID: .appleMusic
+            providerID: .appleMusic,
+            genreNames: song.genreNames,
+            releaseYear: song.releaseDate.map {
+                Calendar.current.component(.year, from: $0)
+            }
         )
     }
 }
