@@ -142,6 +142,7 @@ final class KokoroDJVoice: DJVoiceProtocol, Sendable {
             .appendingPathComponent(UUID().uuidString)
             .appendingPathExtension("wav")
 
+        guard KokoroDJVoice.isUsableOnThisOS else { throw KokoroDJVoiceError.initializationTimeout(seconds: 0) }
         Log.voice.info("Kokoro TTS request (voice=\(voice ?? "default", privacy: .public), chars=\(script.count))")
         let started = ContinuousClock.now
         try await synth.render(text: script, voice: voice, outputURL: outputURL)
@@ -155,6 +156,7 @@ final class KokoroDJVoice: DJVoiceProtocol, Sendable {
     /// Forces a download + load without synthesizing, so the user can pre-stage
     /// the ~300 MB assets from Settings instead of paying the cost on first segment.
     func prepareModel() async throws {
+        guard KokoroDJVoice.isUsableOnThisOS else { throw KokoroDJVoiceError.initializationTimeout(seconds: 0) }
         try await synth.ensureInitialized()
     }
 
@@ -164,6 +166,16 @@ final class KokoroDJVoice: DJVoiceProtocol, Sendable {
         await synth.reset()
         DownloadUtils.clearAllModelCaches()
         Log.voice.info("Kokoro model cache cleared")
+    }
+
+    /// CoreML Kokoro is unusable on iOS 26/27: 26 segfaults in libBNNS, 27
+    /// asserts in MPSGraph's MLIR pipeline mid-compile — and an MPSGraph
+    /// assert kills the process, which no in-app catch can survive. Every
+    /// Kokoro entry point short-circuits through here so the provider case,
+    /// the router's fallback chain, and the background warmup are all sealed.
+    static var isUsableOnThisOS: Bool {
+        if #available(iOS 26.0, *) { return false }
+        return true
     }
 
     /// Whether the Kokoro model directory exists and is non-empty on disk.
