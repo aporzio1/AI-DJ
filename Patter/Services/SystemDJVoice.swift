@@ -27,7 +27,16 @@ final class SystemDJVoice: DJVoiceProtocol, @unchecked Sendable {
     private static func makeSynthesizer() -> AVSpeechSynthesizer {
         let synth = AVSpeechSynthesizer()
 #if os(iOS)
-        synth.usesApplicationAudioSession = false
+        if #available(iOS 26.0, *) {
+            // iOS 27 beta: the detached AU graph never connects to the audio
+            // server (IPCAUClient -66748), so every render is permanently
+            // mute. Ride the app's shared session instead — MusicKit proves
+            // that connection is alive — and eat the (26-era) re-activation
+            // cost, which beats silence.
+            synth.usesApplicationAudioSession = true
+        } else {
+            synth.usesApplicationAudioSession = false
+        }
 #endif
         return synth
     }
