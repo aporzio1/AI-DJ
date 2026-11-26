@@ -221,23 +221,25 @@ final class SettingsViewModel {
         }
     }
 
-    /// On iOS 26.x, FluidAudio's Kokoro CoreML model triggers a hard segfault
-    /// inside libBNNS.dylib's SME2 1D-conv-transpose kernel during model load
-    /// (tracker K6, FB radar pending). The crash is in Apple framework code so
-    /// the in-app `try/catch` fallback in DJVoiceRouter can't catch it — the
-    /// process is dead before the fallback runs. So if the persisted provider
-    /// is `.kokoro` on iOS 26, force-flip it to `.system` once and surface a
+    /// On iOS 26.x AND 27.x betas, FluidAudio's Kokoro CoreML model kills the
+    /// process in Apple framework code: 26.x segfaults in libBNNS SME2
+    /// conv-transpose-1D at load (K6); 27.3 betas abort via MTLReportFailure
+    /// inside MPSGraph/Espresso at prediction time (crashpoint e74a19c6,
+    /// iPhone17,1, 2026-11-26). In-app catch cannot survive either — the
+    /// process dies before the fallback runs. So if the persisted provider
+    /// is `.kokoro` on iOS 26+, force-flip it to `.system` once and surface a
     /// notice. The sentinel is per-device and one-shot: if the user re-enables
     /// Kokoro afterwards we respect their choice and don't fight them.
+    /// On-device Kokoro returns via the CPU (sherpa-onnx) path, not CoreML.
     private func applyIOS26KokoroDowngradeIfNeeded() {
         #if os(iOS)
         let alreadyDowngraded = UserDefaults.standard.bool(forKey: Self.kokoroDowngradedFromIOS26Key)
         guard !alreadyDowngraded,
               ttsProvider == .kokoro,
-              ProcessInfo.processInfo.operatingSystemVersion.majorVersion == 26
+              ProcessInfo.processInfo.operatingSystemVersion.majorVersion >= 26
         else { return }
 
-        Log.app.warning("Auto-downgrading TTS provider .kokoro → .system on iOS 26 (tracker K6)")
+        Log.app.warning("Auto-downgrading TTS provider .kokoro → .system on iOS 26+ (tracker K6)")
         ttsProvider = .system
         UserDefaults.standard.set(true, forKey: Self.kokoroDowngradedFromIOS26Key)
         UserDefaults.standard.set(ttsProvider.rawValue, forKey: Self.ttsProviderKey)
