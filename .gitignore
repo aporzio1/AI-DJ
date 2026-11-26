@@ -16,3 +16,7 @@ xcuserdata/
 *.xcscmblueprint
 .build/
 Patter.doccarchive/
+
+# Xcode Cloud needs the generated project + scheme in the clone
+!Patter.xcodeproj/
+!Patter.xcodeproj/**
