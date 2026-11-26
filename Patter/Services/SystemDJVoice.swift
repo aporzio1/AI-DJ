@@ -20,24 +20,42 @@ final class SystemDJVoice: DJVoiceProtocol, @unchecked Sendable {
     /// shift the private session might pick is handled.
     /// Producer awaits each `renderToFile` before starting the next, so concurrent
     /// access to this synth doesn't happen in normal operation.
-    private let synthesizer: AVSpeechSynthesizer = {
+    private var synthesizer: AVSpeechSynthesizer = SystemDJVoice.makeSynthesizer()
+
+    /// Fresh detached synth — private audio session so per-render AU
+    /// activations don't pre-empt MusicKit (K35).
+    private static func makeSynthesizer() -> AVSpeechSynthesizer {
         let synth = AVSpeechSynthesizer()
 #if os(iOS)
-        // iOS-only: detach synth's internal audio session from the shared one
-        // so per-render AU activations don't pre-empt MusicKit (K35).
         synth.usesApplicationAudioSession = false
 #endif
         return synth
-    }()
+    }
 
     func renderToFile(script: String, voiceIdentifier: String) async throws -> URL {
+        do {
+            return try await render(script: script, voiceIdentifier: voiceIdentifier, via: synthesizer)
+        } catch let error as DJVoiceError {
+            // The warm, reused synthesizer keeps its AU IPC graph alive for
+            // speed — but a wedged audio server (beta builds under load) can
+            // leave that graph permanently mute: write() then never delivers
+            // buffers and every render burns the timeout. One retry against a
+            // throwaway synthesizer sidesteps the poisoned graph; the OS hands
+            // it a fresh one. Cost only paid on recovery.
+            Log.voice.error("System render failed (\(String(reflecting: error), privacy: .public)) — recycling the synthesizer and retrying")
+            synthesizer = Self.makeSynthesizer()
+            return try await render(script: script, voiceIdentifier: voiceIdentifier, via: synthesizer)
+        }
+    }
+
+    private func render(script: String, voiceIdentifier: String, via synth: AVSpeechSynthesizer) async throws -> URL {
         let voice = Self.voice(for: voiceIdentifier)
         let utterances = Self.makeUtterances(for: script, voice: voice)
         let outputURL = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
             .appendingPathExtension("caf")
 
-        let renderer = SpeechRenderer(synthesizer: synthesizer, utterances: utterances, outputURL: outputURL)
+        let renderer = SpeechRenderer(synthesizer: synth, utterances: utterances, outputURL: outputURL)
 
         return try await withCheckedThrowingContinuation { continuation in
             let timeout = Task {
