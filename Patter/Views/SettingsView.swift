@@ -70,6 +70,14 @@ struct SettingsView: View {
         self.djVoice = djVoice
     }
 
+    /// "1.0 (18)" — marketing version + the build number baked at archive
+    /// time (git rev-count). The number to quote when asking "is the fix in?"
+    private var buildStamp: String {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?"
+        return "\(version) (\(build))"
+    }
+
     var body: some View {
         Form {
             musicServicesSection
@@ -84,6 +92,19 @@ struct SettingsView: View {
 #endif
             }
             iCloudSection
+
+            // Build stamp — lets us confirm which push is actually on-device
+            // after a pull+build, so "it's fixed" claims are checkable, not
+            // taken on faith. Current build = git rev-count, surfaced at launch.
+            Section {
+                LabeledContent("Version") {
+                    Text(buildStamp)
+                        .foregroundStyle(.secondary)
+                        .font(.callout.monospacedDigit())
+                }
+            } footer: {
+                Text("Version and build confirm the code currently installed on this device.")
+            }
         }
         .formStyle(.grouped)
         .navigationTitle("Settings")
