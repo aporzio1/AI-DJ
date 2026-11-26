@@ -14,8 +14,8 @@ actor AudioGraph: AudioGraphProtocol {
     /// practice. The annotation suppresses Swift 6's data-race checker for
     /// these two properties; every future AudioGraph touch must re-validate
     /// the above three preconditions still hold (K34, last reviewed 2026-05-01).
-    nonisolated(unsafe) private let engine = AVAudioEngine()
-    nonisolated(unsafe) private let playerNode = AVAudioPlayerNode()
+    private let engine = AVAudioEngine()
+    private let playerNode = AVAudioPlayerNode()
     private var pendingContinuation: CheckedContinuation<Void, Never>?
     private var lastBufferFormat: AVAudioFormat?
 
