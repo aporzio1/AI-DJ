@@ -157,6 +157,7 @@ struct RootView: View {
         case .system:  id = settings.voiceIdentifier
         case .openAI:  id = settings.openAIVoice
         case .kokoro:  id = settings.kokoroVoice
+        case .sherpaKokoro: id = settings.kokoroVoice
         }
         Task { await p.updateVoice(id) }
     }

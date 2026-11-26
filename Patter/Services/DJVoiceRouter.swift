@@ -4,6 +4,7 @@ enum TTSProvider: String, Codable, CaseIterable, Identifiable {
     case system = "system"
     case openAI = "openai"
     case kokoro = "kokoro"
+    case sherpaKokoro = "sherpa_kokoro"
 
     var id: String { rawValue }
     var displayName: String {
@@ -11,6 +12,7 @@ enum TTSProvider: String, Codable, CaseIterable, Identifiable {
         case .system: "Device Voices"
         case .openAI: "OpenAI"
         case .kokoro: "Kokoro (on-device)"
+        case .sherpaKokoro: "Kokoro CPU (on-device)"
         }
     }
 }
@@ -22,10 +24,12 @@ final class DJVoiceRouter: DJVoiceProtocol, @unchecked Sendable {
     private let system: SystemDJVoice
     private let openAI: OpenAIDJVoice
     private let kokoro: KokoroDJVoice
+    private let sherpa: SherpaKokoroDJVoice
 
     private let lock = NSLock()
     private var _provider: TTSProvider = .system
     private nonisolated(unsafe) var kokoroStrikes = 0
+    private nonisolated(unsafe) var sherpaStrikes = 0
 
     var provider: TTSProvider {
         get { lock.lock(); defer { lock.unlock() }; return _provider }
@@ -34,10 +38,12 @@ final class DJVoiceRouter: DJVoiceProtocol, @unchecked Sendable {
 
     init(system: SystemDJVoice = SystemDJVoice(),
          openAI: OpenAIDJVoice = OpenAIDJVoice(),
-         kokoro: KokoroDJVoice = KokoroDJVoice()) {
+         kokoro: KokoroDJVoice = KokoroDJVoice(),
+         sherpa: SherpaKokoroDJVoice = SherpaKokoroDJVoice()) {
         self.system = system
         self.openAI = openAI
         self.kokoro = kokoro
+        self.sherpa = sherpa
     }
 
     func setOpenAIModel(_ model: OpenAITTSModel) {
@@ -47,6 +53,9 @@ final class DJVoiceRouter: DJVoiceProtocol, @unchecked Sendable {
     // MARK: - Kokoro model management (proxied to the inner KokoroDJVoice)
 
     var isKokoroModelInstalled: Bool { KokoroDJVoice.isModelInstalled }
+    var isSherpaModelInstalled: Bool { SherpaModel.isModelInstalled }
+    func prepareSherpaModel(progress: @escaping @Sendable (Double) -> Void) async throws { try await SherpaModel.install(progress: progress) }
+    func removeSherpaModel() throws { try SherpaModel.removeModel() }
     func prepareKokoroModel() async throws { try await kokoro.prepareModel() }
     func removeKokoroModel() async throws { try await kokoro.removeModel() }
 
@@ -76,6 +85,23 @@ final class DJVoiceRouter: DJVoiceProtocol, @unchecked Sendable {
                         Log.voice.error("Kokoro fallback failed too — using System voice")
                     }
                 }
+                return try await system.renderToFile(script: script, voiceIdentifier: fallbackSystemVoice())
+            }
+        case .sherpaKokoro:
+            // CPU Kokoro: no Apple ML, no speech server. Two misses and it
+            // sits out the session; its only floor is System (which is
+            // itself unreliable on 27 betas — failure surfaces as a skipped
+            // segment, music rides on).
+            if sherpaStrikes >= 2 {
+                return try await system.renderToFile(script: script, voiceIdentifier: fallbackSystemVoice())
+            }
+            do {
+                let url = try await sherpa.renderToFile(script: script, voiceIdentifier: voiceIdentifier)
+                sherpaStrikes = 0
+                return url
+            } catch {
+                sherpaStrikes += 1
+                Log.voice.error("Sherpa Kokoro failed (\(error.localizedDescription, privacy: .public)) — falling back to System voice")
                 return try await system.renderToFile(script: script, voiceIdentifier: fallbackSystemVoice())
             }
         case .kokoro:

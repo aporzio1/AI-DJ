@@ -4,6 +4,9 @@ options:
   createIntermediateGroups: true
 
 packages:
+  sherpa-onnx:
+    url: https://github.com/k2-fsa/sherpa-onnx.git
+    version: 2.0.3
   FluidAudio:
     url: https://github.com/FluidInference/FluidAudio.git
     exactVersion: 0.13.5
@@ -30,6 +33,8 @@ targets:
     dependencies:
       - package: FluidAudio
         product: FluidAudio
+      - package: sherpa-onnx
+        product: sherpa-onnx
     preBuildScripts:
       - name: Set CFBundleVersion from git commit count
         basedOnDependencyAnalysis: false

@@ -49,6 +49,10 @@ struct SettingsView: View {
     // Kokoro model management
     private let djVoice: DJVoiceRouter
     @State private var kokoroModelInstalled: Bool = false
+    @State private var sherpaInstalled: Bool = false
+    @State private var sherpaBusy: Bool = false
+    @State private var sherpaProgress: Double = 0
+    @State private var sherpaError: String? = nil
     @State private var kokoroDownloading: Bool = false
     @State private var kokoroRemoving: Bool = false
     @State private var kokoroError: String?
@@ -118,6 +122,7 @@ struct SettingsView: View {
                 vm.save()
             }
             kokoroModelInstalled = djVoice.isKokoroModelInstalled
+            sherpaInstalled = djVoice.isSherpaModelInstalled
         }
         .confirmationDialog(
             "Remove Kokoro model?",
@@ -226,6 +231,8 @@ struct SettingsView: View {
                 openAIRows
             } else if vm.ttsProvider == .kokoro {
                 kokoroRows
+            } else if vm.ttsProvider == .sherpaKokoro {
+                sherpaRows
             }
         } header: {
             Text("Voice")
@@ -255,6 +262,42 @@ struct SettingsView: View {
     }
 
     @ViewBuilder
+    @ViewBuilder
+    private var sherpaRows: some View {
+        LabeledContent("Model") {
+            HStack(spacing: 4) {
+                Image(systemName: sherpaInstalled ? "checkmark.circle.fill" : "arrow.down.circle")
+                    .foregroundStyle(sherpaInstalled ? Color.green : Color.secondary)
+                Text(sherpaInstalled ? "Installed" : "Not Installed")
+            }
+        }
+        if sherpaBusy { ProgressView(value: sherpaProgress) }
+        if let sherpaError {
+            Text(sherpaError).font(.caption).foregroundStyle(.red)
+        }
+        Button(sherpaInstalled ? "Re-download Model" : "Download Model") {
+            sherpaBusy = true; sherpaError = nil; sherpaProgress = 0
+            Task {
+                do {
+                    try await djVoice.prepareSherpaModel { p in
+                        Task { @MainActor in sherpaProgress = p }
+                    }
+                    sherpaInstalled = true
+                } catch {
+                    sherpaError = error.localizedDescription
+                }
+                sherpaBusy = false
+            }
+        }
+        .disabled(sherpaBusy)
+        if sherpaInstalled {
+            Button("Remove Model", role: .destructive) {
+                try? djVoice.removeSherpaModel()
+                sherpaInstalled = false
+            }
+        }
+    }
+
     private var kokoroRows: some View {
         Picker("Voice", selection: $vm.kokoroVoice) {
             ForEach(KokoroVoice.allCases) { voice in
@@ -441,6 +484,8 @@ struct SettingsView: View {
             Text("Runs in the cloud. Requires an OpenAI API key. Costs roughly ¢0.6 per DJ segment on the Standard model; HD is double. Paste your key above — it's stored in the Keychain (synced across your devices via iCloud Keychain), never in UserDefaults or logs.")
         case .kokoro:
             Text("Runs fully on-device on the Apple Neural Engine — no API key, no network at render time. The first DJ segment downloads a ~300 MB model; after that everything stays local. American English only.")
+        case .sherpaKokoro:
+            Text("Runs fully on-device on the CPU through ONNX Runtime — bypasses Apple's ML stack and speech server entirely, which is what survives iOS 26/27 betas. First use downloads a ~146 MB int8 Kokoro model; every render after is local. American English only.")
         }
     }
 
