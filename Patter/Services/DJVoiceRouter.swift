@@ -25,6 +25,7 @@ final class DJVoiceRouter: DJVoiceProtocol, @unchecked Sendable {
 
     private let lock = NSLock()
     private var _provider: TTSProvider = .system
+    private nonisolated(unsafe) var kokoroStrikes = 0
 
     var provider: TTSProvider {
         get { lock.lock(); defer { lock.unlock() }; return _provider }
@@ -78,9 +79,17 @@ final class DJVoiceRouter: DJVoiceProtocol, @unchecked Sendable {
                 return try await system.renderToFile(script: script, voiceIdentifier: fallbackSystemVoice())
             }
         case .kokoro:
+            // Circuit breaker: two init/synth misses and Kokoro sits out the
+            // session — a 120 s timeout per break is silence in disguise.
+            if kokoroStrikes >= 2 {
+                return try await system.renderToFile(script: script, voiceIdentifier: fallbackSystemVoice())
+            }
             do {
-                return try await kokoro.renderToFile(script: script, voiceIdentifier: voiceIdentifier)
+                let url = try await kokoro.renderToFile(script: script, voiceIdentifier: voiceIdentifier)
+                kokoroStrikes = 0
+                return url
             } catch {
+                kokoroStrikes += 1
                 Log.voice.error("Kokoro provider failed (\(error.localizedDescription, privacy: .public)) — falling back to System voice")
                 return try await system.renderToFile(script: script, voiceIdentifier: fallbackSystemVoice())
             }
