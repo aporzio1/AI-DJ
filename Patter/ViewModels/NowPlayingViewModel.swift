@@ -166,6 +166,8 @@ final class NowPlayingViewModel {
         }
     }
 
+    var lastDJFailure: String? { producer?.lastFailure }
+
     func regenerateDJ() {
         guard let producer, !isRegenerating else { return }
         isRegenerating = true

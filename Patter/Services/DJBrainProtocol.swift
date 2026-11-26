@@ -73,4 +73,9 @@ struct DJContext: Sendable {
 protocol DJBrainProtocol: AnyObject, Sendable {
     /// Returns a script string (≤ ~200 chars) for the DJ to speak.
     func generateScript(for context: DJContext) async throws -> String
+    /// Pre-pays the Foundation Models cold start (K25).
+    func warmUp() async
+    /// True once the brain has answered at least once this session — cold
+    /// brains mean a slow first segment, which drives the play-first choice.
+    func isWarmed() async -> Bool
 }

@@ -72,6 +72,11 @@ final class FakeDJBrain: DJBrainProtocol, @unchecked Sendable {
     var generateCallCount = 0
     var shouldThrow = false
     var lastContext: DJContext?
+    /// Warmed by default so existing producer tests keep the warm path;
+    /// cold-open tests flip this to false.
+    var warmed = true
+    func warmUp() async { warmed = true }
+    func isWarmed() async -> Bool { warmed }
 
     func generateScript(for context: DJContext) async throws -> String {
         generateCallCount += 1

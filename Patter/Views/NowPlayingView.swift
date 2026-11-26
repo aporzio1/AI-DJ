@@ -150,6 +150,13 @@ struct NowPlayingView: View {
                 .padding(.vertical, 8)
                 .background(.thinMaterial, in: Capsule())
 
+            if let reason = vm.lastDJFailure {
+                Text("DJ quiet: \(reason)")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+
             Button {
                 vm.regenerateDJ()
             } label: {

@@ -39,6 +39,12 @@ actor Producer {
     private var monitorTask: Task<Void, Never>?
     private var tracksSinceLastSegment = 0
     private var hasGivenIntro = false
+    /// Last reason the DJ stayed silent, for the now-playing UI to surface —
+    /// silent failures cost a whole TestFlight cycle to diagnose (build 8).
+    private(set) nonisolated(unsafe) var lastFailure: String?
+    /// Play-first cold open: music starts immediately while the brain and
+    /// voice pay their cold-start cost under the first track (Porzio, build 8).
+    var playFirstColdOpen = true
 
     /// Rolling list of headline URLs we've handed to the DJ recently, so we
     /// don't inject the same headline repeatedly. Oldest-first; capped at
@@ -190,6 +196,16 @@ actor Producer {
         }
         let queue = await coordinator.queue
         guard let firstTrack = queue.first, case .track(let upcoming) = firstTrack else { return }
+        if playFirstColdOpen, await !brain.isWarmed() {
+            hasGivenIntro = true
+            tracksSinceLastSegment = 0
+            Log.brain.notice("cold open: music leads, DJ warms up under '\(upcoming.title, privacy: .public)'")
+            Task.detached(priority: .utility) { [brain, voice] in
+                await brain.warmUp()
+                _ = try? await voice.renderToFile(script: "Warm up.", voiceIdentifier: "")
+            }
+            return
+        }
         Log.producer.info("Priming opening intro for '\(upcoming.title, privacy: .public)'")
         guard let segment = await generateSegment(upcomingTrack: upcoming, placement: .opening) else { return }
         await coordinator.prependAndSelect(.djSegment(segment))
@@ -329,6 +345,7 @@ actor Producer {
             script = try await brain.generateScript(for: context)
             Log.producer.info("DJBrain script: \"\(script, privacy: .public)\"")
         } catch {
+            lastFailure = "brain: \(error.localizedDescription)"
             Log.producer.error("DJBrain failed (\(error, privacy: .public)) — falling back to canned template")
             script = "Up next, \(upcomingTrack.title) by \(upcomingTrack.artist)."
         }
@@ -347,6 +364,7 @@ actor Producer {
                 sourceHeadline: headline
             )
         } catch {
+            lastFailure = "voice: \(error.localizedDescription)"
             Log.producer.error("DJVoice failed: \(error.localizedDescription, privacy: .public) — skipping segment")
             return nil
         }

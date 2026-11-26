@@ -29,13 +29,19 @@ struct DJScriptResponse {
 
 final class DJBrain: DJBrainProtocol {
 
+    private nonisolated(unsafe) var warmed = false
+
+    func isWarmed() async -> Bool { warmed }
+
     /// Touch the on-device LLM once to force model load. Dramatically reduces
     /// first-segment latency (cold start can take 30-60s; warm is ~1-3s).
     func warmUp() async {
         let start = ContinuousClock.now
         Log.brain.info("warming up Foundation Models…")
         let session = LanguageModelSession(instructions: "You are a radio DJ.")
-        _ = try? await session.respond(to: "Say hi in three words.")
+        if (try? await session.respond(to: "Say hi in three words.")) != nil {
+            warmed = true
+        }
         let elapsed = ContinuousClock.now - start
         Log.brain.info("warm-up complete in \(String(describing: elapsed), privacy: .public)")
     }
