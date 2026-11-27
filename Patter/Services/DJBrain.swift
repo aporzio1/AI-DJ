@@ -130,6 +130,7 @@ final class DJBrain: DJBrainProtocol {
         let elapsed = ContinuousClock.now - genStart
         let script = response.content.script.trimmingCharacters(in: .whitespacesAndNewlines)
         Log.brain.info("generated in \(String(describing: elapsed), privacy: .public): \(script, privacy: .public)")
+        logEngine("SCRIPT \(elapsed): \(script.prefix(60))")
         let clean = stripEmoji(script).trimmingCharacters(in: .whitespacesAndNewlines)
         var sanitized = sanitizePromptLeakage(clean)
         sanitized = removeRepeatedTimeMentions(sanitized, currentTimeString: context.currentTimeString)

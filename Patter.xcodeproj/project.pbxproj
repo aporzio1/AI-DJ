@@ -46,6 +46,7 @@
 		80C9CCCB384A6EB804CF50FF /* Log.swift in Sources */ = {isa = PBXBuildFile; fileRef = D40036A09AA0C2280FC1EB2C /* Log.swift */; };
 		83FA701B3E587FBF1ED1C131 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 9985D9B01916DDE0742B8FAD /* Assets.xcassets */; };
 		90C1021444A170F796EA9A67 /* SettingsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = C453868242B553D9C113B0A7 /* SettingsViewModel.swift */; };
+		9125BF038314E038CE1911A4 /* LogBuffer.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB9D9E170F71C8E386BCC254 /* LogBuffer.swift */; };
 		93180698DF1AC0CC11614C3C /* QueueView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5562C76F9FD27DEC4525B8B /* QueueView.swift */; };
 		9A92397EFE39004B4A552913 /* DJSegment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A4086B01CF06148F444B5E6 /* DJSegment.swift */; };
 		9EB29C3C84B8E0D5EF1912C9 /* DJBrain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 025F9CD3E1F9E71CFF391480 /* DJBrain.swift */; };
@@ -156,6 +157,7 @@
 		F492E32159CC019DB30C7A09 /* Producer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Producer.swift; sourceTree = "<group>"; };
 		F56C28569C2E9906D0DF0064 /* OnboardingViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingViewModel.swift; sourceTree = "<group>"; };
 		F5C79C64F8F516CD51F0BC26 /* NewsFrequency.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewsFrequency.swift; sourceTree = "<group>"; };
+		FB9D9E170F71C8E386BCC254 /* LogBuffer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogBuffer.swift; sourceTree = "<group>"; };
 		FD4F551CF41E0AEB10BFA8FB /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		FEA817262FEEFE63F35921ED /* PatterApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PatterApp.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -284,6 +286,7 @@
 			children = (
 				8CD840BB92AF95499F4AF9A8 /* Keychain.swift */,
 				D40036A09AA0C2280FC1EB2C /* Log.swift */,
+				FB9D9E170F71C8E386BCC254 /* LogBuffer.swift */,
 			);
 			path = Utilities;
 			sourceTree = "<group>";
@@ -352,7 +355,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 6B02C3822D452D6EE6476A67 /* Build configuration list for PBXNativeTarget "Patter" */;
 			buildPhases = (
-				B2387752AB694BF047457127 /* Set CFBundleVersion from git commit count */,
+				4183D1966524134FC77A80E9 /* Set CFBundleVersion from build clock */,
 				CA650F679B6B8BEC59E93A62 /* Sources */,
 				22B91FC234E2DA005D7B16B3 /* Resources */,
 				80CBC749625FAEEC27C0D035 /* Frameworks */,
@@ -442,7 +445,7 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
-		B2387752AB694BF047457127 /* Set CFBundleVersion from git commit count */ = {
+		4183D1966524134FC77A80E9 /* Set CFBundleVersion from build clock */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
@@ -452,14 +455,14 @@
 			);
 			inputPaths = (
 			);
-			name = "Set CFBundleVersion from git commit count";
+			name = "Set CFBundleVersion from build clock";
 			outputFileListPaths = (
 			);
 			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "# Derive CFBundleVersion from git commit count so every commit\n# gets a unique TestFlight build number — no manual agvtool bumps.\n# We modify the SOURCE Info.plist here (preBuild). Xcode's\n# ProcessInfoPlistFile phase runs AFTER all script phases and\n# picks up the new value when baking the bundle.\n#\n# The source Info.plist's CFBundleVersion will track the\n# last-built number. Commit it periodically to keep history\n# clean — or don't, and let it float locally between archives.\n# Either way, the bundle that ships to TestFlight has a unique\n# incrementing number.\nSOURCE_PLIST=\"${SRCROOT}/Patter/Resources/Info.plist\"\nBUILD_NUMBER=$(cd \"$SRCROOT\" && git rev-list --count HEAD 2>/dev/null || echo \"1\")\n/usr/libexec/PlistBuddy -c \"Set :CFBundleVersion $BUILD_NUMBER\" \"$SOURCE_PLIST\"\necho \"Set CFBundleVersion=$BUILD_NUMBER (from git commit count)\"\n";
+			shellScript = "# Derive CFBundleVersion from git commit count so every commit\n# gets a unique TestFlight build number — no manual agvtool bumps.\n# We modify the SOURCE Info.plist here (preBuild). Xcode's\n# ProcessInfoPlistFile phase runs AFTER all script phases and\n# picks up the new value when baking the bundle.\n#\n# The source Info.plist's CFBundleVersion will track the\n# last-built number. Commit it periodically to keep history\n# clean — or don't, and let it float locally between archives.\n# Either way, the bundle that ships to TestFlight has a unique\n# incrementing number.\nSOURCE_PLIST=\"${SRCROOT}/Patter/Resources/Info.plist\"\nBUILD_NUMBER=$(date +%y%m%d%H%M)\n/usr/libexec/PlistBuddy -c \"Set :CFBundleVersion $BUILD_NUMBER\" \"$SOURCE_PLIST\"\necho \"Set CFBundleVersion=$BUILD_NUMBER (build clock yymmddHHmm)\"\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -490,6 +493,7 @@
 				71C7D6985AA6B4809CFC8CED /* LibraryView.swift in Sources */,
 				B162ADD6387408095C071AE6 /* LibraryViewModel.swift in Sources */,
 				80C9CCCB384A6EB804CF50FF /* Log.swift in Sources */,
+				9125BF038314E038CE1911A4 /* LogBuffer.swift in Sources */,
 				0192ABCBCA16CE6F12E38C33 /* MiniPlayerBar.swift in Sources */,
 				022DEC5A6626FEDBFAFB5E55 /* MusicKitService.swift in Sources */,
 				C860E9BBEEB3D58430966CD2 /* MusicProviderRouter.swift in Sources */,

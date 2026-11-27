@@ -117,14 +117,19 @@ final class DJVoiceRouter: DJVoiceProtocol, @unchecked Sendable {
                 return url
             } catch {
                 sherpaStrikes += 1
+                logEngine("SHERPA-FAIL(\(error.localizedDescription)) -> edge")
                 Log.voice.error("Sherpa Kokoro failed (\(error.localizedDescription, privacy: .public)) — trying Edge Neural")
                 if edgeStrikes < 2 {
                     do {
                         let url = try await edge.renderToFile(script: script, voiceIdentifier: voiceIdentifier)
                         edgeStrikes = 0
                         return url
-                    } catch { edgeStrikes += 1 }
+                    } catch {
+                        edgeStrikes += 1
+                        logEngine("EDGE-FAIL -> system")
+                    }
                 }
+                logEngine("SYSTEM voice spoke")
                 return try await system.renderToFile(script: script, voiceIdentifier: fallbackSystemVoice())
             }
         case .kokoro:
@@ -157,6 +162,7 @@ final class DJVoiceRouter: DJVoiceProtocol, @unchecked Sendable {
                 return url
             } catch {
                 edgeStrikes += 1
+                logEngine("EDGE-FAIL(\(error.localizedDescription)) -> local tier")
                 Log.voice.error("Edge TTS failed (\(error.localizedDescription, privacy: .public)) — falling back to local tier")
             }
         }
@@ -164,11 +170,15 @@ final class DJVoiceRouter: DJVoiceProtocol, @unchecked Sendable {
         // that is gone (alive again once Apple ships a fixed speech server).
         if SherpaModel.isModelInstalled {
             do {
-                return try await sherpa.renderToFile(script: script, voiceIdentifier: voiceIdentifier)
+                let url = try await sherpa.renderToFile(script: script, voiceIdentifier: voiceIdentifier)
+                logEngine("SHERPA floor spoke")
+                return url
             } catch {
+                logEngine("SHERPA floor failed -> system")
                 Log.voice.error("Sherpa floor failed too — using system voice")
             }
         }
+        logEngine("SYSTEM voice spoke")
         return try await system.renderToFile(script: script, voiceIdentifier: fallbackSystemVoice())
     }
 

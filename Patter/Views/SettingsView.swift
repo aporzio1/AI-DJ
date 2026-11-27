@@ -61,6 +61,8 @@ struct SettingsView: View {
     @State private var kokoroPreviewPlayer: AVAudioPlayer?
 
     @State private var showingPersonaList = false
+    @State private var djLogExport: String = ""
+    @State private var djLogURL: URL?
     @State private var feedPendingRemoval: String?
     @State private var showingResetOnboardingConfirm = false
     @State private var showingResetOnboardingDone = false
@@ -107,11 +109,12 @@ struct SettingsView: View {
                         .font(.callout.monospacedDigit())
                 }
             } footer: {
-                Text("Version and build confirm the code currently installed on this device.")
+                Text("Version and build confirm the code currently installed on this device. The DJ engine log records which voice spoke each line and why, for diagnostics.")
             }
         }
         .formStyle(.grouped)
         .navigationTitle("Settings")
+        .task { await prepareDJLog() }
         .onAppear {
             availableVoices = VoiceOption.installedEnglish()
             // If the previously-saved voice isn't installed anymore, fall back to default
@@ -145,6 +148,16 @@ struct SettingsView: View {
 
     // MARK: - Music Services
 
+    /// Writes the ring-buffer log to a shareable .txt in tmp; Settings shows a
+    /// ShareLink to it. Tapping "Refresh log" re-captures after new events.
+    private func prepareDJLog() async {
+        let dump = await LogBuffer.shared.dump()
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("patter-dj-log.txt")
+        let body = dump.isEmpty ? "no engine events recorded yet this session" : dump
+        try? body.write(to: url, atomically: true, encoding: .utf8)
+        djLogURL = url
+    }
+
     private var musicServicesSection: some View {
         Section {
             LabeledContent("Apple Music") {
@@ -168,6 +181,10 @@ struct SettingsView: View {
         Section {
             Toggle("Enable DJ", isOn: $vm.djEnabled)
                 .onChange(of: vm.djEnabled) { _, _ in vm.save() }
+
+            if let url = djLogURL {
+                ShareLink("Share DJ engine log", item: url)
+            }
 
             Picker("Frequency", selection: $vm.djFrequency) {
                 ForEach(DJFrequency.allCases) { freq in

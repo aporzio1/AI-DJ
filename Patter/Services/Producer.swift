@@ -199,6 +199,7 @@ actor Producer {
         if playFirstColdOpen, await !brain.isWarmed() {
             hasGivenIntro = true
             tracksSinceLastSegment = 0
+            logEngine("COLD-OPEN: music leads, brain cold")
             Log.brain.notice("cold open: music leads, DJ warms up under '\(upcoming.title, privacy: .public)'")
             Task.detached(priority: .utility) { [brain, voice] in
                 await brain.warmUp()
@@ -206,6 +207,7 @@ actor Producer {
             }
             return
         }
+        logEngine("PRIMING opening intro '\(upcoming.title)'")
         Log.producer.info("Priming opening intro for '\(upcoming.title, privacy: .public)'")
         guard let segment = await generateSegment(upcomingTrack: upcoming, placement: .opening) else { return }
         await coordinator.prependAndSelect(.djSegment(segment))

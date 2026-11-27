@@ -11,7 +11,7 @@ import AVFAudio
 /// bounds every render and misses fall through to the offline Sherpa tier.
 final class EdgeTTSDJVoice: DJVoiceProtocol, @unchecked Sendable {
     private let defaultVoice = "en-US-AriaNeural"
-    private let renderDeadline: TimeInterval = 2.5
+    private let renderDeadline: TimeInterval = 6.0
 
     private static let origin = "chrome-extension://jdiccldimpdaibmpdkjnbmckianbfold"
     private static let browserUA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0"
@@ -27,6 +27,7 @@ final class EdgeTTSDJVoice: DJVoiceProtocol, @unchecked Sendable {
     func renderToFile(script: String, voiceIdentifier: String) async throws -> URL {
         let text = SherpaKokoroDJVoice.normalize(script)
         guard !text.isEmpty else { throw DJVoiceError.noAudioRendered }
+        let t0 = Date()
 
         let audio = try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Data, Error>) in
             let connectID = UUID().uuidString
@@ -83,6 +84,7 @@ final class EdgeTTSDJVoice: DJVoiceProtocol, @unchecked Sendable {
         }
 
         guard !audio.isEmpty else { throw DJVoiceError.noAudioRendered }
+        logEngine("EDGE-OK \(audio.count)B in \(Int(Date().timeIntervalSince(t0) * 1000))ms")
         return try Self.transcodeToCAF(mp3: audio)
     }
 

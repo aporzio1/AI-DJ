@@ -36,7 +36,7 @@ targets:
       - package: sherpa-onnx
         product: sherpa-onnx
     preBuildScripts:
-      - name: Set CFBundleVersion from git commit count
+      - name: Set CFBundleVersion from build clock
         basedOnDependencyAnalysis: false
         script: |
           # Derive CFBundleVersion from git commit count so every commit
@@ -51,9 +51,9 @@ targets:
           # Either way, the bundle that ships to TestFlight has a unique
           # incrementing number.
           SOURCE_PLIST="${SRCROOT}/Patter/Resources/Info.plist"
-          BUILD_NUMBER=$(cd "$SRCROOT" && git rev-list --count HEAD 2>/dev/null || echo "1")
+          BUILD_NUMBER=$(date +%y%m%d%H%M)
           /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD_NUMBER" "$SOURCE_PLIST"
-          echo "Set CFBundleVersion=$BUILD_NUMBER (from git commit count)"
+          echo "Set CFBundleVersion=$BUILD_NUMBER (build clock yymmddHHmm)"
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.andrewporzio.patter
