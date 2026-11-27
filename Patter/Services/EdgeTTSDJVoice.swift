@@ -10,7 +10,9 @@ import AVFAudio
 /// Path:ssml frame. The DJ must never wait on the network: a hard deadline
 /// bounds every render and misses fall through to the offline Sherpa tier.
 final class EdgeTTSDJVoice: DJVoiceProtocol, @unchecked Sendable {
-    private let defaultVoice = "en-US-AriaNeural"
+    private var defaultVoice: String {
+        UserDefaults.standard.string(forKey: "edgeVoice") ?? "en-US-AriaNeural"
+    }
     private let renderDeadline: TimeInterval = 6.0
 
     private static let origin = "chrome-extension://jdiccldimpdaibmpdkjnbmckianbfold"

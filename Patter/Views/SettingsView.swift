@@ -61,6 +61,9 @@ struct SettingsView: View {
     @State private var kokoroPreviewPlayer: AVAudioPlayer?
 
     @State private var showingPersonaList = false
+    @State private var edgePreviewState: KokoroPreviewState = .idle
+    @State private var edgePreviewPlayer: AVAudioPlayer?
+    @State private var edgeError: String?
     @State private var djLogExport: String = ""
     @State private var djLogURL: URL?
     @State private var feedPendingRemoval: String?
@@ -248,6 +251,8 @@ struct SettingsView: View {
                 openAIRows
             } else if vm.ttsProvider == .kokoro {
                 kokoroRows
+            } else if vm.ttsProvider == .edgeTTS {
+                edgeRows
             } else if vm.ttsProvider == .sherpaKokoro {
                 sherpaRows
             }
@@ -255,6 +260,79 @@ struct SettingsView: View {
             Text("Voice")
         } footer: {
             voiceFooter
+        }
+    }
+
+    private static let edgeVoices: [(id: String, name: String)] = [
+        ("en-US-AriaNeural", "Aria (US)"),
+        ("en-US-GuyNeural", "Guy (US)"),
+        ("en-US-JennyNeural", "Jenny (US)"),
+        ("en-US-AndrewMultilingualNeural", "Andrew (US, multilingual)"),
+        ("en-US-AvaMultilingualNeural", "Ava (US, multilingual)"),
+        ("en-GB-SoniaNeural", "Sonia (UK)"),
+    ]
+
+    @ViewBuilder
+    private var edgeRows: some View {
+        Picker("Edge voice", selection: $vm.edgeVoiceName) {
+            ForEach(Self.edgeVoices, id: \.id) { voice in
+                Text(voice.name).tag(voice.id)
+            }
+        }
+        .onChange(of: vm.edgeVoiceName) { _, _ in
+            vm.save()
+            stopEdgePreview()
+        }
+
+        if let edgeError {
+            Text(edgeError).font(.caption).foregroundStyle(.red)
+        }
+        Button {
+            Task { await toggleEdgePreview() }
+        } label: {
+            switch edgePreviewState {
+            case .idle:      Label("Preview Voice", systemImage: "play.circle")
+            case .rendering: Label("Rendering…", systemImage: "hourglass")
+            case .playing:   Label("Stop Preview", systemImage: "stop.circle")
+            }
+        }
+        .buttonStyle(.bordered)
+        .disabled(edgePreviewState == .rendering)
+    }
+
+    private func stopEdgePreview() {
+        edgePreviewPlayer?.stop()
+        edgePreviewPlayer = nil
+        edgePreviewState = .idle
+    }
+
+    private func toggleEdgePreview() async {
+        switch edgePreviewState {
+        case .idle:      await startEdgePreview()
+        case .rendering: return
+        case .playing:   stopEdgePreview()
+        }
+    }
+
+    private func startEdgePreview() async {
+        edgePreviewState = .rendering
+        edgeError = nil
+        let sample = "Hey Andrew, this is your DJ checking in. Coming up next, another great track."
+        do {
+            let url = try await djVoice.renderEdgeSample(script: sample)
+            let player = try AVAudioPlayer(contentsOf: url)
+            player.prepareToPlay()
+            edgePreviewPlayer = player
+            edgePreviewState = .playing
+            player.play()
+            let duration = player.duration
+            try? await Task.sleep(for: .seconds(duration + 0.15))
+            if case .playing = edgePreviewState, player.isPlaying == false {
+                stopEdgePreview()
+            }
+        } catch {
+            edgeError = "Preview failed: \(error.localizedDescription)"
+            edgePreviewState = .idle
         }
     }
 

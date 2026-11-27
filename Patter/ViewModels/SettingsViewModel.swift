@@ -15,6 +15,7 @@ final class SettingsViewModel {
     var listenerName: String = ""
     var voiceIdentifier: String = ""
     var ttsProvider: TTSProvider = .system
+    var edgeVoiceName: String = "en-US-AriaNeural"
     var openAIVoice: String = OpenAITTSVoice.alloy.rawValue
     var openAIModel: String = OpenAITTSModel.tts_1.rawValue
     var openAIAPIKey: String = ""   // mirrored in Keychain; this is the in-memory copy for the SecureField
@@ -57,6 +58,7 @@ final class SettingsViewModel {
         listenerNameKey,
         voiceIdentifierKey,
         ttsProviderKey,
+        "edgeVoice",
         openAIVoiceKey,
         openAIModelKey,
         kokoroVoiceKey,
@@ -160,6 +162,7 @@ final class SettingsViewModel {
         write(listenerName, forKey: Self.listenerNameKey)
         write(voiceIdentifier, forKey: Self.voiceIdentifierKey)
         write(ttsProvider.rawValue, forKey: Self.ttsProviderKey)
+        write(edgeVoiceName, forKey: "edgeVoice")
         write(openAIVoice, forKey: Self.openAIVoiceKey)
         write(openAIModel, forKey: Self.openAIModelKey)
         write(kokoroVoice, forKey: Self.kokoroVoiceKey)
@@ -196,6 +199,7 @@ final class SettingsViewModel {
             ttsProvider = p
         }
         openAIVoice = UserDefaults.standard.string(forKey: Self.openAIVoiceKey) ?? OpenAITTSVoice.alloy.rawValue
+        edgeVoiceName = UserDefaults.standard.string(forKey: "edgeVoice") ?? "en-US-AriaNeural"
         openAIModel = UserDefaults.standard.string(forKey: Self.openAIModelKey) ?? OpenAITTSModel.tts_1.rawValue
         // `loadFromUserDefaults` runs on every iCloud sync import, not just init.
         // Without the sentinel the Keychain rewrite would re-fire per import batch.

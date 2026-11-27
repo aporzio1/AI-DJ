@@ -71,6 +71,14 @@ final class DJVoiceRouter: DJVoiceProtocol, @unchecked Sendable {
         try await kokoro.renderToFile(script: script, voiceIdentifier: voiceIdentifier)
     }
 
+    /// Direct Edge render honoring the Settings-selected Edge voice (read live
+    /// from UserDefaults by EdgeTTSDJVoice). Used by the voice preview.
+    func renderEdgeSample(script: String) async throws -> URL {
+        let url = try await edge.renderToFile(script: script, voiceIdentifier: "")
+        edgeStrikes = 0
+        return url
+    }
+
     func renderToFile(script: String, voiceIdentifier: String) async throws -> URL {
         let active = provider
         switch active {
