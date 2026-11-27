@@ -27,6 +27,21 @@ final class EdgeTTSDJVoice: DJVoiceProtocol, @unchecked Sendable {
     }
 
     func renderToFile(script: String, voiceIdentifier: String) async throws -> URL {
+        // "Connection reset by peer" is a transient socket hiccup, not a
+        // protocol rejection — one retry keeps Aria on the mic instead of
+        // handing the night to the 17 s CPU fallback.
+        var attempt = 0
+        while true {
+            attempt += 1
+            do {
+                return try await renderOnce(script: script)
+            } catch {
+                if attempt >= 2 || error is DJVoiceError { throw error }
+            }
+        }
+    }
+
+    private func renderOnce(script: String) async throws -> URL {
         let text = SherpaKokoroDJVoice.normalize(script)
         guard !text.isEmpty else { throw DJVoiceError.noAudioRendered }
         let t0 = Date()
