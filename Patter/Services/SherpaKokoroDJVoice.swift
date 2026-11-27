@@ -63,14 +63,19 @@ enum SherpaModel {
         for (index, asset) in files.enumerated() {
             let target = fileBaseURL.appendingPathComponent(asset.name)
             if fm.fileExists(atPath: target.path) { continue }
-            let (temp, response) = try await URLSession.shared.download(from: asset.url)
-            if let http = response as? HTTPURLResponse, http.statusCode != 200 {
-                throw SherpaTTSError.downloadFailed(asset.name, http.statusCode)
-            }
             let part = target.appendingPathExtension("part")
-            try? fm.removeItem(at: part)
-            try fm.moveItem(at: temp, to: part)
-            try fm.removeItem(at: target)
+            if !fm.fileExists(atPath: part.path) {
+                let (temp, response) = try await URLSession.shared.download(from: asset.url)
+                if let http = response as? HTTPURLResponse, http.statusCode != 200 {
+                    throw SherpaTTSError.downloadFailed(asset.name, http.statusCode)
+                }
+                try? fm.removeItem(at: part)
+                try fm.moveItem(at: temp, to: part)
+            }
+            // Fresh install: target does not exist yet — removeItem(at:) on a
+            // missing path THROWS ("couldn't be removed"), which killed the
+            // whole install after a successful 134 MB download.
+            if fm.fileExists(atPath: target.path) { try fm.removeItem(at: target) }
             try fm.moveItem(at: part, to: target)
             progress(Double(index + 1) / Double(files.count))
         }
