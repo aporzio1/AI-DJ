@@ -132,6 +132,8 @@ final class EdgeTTSDJVoice: DJVoiceProtocol, @unchecked Sendable {
 private final class EdgeReceiveBox: @unchecked Sendable {
     private let cont: CheckedContinuation<Data, Error>
     private var audio = Data()
+    private var texts: [String] = []
+    private var bins = 0
     private var done = false
     private let lock = NSLock()
 
@@ -145,6 +147,7 @@ private final class EdgeReceiveBox: @unchecked Sendable {
                 if self.audio.isEmpty { self.fail(error) } else { self.finish() }
             case .success(.data(let chunk)):
                 self.lock.lock()
+                self.bins += 1
                 if chunk.count > 2 {
                     let header = chunk.prefix(2).withUnsafeBytes { $0.load(as: UInt16.self) }
                     self.audio.append(chunk.dropFirst(Int(UInt(header).bigEndian)))
@@ -152,6 +155,7 @@ private final class EdgeReceiveBox: @unchecked Sendable {
                 self.lock.unlock()
                 self.pump(task)
             case .success(.string(let text)):
+                if texts.count < 4 { texts.append(String(text.prefix(200))) }
                 if text.contains("turn.end") { self.finish() } else { self.pump(task) }
             @unknown default:
                 self.pump(task)
@@ -171,7 +175,10 @@ private final class EdgeReceiveBox: @unchecked Sendable {
         lock.lock()
         guard !done else { lock.unlock(); return }
         done = true
+        let empty = audio.isEmpty
+        let snapshot = (bins, texts.prefix(3).joined(separator: " || "))
         lock.unlock()
+        if empty { logEngine("EDGE-EMPTY bins=\(snapshot.0) srv=[\(snapshot.1)]") }
         cont.resume(returning: audio)
     }
 }
