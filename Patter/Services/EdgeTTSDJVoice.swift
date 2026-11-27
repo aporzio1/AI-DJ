@@ -149,8 +149,13 @@ private final class EdgeReceiveBox: @unchecked Sendable {
                 self.lock.lock()
                 self.bins += 1
                 if chunk.count > 2 {
-                    let header = chunk.prefix(2).withUnsafeBytes { $0.load(as: UInt16.self) }
-                    self.audio.append(chunk.dropFirst(Int(UInt(header).bigEndian)))
+                    // Wire format: 2-byte BIG-endian header length. Load raw
+                    // bytes — the old load(as: UInt16.self) + .bigEndian combo
+                    // byte-swapped on arm64 and shredded the MP3 stream.
+                    let headerLen = Int(chunk[0]) << 8 | Int(chunk[1])
+                    if headerLen > 0, chunk.count > 2 + headerLen {
+                        self.audio.append(chunk.dropFirst(2 + headerLen))
+                    }
                 }
                 self.lock.unlock()
                 self.pump(task)
