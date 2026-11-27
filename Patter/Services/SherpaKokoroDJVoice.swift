@@ -38,22 +38,45 @@ enum SherpaModel {
     }()
 
     /// Remote sources. Files land verbatim under fileBaseURL.
+    /// `urls` is tried in order: LAN mirror first (the HF CDN repeatedly
+    /// reset the phone's connections on iOS 27.3 beta — "Connection reset
+    /// by peer" ×8; served by Hermes at 192.168.1.204:8018 for dev), public
+    /// sources as fallback so TestFlight builds off-LAN still work.
     static let files: [RemoteAsset] = [
         RemoteAsset(name: "model.onnx",
-                    url: URL(string: "https://huggingface.co/RuiSumida/sherpa-onnx-kokoro-int8-en-v0_19/resolve/main/model.onnx")!),
+                    urls: [URL(string: "http://192.168.1.204:8018/model.onnx")!,
+                           URL(string: "https://huggingface.co/RuiSumida/sherpa-onnx-kokoro-int8-en-v0_19/resolve/main/model.onnx")!]),
         RemoteAsset(name: "voices.bin",
-                    url: URL(string: "https://huggingface.co/RuiSumida/sherpa-onnx-kokoro-int8-en-v0_19/resolve/main/voices.bin")!),
+                    urls: [URL(string: "http://192.168.1.204:8018/voices.bin")!,
+                           URL(string: "https://huggingface.co/RuiSumida/sherpa-onnx-kokoro-int8-en-v0_19/resolve/main/voices.bin")!]),
         RemoteAsset(name: "tokens.txt",
-                    url: URL(string: "https://raw.githubusercontent.com/aporzio1/AI-DJ/main/Patter/Assets/sherpa-kokoro/tokens.txt")!),
+                    urls: [URL(string: "http://192.168.1.204:8018/tokens.txt")!,
+                           URL(string: "https://raw.githubusercontent.com/aporzio1/AI-DJ/main/Patter/Assets/sherpa-kokoro/tokens.txt")!]),
         RemoteAsset(name: "lexicon-en-us.txt",
-                    url: URL(string: "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/lexicon-en-us.txt")!),
+                    urls: [URL(string: "http://192.168.1.204:8018/lexicon-en-us.txt")!,
+                           URL(string: "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/lexicon-en-us.txt")!]),
     ]
 
-    struct RemoteAsset { let name: String; let url: URL }
+    struct RemoteAsset { let name: String; let urls: [URL] }
 
     static var isModelInstalled: Bool {
         files.allSatisfy { FileManager.default.fileExists(atPath: fileBaseURL.appendingPathComponent($0.name).path) }
     }
+
+    /// Dedicated session for the big transfers: URLSession.shared's 60 s
+    /// request timeout killed the 134 MB model.onnx mid-flight
+    /// ("nw_read_request_report … Operation timed out" ×3, install never
+    /// reached promote). Timeouts measure byte-silence, not elapsed time,
+    /// but HF's CDN handoff stalls long enough to burn 60 s before the
+    /// stream ever starts. Long idle window, patient reconnect, one retry
+    /// per file.
+    static let downloadSession: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 300
+        config.timeoutIntervalForResource = 3600
+        config.waitsForConnectivity = true
+        return URLSession(configuration: config)
+    }()
 
     /// Download all four files with per-file progress, atomic promote
     /// (.part → final), resume-by-existence (finished files are skipped).
@@ -65,12 +88,22 @@ enum SherpaModel {
             if fm.fileExists(atPath: target.path) { continue }
             let part = target.appendingPathExtension("part")
             if !fm.fileExists(atPath: part.path) {
-                let (temp, response) = try await URLSession.shared.download(from: asset.url)
-                if let http = response as? HTTPURLResponse, http.statusCode != 200 {
-                    throw SherpaTTSError.downloadFailed(asset.name, http.statusCode)
+                var lastError: Error?
+                var installed = false
+                for url in asset.urls where !installed {
+                    do {
+                        let (temp, response) = try await downloadSession.download(from: url)
+                        if let http = response as? HTTPURLResponse, http.statusCode != 200 {
+                            throw SherpaTTSError.downloadFailed(asset.name, http.statusCode)
+                        }
+                        try? fm.removeItem(at: part)
+                        try fm.moveItem(at: temp, to: part)
+                        installed = true
+                    } catch {
+                        lastError = error
+                    }
                 }
-                try? fm.removeItem(at: part)
-                try fm.moveItem(at: temp, to: part)
+                if !installed { throw lastError ?? SherpaTTSError.downloadFailed(asset.name, -1) }
             }
             // Fresh install: target does not exist yet — removeItem(at:) on a
             // missing path THROWS ("couldn't be removed"), which killed the
@@ -119,9 +152,7 @@ final class SherpaKokoroDJVoice: DJVoiceProtocol, @unchecked Sendable {
     init(speakerID: Int = 0) { self.speakerID = speakerID }
 
     func renderToFile(script: String, voiceIdentifier: String) async throws -> URL {
-        let text = script
-            .replacingOccurrences(of: "\n", with: " ")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let text = Self.normalize(script)
         let outputURL = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
             .appendingPathExtension("caf")
@@ -145,10 +176,14 @@ final class SherpaKokoroDJVoice: DJVoiceProtocol, @unchecked Sendable {
                     var genConfig = SherpaOnnxGenerationConfigSwift()
                     genConfig.sid = sid
                     genConfig.speed = 1.0
+                    let t0 = CFAbsoluteTimeGetCurrent()
                     _ = tts.generateWithConfig(text: text, config: genConfig,
                                                callback: Self.callbackThunk, arg: arg)
+                    let inferSecs = CFAbsoluteTimeGetCurrent() - t0
                     let samples = box.samples
                     guard !samples.isEmpty else { throw SherpaTTSError.noAudio }
+                    // Benchmark gate: p95 < 3s for a 60-word line on A19.
+                    Log.voice.info("sherpa render \(String(format: "%.2f", inferSecs))s (\(text.split(separator: " ").count, privacy: .public) words, \(samples.count, privacy: .public) samples)")
                     try Self.writeCAF(samples: samples, sampleRate: 24_000, to: outputURL)
                     continuation.resume(returning: outputURL)
                 } catch {
@@ -188,6 +223,93 @@ final class SherpaKokoroDJVoice: DJVoiceProtocol, @unchecked Sendable {
         let wrapper = SherpaOnnxOfflineTtsWrapper(config: &ttsConfig)
         engine = wrapper
         return wrapper
+    }
+
+    /// Kokoro's lexicon tokenizer silently SKIPS anything it doesn't know
+    /// ("OOV word skipped" in the engine log) — digits, curly quotes, and
+    /// em-dashes all vanish from the voice, so "8:17 PM" spoke as "PM" and
+    /// "SpaceX" disappeared mid-sentence. Spell numbers, flatten typography,
+    /// and hand the engine only words it can pronounce.
+    static func normalize(_ raw: String) -> String {
+        var t = raw
+            .replacingOccurrences(of: "\n", with: " ")
+            .replacingOccurrences(of: "\u{2019}", with: "'")   // ' -> '
+            .replacingOccurrences(of: "\u{2018}", with: "'")   // ' -> '
+            .replacingOccurrences(of: "\u{201C}", with: "\"")  // " -> "
+            .replacingOccurrences(of: "\u{201D}", with: "\"")  // " -> "
+            .replacingOccurrences(of: "\u{2014}", with: ", ")  // — -> ,
+            .replacingOccurrences(of: "\u{2013}", with: "-")   // – -> -
+        t = t.replacingOccurrences(of: "SpaceX", with: "Space X")
+        // Clock times: "8:17" -> "8 17" so both halves spell out
+        // (colons are never read aloud anyway).
+        t = t.replacingOccurrences(of: ":", with: " ")
+        // Strip quote punctuation at token EDGES ('Learn -> Learn) but keep
+        // word-internal apostrophes — "don't" lives in the lexicon, "dont"
+        // does not.
+        t = t.split(separator: " ", omittingEmptySubsequences: true).map { tok -> String in
+            var s = Substring(tok)
+            while let f = s.first, f == "'" || f == "\"" { s = s.dropFirst() }
+            while let l = s.last, l == "'" || l == "\"" { s = s.dropLast() }
+            // Possessives: the lexicon has "Congo", not "Congo's". Dropping
+            // the "'s" loses one light "z" in exchange for the word surviving
+            // at all. Contractions (don't, it's→kept base) end in letters and
+            // pass through untouched unless they end in 's after an apostrophe.
+            if s.lowercased().hasSuffix("'s") { s = s.dropLast(2) }
+            return String(s)
+        }.joined(separator: " ")
+        // Spell every remaining integer run.
+        t = spellIntegers(in: t)
+        return t.trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "  ", with: " ")
+    }
+
+    /// Replaces each run of digits with spoken English words (0...999_999;
+    /// longer runs fall back to digit-by-digit, which is still speakable).
+    private static func spellIntegers(in text: String) -> String {
+        var out = ""
+        var digits = ""
+        for ch in text {
+            if ch.isNumber { digits.append(ch); continue }
+            if !digits.isEmpty { out += spell(digits); digits = "" }
+            out.append(ch)
+        }
+        if !digits.isEmpty { out += spell(digits) }
+        return out
+    }
+
+    private static func digitWord(_ d: Int) -> String {
+        ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"][d]
+    }
+
+    private static func spell(_ run: String) -> String {
+        guard let n = Int(run) else { return run }
+        if run.count > 6 {
+            // Long id-like runs: read each digit ("one five three …").
+            var spoken: [String] = []
+            for ch in run {
+                if let d = ch.wholeNumberValue { spoken.append(digitWord(d)) }
+            }
+            return spoken.joined(separator: " ")
+        }
+        return words(n)
+
+        func words(_ v: Int) -> String {
+            switch v {
+            case 0: return "zero"
+            case 1...19: return ["one","two","three","four","five","six","seven","eight","nine",
+                                 "ten","eleven","twelve","thirteen","fourteen","fifteen","sixteen",
+                                 "seventeen","eighteen","nineteen"][v - 1]
+            case 20...99:
+                let tens = ["twenty","thirty","forty","fifty","sixty","seventy","eighty","ninety"][v / 10 - 2]
+                return v % 10 == 0 ? tens : tens + " " + words(v % 10)
+            case 100...999:
+                let head = words(v / 100) + " hundred"
+                return v % 100 == 0 ? head : head + " " + words(v % 100)
+            default:
+                let thousands = words(v / 1000) + " thousand"
+                return v % 1000 == 0 ? thousands : thousands + " " + words(v % 1000)
+            }
+        }
     }
 
     private static func writeCAF(samples: [Float], sampleRate: Int, to url: URL) throws {

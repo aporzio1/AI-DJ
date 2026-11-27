@@ -360,7 +360,7 @@ actor Producer {
                 script: script,
                 audioFileURL: audioURL,
                 duration: estimateDuration(script: script),
-                overlapStart: talkOverSeconds(renderedURL: audioURL),
+                overlapStart: placement == .opening ? nil : talkOverSeconds(renderedURL: audioURL),
                 sourceHeadline: headline
             )
         } catch {

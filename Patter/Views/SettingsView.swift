@@ -486,6 +486,8 @@ struct SettingsView: View {
             Text("Runs fully on-device on the Apple Neural Engine — no API key, no network at render time. The first DJ segment downloads a ~300 MB model; after that everything stays local. American English only.")
         case .sherpaKokoro:
             Text("Runs fully on-device on the CPU through ONNX Runtime — bypasses Apple's ML stack and speech server entirely, which is what survives iOS 26/27 betas. First use downloads a ~146 MB int8 Kokoro model; every render after is local. American English only.")
+        case .edgeTTS:
+            Text("Microsoft's free neural voices over the network — no API key, no account. Renders in about a second; when the network is gone Patter falls back to the local Kokoro CPU engine automatically.")
         }
     }
 

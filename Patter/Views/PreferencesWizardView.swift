@@ -155,7 +155,7 @@ struct PreferencesWizardView: View {
                 }
             }
             .labelsHidden()
-        case .kokoro, .sherpaKokoro:
+        case .kokoro, .sherpaKokoro, .edgeTTS:
             Picker("Voice", selection: $settings.kokoroVoice) {
                 ForEach(KokoroVoice.allCases) { voice in
                     Text(voice.displayName).tag(voice.rawValue)

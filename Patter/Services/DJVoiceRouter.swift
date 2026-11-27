@@ -5,6 +5,7 @@ enum TTSProvider: String, Codable, CaseIterable, Identifiable {
     case openAI = "openai"
     case kokoro = "kokoro"
     case sherpaKokoro = "sherpa_kokoro"
+    case edgeTTS = "edge_tts"
 
     var id: String { rawValue }
     var displayName: String {
@@ -13,6 +14,7 @@ enum TTSProvider: String, Codable, CaseIterable, Identifiable {
         case .openAI: "OpenAI"
         case .kokoro: "Kokoro (on-device)"
         case .sherpaKokoro: "Kokoro CPU (on-device)"
+        case .edgeTTS: "Edge Neural (free cloud)"
         }
     }
 }
@@ -25,11 +27,13 @@ final class DJVoiceRouter: DJVoiceProtocol, @unchecked Sendable {
     private let openAI: OpenAIDJVoice
     private let kokoro: KokoroDJVoice
     private let sherpa: SherpaKokoroDJVoice
+    let edge: EdgeTTSDJVoice
 
     private let lock = NSLock()
     private var _provider: TTSProvider = .system
     private nonisolated(unsafe) var kokoroStrikes = 0
     private nonisolated(unsafe) var sherpaStrikes = 0
+    private nonisolated(unsafe) var edgeStrikes = 0
 
     var provider: TTSProvider {
         get { lock.lock(); defer { lock.unlock() }; return _provider }
@@ -39,11 +43,13 @@ final class DJVoiceRouter: DJVoiceProtocol, @unchecked Sendable {
     init(system: SystemDJVoice = SystemDJVoice(),
          openAI: OpenAIDJVoice = OpenAIDJVoice(),
          kokoro: KokoroDJVoice = KokoroDJVoice(),
-         sherpa: SherpaKokoroDJVoice = SherpaKokoroDJVoice()) {
+         sherpa: SherpaKokoroDJVoice = SherpaKokoroDJVoice(),
+         edge: EdgeTTSDJVoice = EdgeTTSDJVoice()) {
         self.system = system
         self.openAI = openAI
         self.kokoro = kokoro
         self.sherpa = sherpa
+        self.edge = edge
     }
 
     func setOpenAIModel(_ model: OpenAITTSModel) {
@@ -69,7 +75,10 @@ final class DJVoiceRouter: DJVoiceProtocol, @unchecked Sendable {
         let active = provider
         switch active {
         case .system:
-            return try await system.renderToFile(script: script, voiceIdentifier: voiceIdentifier)
+            return try await renderEdgeThenLocal(script: script, voiceIdentifier: voiceIdentifier)
+        case .edgeTTS:
+            // Explicit selection: network tier with the full local floor behind it.
+            return try await renderEdgeThenLocal(script: script, voiceIdentifier: voiceIdentifier)
         case .openAI:
             do {
                 return try await openAI.renderToFile(script: script, voiceIdentifier: voiceIdentifier)
@@ -95,13 +104,27 @@ final class DJVoiceRouter: DJVoiceProtocol, @unchecked Sendable {
             if sherpaStrikes >= 2 {
                 return try await system.renderToFile(script: script, voiceIdentifier: fallbackSystemVoice())
             }
+            // Self-healing install: the first render after provider selection
+            // (or after a Remove) pulls the assets itself — LAN mirror first,
+            // public sources as fallback. One-time cost, then silent forever.
+            if !SherpaModel.isModelInstalled {
+                do { try await SherpaModel.install(progress: { _ in }) }
+                catch { Log.voice.error("Sherpa auto-install failed (\(error.localizedDescription, privacy: .public))") }
+            }
             do {
                 let url = try await sherpa.renderToFile(script: script, voiceIdentifier: voiceIdentifier)
                 sherpaStrikes = 0
                 return url
             } catch {
                 sherpaStrikes += 1
-                Log.voice.error("Sherpa Kokoro failed (\(error.localizedDescription, privacy: .public)) — falling back to System voice")
+                Log.voice.error("Sherpa Kokoro failed (\(error.localizedDescription, privacy: .public)) — trying Edge Neural")
+                if edgeStrikes < 2 {
+                    do {
+                        let url = try await edge.renderToFile(script: script, voiceIdentifier: voiceIdentifier)
+                        edgeStrikes = 0
+                        return url
+                    } catch { edgeStrikes += 1 }
+                }
                 return try await system.renderToFile(script: script, voiceIdentifier: fallbackSystemVoice())
             }
         case .kokoro:
@@ -120,6 +143,33 @@ final class DJVoiceRouter: DJVoiceProtocol, @unchecked Sendable {
                 return try await system.renderToFile(script: script, voiceIdentifier: fallbackSystemVoice())
             }
         }
+    }
+
+    /// Edge Neural (free, keyless, ~1 s neural audio) ahead of the local tiers.
+    /// On the 26/27 betas the AVSpeech server is dead (-66748), so a live
+    /// network tier beats a dead native one; the two-strike breaker keeps
+    /// offline sessions fast by skipping the network after repeated misses.
+    private func renderEdgeThenLocal(script: String, voiceIdentifier: String) async throws -> URL {
+        if edgeStrikes < 2 {
+            do {
+                let url = try await edge.renderToFile(script: script, voiceIdentifier: voiceIdentifier)
+                edgeStrikes = 0
+                return url
+            } catch {
+                edgeStrikes += 1
+                Log.voice.error("Edge TTS failed (\(error.localizedDescription, privacy: .public)) — falling back to local tier")
+            }
+        }
+        // Local floor: Sherpa wherever its assets survived; System when even
+        // that is gone (alive again once Apple ships a fixed speech server).
+        if SherpaModel.isModelInstalled {
+            do {
+                return try await sherpa.renderToFile(script: script, voiceIdentifier: voiceIdentifier)
+            } catch {
+                Log.voice.error("Sherpa floor failed too — using system voice")
+            }
+        }
+        return try await system.renderToFile(script: script, voiceIdentifier: fallbackSystemVoice())
     }
 
     /// If the user had a non-system voice identifier selected, it's not a valid AVSpeech ID.
